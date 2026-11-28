@@ -7,6 +7,7 @@ import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { recommendationMarket } from "../../domain/recommendation-view.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
+import { timedRequestPhase } from "../http/request-timing.ts";
 import { storedInPlayOddsForFixtures } from "../odds/in-play-odds-read.ts";
 import { storedUpcomingOddsForFixtures } from "../odds/odds-read.ts";
 import { storedCurrentBookmakerQuotes, storedRecoveredBookmakerQuotes, type StoredCurrentBookmakerQuotes } from "../odds/odds-mysql-store.ts";
@@ -73,11 +74,14 @@ export async function withFeedOdds(database: DatabaseRuntime, response: StoredMa
     (status === "live" || isPlayedFinalStatus(status)) && forecast !== null && prices.length < forecast.markets.length);
   const replays = response.records.filter(({ retrospective }) => retrospective && !retrospective.featuredDecisionSealed);
   const [upcoming, live, recovered, replayQuotes] = await Promise.all([
-    scheduled.length ? database.query((tx) => storedUpcomingOddsForFixtures(tx, scheduled, asOf)).catch(() => []) : [],
-    playing.length ? database.query((tx) => storedInPlayOddsForFixtures(tx, playing, asOf)).catch(() => []) : [],
-    started.length ? database.transaction((tx) => storedRecoveredBookmakerQuotes(tx, started, asOf, featuredBookmakerBetIds),
-      { isolationLevel: "RepeatableRead", maxWait: 2_000, timeout: 5_000 }).catch(() => null) : null,
-    replays.length ? readReplayBookmakerQuotes(database, replays, asOf) : null,
+    scheduled.length ? timedRequestPhase("odds-upcoming",
+      () => database.query((tx) => storedUpcomingOddsForFixtures(tx, scheduled, asOf))).catch(() => []) : [],
+    playing.length ? timedRequestPhase("odds-in-play",
+      () => database.query((tx) => storedInPlayOddsForFixtures(tx, playing, asOf))).catch(() => []) : [],
+    started.length ? timedRequestPhase("odds-recovered", () => database.transaction(
+      (tx) => storedRecoveredBookmakerQuotes(tx, started, asOf, featuredBookmakerBetIds),
+      { isolationLevel: "RepeatableRead", maxWait: 2_000, timeout: 5_000 })).catch(() => null) : null,
+    replays.length ? timedRequestPhase("odds-replay", () => readReplayBookmakerQuotes(database, replays, asOf)) : null,
   ]);
   const observations = new Map<string, { kickoffAt: number; observation: MarketOddsObservation }>(
     upcoming.map(({ fixtureId, kickoffAt, observation }) => [fixtureId, { kickoffAt, observation }]),

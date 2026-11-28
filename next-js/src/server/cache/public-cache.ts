@@ -9,7 +9,8 @@ export const publicCacheRules = Object.freeze({ mutableMs: 5000, todayFeedListMs
   // A year-long feed range (366 days plus two zone-window days) keeps one date tag per day beside the global tags.
   maximumBytes: 1024 * 1024, maximumTags: 380, maximumPending: 128, recoveryBatch: 100 });
 export type CacheDescriptor<T> = Readonly<{ key: string; tags: readonly string[]; lifetimeMs: number;
-  deadlineAt: number; kind?: ReadFamily; validUntil?: () => number; parse(value: unknown): T }>;
+  deadlineAt: number; kind?: ReadFamily; validUntil?: () => number;
+  scheduleFill?: (write: () => Promise<void>) => void; parse(value: unknown): T }>;
 export type CacheSnapshot = Readonly<{ generations: Readonly<Record<string, string>>; value: unknown; createdAt: number | null; expiresAt: number | null }>;
 export type PublicCacheStore = Readonly<{
   lookup(key: string, tags: readonly string[]): Promise<CacheSnapshot>;
@@ -101,8 +102,16 @@ export function createPublicResponseCache(store: PublicCacheStore, now = Date.no
         // Keep the original observation budget, including time spent loading.
         // Slow reads remain uncacheable rather than being retimestamped as fresh.
         const expiresAt = Math.min(startedAt + descriptor.lifetimeMs, descriptor.deadlineAt, descriptor.validUntil?.() ?? Number.MAX_SAFE_INTEGER);
-        if (snapshot && now() < expiresAt && Buffer.byteLength(JSON.stringify(value), "utf8") <= publicCacheRules.maximumBytes) {
-          try { await store.fill(descriptor.key, descriptor.tags, snapshot.generations, value, startedAt, expiresAt); } catch { /* Best effort cache only. */ }
+        const acceptedSnapshot = snapshot;
+        if (acceptedSnapshot && now() < expiresAt && Buffer.byteLength(JSON.stringify(value), "utf8") <= publicCacheRules.maximumBytes) {
+          const fill = async () => {
+            if (now() >= expiresAt) return;
+            try { await store.fill(descriptor.key, descriptor.tags, acceptedSnapshot.generations, value, startedAt, expiresAt); }
+            catch { /* Best effort cache only. */ }
+          };
+          if (descriptor.scheduleFill) {
+            try { descriptor.scheduleFill(fill); } catch { await fill(); }
+          } else await fill();
         }
         return { value, expiresAt };
       };

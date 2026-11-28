@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { useRouter } from "next/navigation";
 import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { nextLoadedPage } from "@/domain/browse-period";
+import { hashFeedContinuation, supportsFeedContinuation } from "@/domain/feed-continuation";
 import { restoredLiveFeedSearch } from "@/domain/feed-live-search";
 import type { FeedCheckpoint } from "@/domain/feed-navigation";
 import { applyServerFeedPage, continueFeedPages, FeedPaginationError, initialLoadedFeed, observeFeedPage, replaceFeedPages, supportsFeedWindow, type LoadedFeed } from "@/domain/feed-pagination";
@@ -11,7 +12,7 @@ import { feedQueryHref, feedQueryKey, type FeedQuery } from "@/domain/feed-query
 import { feedRowNumber } from "@/domain/feed-presentation";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
-import { consumeRefresh, readRefreshFeedPage, readRefreshFeedWindow, refreshApi } from "@/state/refresh-api";
+import { consumeRefresh, readRefreshFeedContinuation, readRefreshFeedPage, readRefreshFeedWindow, refreshApi } from "@/state/refresh-api";
 import { useAppDispatch } from "@/state/hooks";
 import { acceptRun, feedRefreshInterval, liveRefreshRules } from "@/domain/live-refresh";
 import { startRequestDeadline } from "@/domain/request-deadline";
@@ -130,9 +131,17 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
         let next: LoadedFeed;
         if (mode === "append") {
           const through = base.data.nextPage;
+          const hash = through !== null && !rebaseAppend && globalThis.crypto?.subtle
+            && supportsFeedContinuation(base.firstPage, through, applied.pageSize)
+            ? await hashFeedContinuation(base.firstPage, base.records.map(({ fixtureId }) => fixtureId)) : null;
           next = await continueFeedPages(base, fetchPage, delay => waitForContinuation(delay, controller.signal, deadlineAt),
             { rebase: rebaseAppend, readWindow: through !== null && supportsFeedWindow(base.firstPage, through, applied.pageSize)
-              ? () => fetchWindow(base.firstPage, through) : undefined });
+              ? () => fetchWindow(base.firstPage, through) : undefined, readContinuation: hash && through !== null ? async () => {
+                controller.signal.throwIfAborted();
+                const page = await readRefreshFeedContinuation(applied, today, through, { firstPage: base.firstPage, hash }, controller.signal, budget);
+                verifyAccess(page);
+                return page;
+              } : undefined });
         } else if (mode === "background" && base.pages > 1) {
           backgroundPage.current = nextLoadedPage(backgroundPage.current, base.firstPage, base.lastPage);
           const page = await fetchPage(backgroundPage.current);

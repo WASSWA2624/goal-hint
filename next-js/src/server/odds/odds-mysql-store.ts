@@ -11,6 +11,7 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { NormalizedFixtureOdds } from "../football/api-football-normalize.ts";
 import { Prisma } from "../generated/prisma/client.ts";
+import { timedRequestPhase } from "../http/request-timing.ts";
 import { assertHistorySeal, historyJson } from "../predictions/history-read.ts";
 import { provenTrue } from "../shared/authority-proof.ts";
 import { mayRetainRecoveredPreMatchFixtureStatus, OddsError, oddsFail, preMatchOddsFreshMs, recoveredPreMatchFixtureStatuses,
@@ -102,10 +103,65 @@ const sameRow = (left: PriceRow, right: PriceRow) => evidenceFingerprint(left) =
 const totalGoalsBet = launchOddsMapping.find(({ family }) => family === "total-goals")!;
 
 type SealedRow = Readonly<{ id: string; body: unknown; validIntegrity: unknown }>;
+type CacheableSealedRow = SealedRow & Readonly<{ integrity: string; bodyBytes: bigint | number | null }>;
+
+/** Read the current seal and occurrence metadata even when a previously verified body can be omitted. */
+function sealedOddsCache<T>(maximumEntries: number, maximumBytes: number) {
+  type Entry = Readonly<{ seal: string; value: T; bytes: number }>;
+  const entries = new Map<string, Entry>();
+  let bytes = 0;
+  function put(id: string, entry: Entry) {
+    bytes -= entries.get(id)?.bytes ?? 0;
+    entries.delete(id);
+    entries.set(id, entry);
+    bytes += entry.bytes;
+    for (const [key, oldest] of entries) {
+      if (entries.size <= maximumEntries && bytes <= maximumBytes) break;
+      entries.delete(key);
+      bytes -= oldest.bytes;
+    }
+  }
+  return {
+    prepare(idColumn: Prisma.Sql, sealColumn: Prisma.Sql, bodyColumn: Prisma.Sql, candidate: (id: string, value: T) => boolean,
+      parse: (row: SealedRow) => T, maximumHints: number) {
+      const known = new Map([...entries].filter(([id, { value }]) => candidate(id, value)).slice(-maximumHints));
+      const body = known.size ? Prisma.sql`CASE WHEN (${idColumn}, BINARY ${sealColumn}) IN (
+        ${Prisma.join([...known].map(([id, { seal }]) => Prisma.sql`(${id}, BINARY ${seal})`))}) THEN NULL ELSE ${bodyColumn} END` : bodyColumn;
+      return { body, read(row: CacheableSealedRow) {
+        assertHistorySealForOdds(row.validIntegrity);
+        if (typeof row.integrity !== "string" || !/^[a-f0-9]{64}$/iu.test(row.integrity)) return oddsFail("invalid-state");
+        if (row.body === null) {
+          const entry = known.get(row.id);
+          if (!entry || entry.seal !== row.integrity) return oddsFail("invalid-state");
+          if (entries.get(row.id) === entry) put(row.id, entry);
+          return entry.value;
+        }
+        const value = parse(row), size = Number(row.bodyBytes);
+        // Indexed, parsed evidence has additional allocation overhead and still shares a hard cap.
+        const weight = size * 3 + 256;
+        if (Number.isSafeInteger(size) && size > 0 && weight <= maximumBytes) put(row.id, { value, seal: row.integrity, bytes: weight });
+        return value;
+      } };
+    },
+  };
+}
+
+function assertHistorySealForOdds(value: unknown) {
+  try { assertHistorySeal(value); }
+  catch { return oddsFail("invalid-state"); }
+}
 
 function sealedBody(row: SealedRow) {
   try { assertHistorySeal(row.validIntegrity); return historyJson(row.body); }
   catch { return oddsFail("invalid-state"); }
+}
+
+const historyBatchCache = sealedOddsCache<VerifiedBatch>(256, 12 * 1024 * 1024);
+const historySnapshotCache = sealedOddsCache<StoredOddsSnapshot | null>(8_192, 12 * 1024 * 1024);
+const historyRecoveredCache = sealedOddsCache<z.infer<typeof recoveredSnapshotSchema>>(2_048, 4 * 1024 * 1024);
+function indexedBatch(batch: OddsBatchBody): VerifiedBatch {
+  return { batch, fixtures: new Map(batch.fixtures.map((entry) => [entry.externalId, entry])),
+    pages: new Set(batch.pages.filter(({ endpoint, fromCache }) => endpoint === "odds" && !fromCache).map(({ retrievedAt }) => retrievedAt)) };
 }
 
 function parsedBatch(row: SealedRow) {
@@ -332,7 +388,7 @@ async function readHistoricalBookmakerQuotes(tx: Tx, fixtures: readonly Bookmake
     return { receivedAt, names: new Map(catalog.map(({ id, name }) => [id, name])) };
   });
   if (!catalogs.length) return found;
-  type SnapshotRow = SealedRow & { fixtureId: string; externalId: bigint; kickoff: Date; preMatchUntil: Date; batchId: string; recovered: unknown };
+  type SnapshotRow = CacheableSealedRow & { fixtureId: string; externalId: bigint; kickoff: Date; preMatchUntil: Date; batchId: string; recovered: unknown };
   const fixtureIds = Prisma.join([...expectedKickoff.keys()]);
   const lifecycle = verifiedBeforeKickoff ? Prisma.sql`LEFT JOIN FixtureLifecycleState life
     ON life.fixtureId=f.id AND life.retrievedAt<=${at} AND life.issue IS NULL` : Prisma.empty;
@@ -345,28 +401,42 @@ async function readHistoricalBookmakerQuotes(tx: Tx, fixtures: readonly Bookmake
       AND s.retrievedAt<${preMatchUntil}` : verifiedBeforeKickoff
       ? Prisma.sql`AND (s.retrievedAt<${preMatchUntil} OR s.providerUpdatedAt<${preMatchUntil})` : Prisma.empty}
     ${betIds ? Prisma.sql`AND s.betExternalId IN (${Prisma.join([...new Set(betIds)])})` : Prisma.empty}`;
+  const candidate = (_id: string, snapshot: Pick<StoredOddsSnapshot, "fixtureId" | "betId" | "retainUntil" | "retrievedAt"> | null) =>
+    snapshot !== null && expectedKickoff.has(snapshot.fixtureId) && (betIds === undefined || betIds.includes(snapshot.betId))
+      && snapshot.retainUntil >= asOf && snapshot.retrievedAt <= asOf;
+  const originalBodies = historySnapshotCache.prepare(Prisma.sql`s.id`, Prisma.sql`s.integrity`, Prisma.sql`s.body`,
+    candidate, (row) => {
+      const snapshot = parsedSnapshot(row);
+      return snapshot.valuesHash === oddsValuesHash(snapshot.values) ? snapshot : null;
+    }, 2_048);
+  const recoveredBodies = historyRecoveredCache.prepare(Prisma.sql`s.id`, Prisma.sql`s.integrity`, Prisma.sql`s.body`,
+    candidate, parsedRecoveredSnapshot, 512);
   // The recovery store only accepts captures taken at or after kickoff.
   const recovered = decisionTimes ? Prisma.empty : Prisma.sql`
     SELECT s.id,s.batchId,f.id AS fixtureId,f.externalId,f.kickoff,CAST(${preMatchUntil} AS DATETIME(3)) AS preMatchUntil,
-      s.body,s.integrity=SHA2(CAST(s.body AS CHAR),256) AS validIntegrity,TRUE AS recovered
+      ${recoveredBodies.body} AS body,s.integrity,OCTET_LENGTH(CAST(s.body AS CHAR)) AS bodyBytes,
+      s.integrity=SHA2(CAST(s.body AS CHAR),256) AS validIntegrity,TRUE AS recovered
     FROM FootballFixture f JOIN RecoveredPreMatchOddsSnapshot s ON s.fixtureId=f.id AND s.kickoffAt=f.kickoff ${lifecycle} WHERE ${eligible}
     UNION ALL`;
-  const rows = await tx.$queryRaw<SnapshotRow[]>(Prisma.sql`
+  const rows = await timedRequestPhase("odds-history-rows", () => tx.$queryRaw<SnapshotRow[]>(Prisma.sql`
     ${recovered}
     SELECT s.id,s.batchId,f.id AS fixtureId,f.externalId,f.kickoff,CAST(${preMatchUntil} AS DATETIME(3)) AS preMatchUntil,
-      s.body,s.integrity=SHA2(CAST(s.body AS CHAR),256) AS validIntegrity,FALSE AS recovered
-    FROM FootballFixture f JOIN ProviderOddsSnapshot s ON s.fixtureId=f.id AND s.retrievedAt<f.kickoff ${lifecycle} WHERE ${eligible}`);
-  const receipts = new Map<string, Readonly<{ batch: OddsBatchBody; fixtures: ReadonlyMap<number, OddsBatchBody["fixtures"][number]>;
-    checked: ReadonlySet<number> }>>();
-  for (const ids of chunks([...new Set(rows.map(({ batchId }) => batchId))], 250)) {
-    const pages = await tx.$queryRaw<SealedRow[]>(Prisma.sql`SELECT id,body,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
-      FROM OddsImportBatch WHERE id IN (${Prisma.join(ids)})`);
-    for (const page of pages) {
-      const batch = parsedBatch(page);
-      receipts.set(page.id, { batch, fixtures: new Map(batch.fixtures.map((entry) => [entry.externalId, entry])),
-        checked: new Set(batch.pages.filter((item) => item.endpoint === "odds" && !item.fromCache).map(({ retrievedAt }) => retrievedAt)) });
+      ${originalBodies.body} AS body,s.integrity,OCTET_LENGTH(CAST(s.body AS CHAR)) AS bodyBytes,
+      s.integrity=SHA2(CAST(s.body AS CHAR),256) AS validIntegrity,FALSE AS recovered
+    FROM FootballFixture f JOIN ProviderOddsSnapshot s ON s.fixtureId=f.id AND s.retrievedAt<f.kickoff ${lifecycle} WHERE ${eligible}`));
+  const receipts = await timedRequestPhase("odds-history-receipts", async () => {
+    const receipts = new Map<string, VerifiedBatch>();
+    for (const ids of chunks([...new Set(rows.map(({ batchId }) => batchId))], 250)) {
+      const wanted = new Set(ids);
+      const bodies = historyBatchCache.prepare(Prisma.sql`id`, Prisma.sql`integrity`, Prisma.sql`body`,
+        (id) => wanted.has(id), (row) => indexedBatch(parsedBatch(row)), ids.length);
+      const pages = await tx.$queryRaw<CacheableSealedRow[]>(Prisma.sql`SELECT id,${bodies.body} AS body,integrity,
+        OCTET_LENGTH(CAST(body AS CHAR)) AS bodyBytes,integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
+        FROM OddsImportBatch WHERE id IN (${Prisma.join(ids)})`);
+      for (const page of pages) receipts.set(page.id, bodies.read(page));
     }
-  }
+    return receipts;
+  });
   const availability = decisionTimes && receipts.size ? await readReplayAvailability(tx,
     new Map(rows.flatMap(({ fixtureId, externalId, kickoff, preMatchUntil }) => {
       const decisionAt = decisionTimes.get(fixtureId);
@@ -384,11 +454,12 @@ async function readHistoricalBookmakerQuotes(tx: Tx, fixtures: readonly Bookmake
   const compareTime = (next: HistoricalObservation, current: HistoricalObservation) =>
     (next.providerUpdatedAt ?? 0) - (current.providerUpdatedAt ?? 0) || next.observedAt - current.observedAt;
   for (const row of rows) {
-    const recovery = asBoolean(row.recovered), snapshot = recovery ? parsedRecoveredSnapshot(row) : parsedSnapshot(row);
+    const recovery = asBoolean(row.recovered), snapshot = recovery ? recoveredBodies.read(row) : originalBodies.read(row);
+    if (!snapshot) continue;
     const kickoffAt = row.kickoff.getTime(), receipt = receipts.get(row.batchId), entry = receipt?.fixtures.get(Number(row.externalId));
     if (snapshot.fixtureId !== row.fixtureId || expectedKickoff.get(snapshot.fixtureId) !== kickoffAt || !receipt || receipt.batch.kind !== "prices" || receipt.batch.status === "failed" ||
-      entry?.outcome !== (recovery ? "recover" : "apply") || !entry.quoteManifest || !receipt.checked.has(snapshot.retrievedAt) ||
-      snapshot.valuesHash !== oddsValuesHash(snapshot.values) || (snapshot.providerUpdatedAt !== null && snapshot.providerUpdatedAt > snapshot.retrievedAt) ||
+      entry?.outcome !== (recovery ? "recover" : "apply") || !entry.quoteManifest || !receipt.pages.has(snapshot.retrievedAt) ||
+      (snapshot.providerUpdatedAt !== null && snapshot.providerUpdatedAt > snapshot.retrievedAt) ||
       ("kickoffAt" in snapshot && (snapshot.kickoffAt !== kickoffAt || snapshot.batchId !== row.batchId))) continue;
     const { betId, fixtureId, bookmakerId, bookmakerName } = snapshot;
     const decisionAt = decisionTimes?.get(fixtureId) ?? asOf;

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { hashFeedContinuation } from '../src/domain/feed-continuation.ts';
 import { maximumFeedWindowRecords } from '../src/domain/match-feed-rules.ts';
 import { storedMatchFeedResponseSchema } from '../src/domain/match-feed.ts';
 import { createPublicResponseCache } from '../src/server/cache/public-cache.ts';
@@ -8,8 +9,8 @@ import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
 const at = Date.parse('2026-10-09T08:00:00Z');
 const parameters = { date: '2026-10-09', pageSize: '100' };
 
-function fixtureWindow({ knownFixtures } = {}) {
-  const firstOrder = Array.from({ length: 105 }, (_, index) => `10000000-0000-4000-8000-${String(index).padStart(12, '0')}`);
+function fixtureWindow({ knownFixtures, fixtures = 105 } = {}) {
+  const firstOrder = Array.from({ length: fixtures }, (_, index) => `10000000-0000-4000-8000-${String(index).padStart(12, '0')}`);
   const homeTeam = { id: 'home', name: 'Synthetic Home', code: null, logoUrl: null };
   const awayTeam = { id: 'away', name: 'Synthetic Away', code: null, logoUrl: null };
   const competition = { id: 'competition-1', name: 'Synthetic league', country: null, logoUrl: null, countryFlagUrl: null };
@@ -58,7 +59,7 @@ function fixtureWindow({ knownFixtures } = {}) {
     providerOdds: false, includePerformance: false });
   return { service, firstOrder, transactions, selections, hydration, get cached() { return cached; },
     get completedTransactions() { return completedTransactions; },
-    rotate() { generation++; order = [...order.slice(1), order[0]]; return order; } };
+    advance() { generation++; }, rotate() { generation++; order = [...order.slice(1), order[0]]; return order; } };
 }
 
 test('page validation rejects an inconsistent response after the read transaction completes', async () => {
@@ -74,7 +75,7 @@ test('a changed source yields adjacent exact pages from one new transaction and 
   const [first, second] = pages;
   assert.equal(fixture.cached, 2);
   assert.deepEqual(fixture.transactions, Array.from({ length: 2 }, () => ({ isolationLevel: 'RepeatableRead', maxWait: 5000, timeout: 30_000 })));
-  assert.deepEqual(fixture.selections, [{ limit: 100, offset: 0 }, { limit: maximumFeedWindowRecords, offset: 0 }]);
+  assert.deepEqual(fixture.selections, [{ limit: 100, offset: 0 }, { limit: 200, offset: 0 }]);
   assert.deepEqual(fixture.hydration.map((batch) => batch.length), [100, 100, 5]);
   assert.notEqual(first.paginationVersion, before.paginationVersion);
   assert.equal(first.paginationVersion, second.paginationVersion);
@@ -101,7 +102,7 @@ test('an unchanged source reuses the complete window, and a date generation chan
 
 test('windows keep the requested offset, stop at the genuine end and reject unsafe ranges before opening a transaction', async () => {
   const fixture = fixtureWindow();
-  for (const through of [0, 1, 3, 2.5, 10001]) {
+  for (const through of [0, 1, 4, 2.5, 10001]) {
     await assert.rejects(fixture.service.queryWindow(parameters, through), (error) => error.code === 'invalid-query');
   }
   assert.equal(fixture.transactions.length, 0);
@@ -109,4 +110,31 @@ test('windows keep the requested offset, stop at the genuine end and reject unsa
   assert.deepEqual(fixture.selections, [{ limit: 150, offset: 30 }]);
   assert.deepEqual(pages.map(({ page, nextPage, records }) => [page, nextPage, records.length]), [[2, 3, 30], [3, 4, 30], [4, null, 15]]);
   assert.deepEqual(pages.flatMap((page) => page.records.map(({ fixtureId }) => fixtureId)), fixture.firstOrder.slice(30));
+});
+
+test('stable checked appends hydrate only the new 50 rows, even when the live generation changes', async () => {
+  const fixture = fixtureWindow({ fixtures: 293 });
+  const filters = { ...parameters, pageSize: '50' };
+  const first = await fixture.service.query(filters);
+  let latestVersion = first.paginationVersion;
+  for (let page = 2; page <= 6; page++) {
+    const start = (page - 1) * 50;
+    const hash = await hashFeedContinuation(1, fixture.firstOrder.slice(0, start));
+    fixture.advance();
+    const response = await fixture.service.query({ ...filters, page: String(page) }, { continuation: { firstPage: 1, hash } });
+    assert.notEqual(response.paginationVersion, latestVersion);
+    latestVersion = response.paginationVersion;
+    assert.deepEqual(response.records.map(({ fixtureId }) => fixtureId), fixture.firstOrder.slice(start, start + 50));
+    assert.deepEqual(fixture.hydration.at(-1), fixture.firstOrder.slice(start, start + 50));
+    assert.deepEqual(fixture.selections.at(-1), { limit: start + 50, offset: 0 });
+  }
+  assert.deepEqual(fixture.hydration.map(batch => batch.length), [50, 50, 50, 50, 50, 43]);
+  const hash = await hashFeedContinuation(1, fixture.firstOrder.slice(0, 100));
+  const revised = fixture.rotate();
+  await assert.rejects(fixture.service.query({ ...filters, page: '3' }, { continuation: { firstPage: 1, hash } }),
+    error => error.code === 'changed');
+  assert.equal(fixture.hydration.length, 6, 'A changed prefix never hydrates or exposes the next page');
+  const rebase = await fixture.service.queryWindow(filters, 6);
+  assert.deepEqual(rebase.flatMap(page => page.records.map(record => record.fixtureId)), revised);
+  assert.deepEqual(fixture.selections.at(-1), { limit: maximumFeedWindowRecords, offset: 0 });
 });

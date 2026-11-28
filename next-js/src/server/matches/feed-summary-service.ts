@@ -6,7 +6,7 @@ import { getDayBoundsInTimeZone } from "../../domain/device-calendar.ts";
 import { feedPerformanceReplySchema, performanceFeedQuery } from "../../domain/feed-performance-summary.ts";
 import { activeFeedFilterCount, feedQueryRules, getFeedToday, maximumCompetitionScope, resolveFeedDates, type FeedParameters } from "../../domain/feed-query.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
-import { publicCacheDescriptor, publicCacheRules, type PublicResponseCache } from "../cache/public-cache.ts";
+import { publicCacheDescriptor, publicCacheRules, type CacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { prepareDemoRange } from "../demo/read-seed.ts";
 import { timedRequestPhase } from "../http/request-timing.ts";
@@ -27,7 +27,7 @@ const storedSummarySchema = feedPerformanceReplySchema.omit({ access: true }).ex
 
 /** Aggregate reads share the feed's scope, ranking, audit and invalidation rules, without hydrating a discarded page. */
 export function createMatchFeedSummaryService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[];
-  clock?: Clock; cache?: PublicResponseCache; providerOdds?: boolean }>) {
+  clock?: Clock; cache?: PublicResponseCache; providerOdds?: boolean; scheduleCacheFill?: CacheDescriptor<unknown>["scheduleFill"] }>) {
   const configured = z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).min(1).max(maximumCompetitionScope).safeParse(options.competitionIds);
   if (!configured.success || new Set(configured.data).size !== configured.data.length) throw new MatchFeedError("unavailable");
   const { cache, database } = options, competitionIds = Object.freeze(configured.data);
@@ -79,6 +79,7 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
       // Counts depend on the same catalog and source dates as storedFeedVersions.
       return await timedRequestPhase("summary-cache", () => cache.read({ ...descriptor,
         tags: descriptor.tags.filter((tag) => tag !== "global:progress"),
+        ...(options.scheduleCacheFill ? { scheduleFill: options.scheduleCacheFill } : {}),
         lifetimeMs: publicToday ? publicCacheRules.todayFeedSummaryMs : descriptor.lifetimeMs }, read));
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

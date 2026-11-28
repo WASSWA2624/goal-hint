@@ -210,12 +210,12 @@ export async function verifyBestSlipsNavigation(page, origin) {
         const row = screen.locator('[data-slip-key="synthetic-archive-slip"]');
         await row.waitFor();
         assert(await pending.count() === 0 && await screen.getByRole('alert').count() === 0, 'Verified rows clear pending and failure feedback');
-        assert(await screen.locator('[data-summary-count="pending"]').textContent() === '25', 'The archive shows its verified count with the row');
+        assert(await screen.locator('[data-summary-count="pending"]').textContent() === '65', 'The archive shows its verified count with the row');
         assert(await headerIsStable(), 'The archive updates within the initial Best Slips document and shared header');
         assert(requests.length === (fail ? 2 : 0) && requests.every(request => request === query),
           'A verified server seed avoids the duplicate API read, and fallback keeps its exact query on retry');
         const readyMs = Math.round(performance.now() - started), initialRequests = requests.length;
-        const load = screen.locator('[data-show-more]'), secondPage = url => archive(url) && url.searchParams.get('page') === '2';
+        const load = screen.locator('[data-show-more]'), secondPage = url => archive(url) && url.searchParams.get('through') === '2';
         const next = Promise.withResolvers();
         const holdNext = async route => { await next.promise; await route.continue(); };
         await page.evaluate(() => { window.fixtureFirstSlip = document.querySelector('[data-slip-key]'); });
@@ -227,10 +227,10 @@ export async function verifyBestSlipsNavigation(page, origin) {
           const pendingMs = Math.round(performance.now() - moreStarted);
           assert(await screen.locator('[data-slip-key]').count() === 20, 'Show More keeps the accepted first archive page visible');
           next.resolve();
-          await screen.locator('[data-slip-key="synthetic-archive-slip-25"]').waitFor();
+          await screen.locator('[data-slip-key="synthetic-archive-slip-40"]').waitFor();
           const unique = await screen.locator('[data-slip-key]').evaluateAll(rows => new Set(rows.map(row => row.dataset.slipKey)).size);
-          assert(unique === 25 && await screen.locator('[data-summary-count="pending"]').textContent() === '25',
-            'Show More appends the remaining original ranks and preserves the period count');
+          assert(unique === 40 && await screen.locator('[data-summary-count="pending"]').textContent() === '65',
+            'Show More appends a full page and preserves the period count');
           assert(await page.evaluate(() => window.fixtureFirstSlip === document.querySelector('[data-slip-key]')),
             'Appending the archive leaves the first rendered row mounted');
           results.push({ screen: 'best-slips-navigation', theme, width, shellMs, readyMs, initialRequests, retry: fail,
@@ -256,7 +256,7 @@ export async function verifyBestSlipsNavigation(page, origin) {
   }
 }
 
-/** Exercise the atomic window and same-snapshot history return in both themes. */
+/** Exercise deep pagination, transient failure, an atomic rebase and guest history in both themes. */
 export async function verifyMatchesContinuation(page, origin) {
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   const listEndpoint = url => url.pathname === '/api/matches';
@@ -266,6 +266,11 @@ export async function verifyMatchesContinuation(page, origin) {
   const load = page.locator('[data-feed-pagination] [data-show-more]');
   const guest = 'synthetic-match-history-guest';
   const results = [];
+  async function checkedSize(expected) {
+    await page.waitForFunction(size => document.querySelectorAll('[data-feed-match-results] [data-fixture-id]').length === size, expected);
+    const unique = await rows.evaluateAll(elements => new Set(elements.map(element => element.dataset.fixtureId)).size);
+    assert(unique === expected, 'Loaded matches must have unique fixture IDs');
+  }
   async function openSlips() {
     const navigation = page.locator('[data-responsive-navigation]:visible').first();
     const link = navigation.locator('a[data-nav-key="best-slips"]:visible').first();
@@ -316,21 +321,50 @@ export async function verifyMatchesContinuation(page, origin) {
         await load.and(page.locator('[aria-busy="true"]')).waitFor();
         const pendingMs = Math.round(performance.now() - started);
         assert(await rows.count() === 50, 'Show More keeps the accepted first Matches page visible');
-        assert(calls.length === 1 && calls[0].searchParams.get('through') === '2', 'Show More starts one atomic window request');
+        assert(calls.length === 1 && calls[0].searchParams.get('page') === '2' && calls[0].searchParams.has('prefix')
+          && !calls[0].searchParams.has('through'), 'Show More starts one checked next-page request');
         release();
-        await page.waitForFunction(() => document.querySelectorAll('[data-feed-match-results] [data-fixture-id]').length === 55);
-        const unique = await rows.evaluateAll(elements => new Set(elements.map(element => element.dataset.fixtureId)).size);
-        assert(unique === 55, 'The next match page contains every fixture exactly once');
+        await checkedSize(100);
         results.push({ screen: 'matches-continuation', theme, width, loadMorePendingMs: pendingMs,
-          loadMoreReadyMs: Math.round(performance.now() - started), rows: unique, quietHistory: true });
+          loadMoreReadyMs: Math.round(performance.now() - started), rows: 100, quietHistory: true });
       });
       await openSlips();
       await heldRead(() => page.goBack({ waitUntil: 'commit' }), async (calls, release) => {
         assert(calls.length === 1 && calls[0].searchParams.get('through') === '2',
           'The two-page history return restores the exact window with one request');
         release();
-        await page.waitForFunction(() => document.querySelectorAll('[data-feed-match-results] [data-fixture-id]').length === 55);
+        await checkedSize(100);
       });
+      for (const [next, expected, fault] of [[3, 150, 503], [4, 200, 409], [5, 250, 'connection'], [6, 293, null]]) {
+        const calls = [];
+        const continuation = url => listEndpoint(url) && (url.searchParams.get('through') === String(next)
+          || url.searchParams.get('page') === String(next) && url.searchParams.has('prefix'));
+        const intercept = route => {
+          const url = new URL(route.request().url());
+          calls.push(url.searchParams.has('prefix') ? 'page' : 'rebase');
+          if (fault === 'connection' && calls.length <= 2) return route.abort();
+          if (typeof fault === 'number' && calls.length === 1) return route.fulfill({ status: fault, json: { error: 'test' },
+            headers: { 'Retry-After': '0' } });
+          return route.continue();
+        };
+        await page.route(continuation, intercept);
+        try {
+          const started = performance.now();
+          await load.click();
+          if (fault === 'connection') {
+            await page.locator('[data-feed-pagination] [data-show-more-status]').waitFor();
+            await checkedSize(expected - 50);
+            await load.click();
+          }
+          await checkedSize(expected);
+          const sequence = fault === 503 ? ['page', 'page'] : fault === 409 ? ['page', 'rebase']
+            : fault === 'connection' ? ['page', 'page', 'page'] : ['page'];
+          assert(JSON.stringify(calls) === JSON.stringify(sequence), `Page ${next} must read ${sequence.join(', ')} exactly`);
+          results.push({ screen: 'matches-deep-continuation', theme, width, rows: expected, requests: calls.length,
+            fault, loadMoreReadyMs: Math.round(performance.now() - started) });
+        } finally { await page.unroute(continuation, intercept); }
+      }
+      assert(!await load.isVisible(), 'No continuation control remains after the verified final page');
     }
     return results;
   } finally {
@@ -407,7 +441,7 @@ export async function verifyColdBestSlipsRetry(page, origin) {
         await response;
         await screen.locator('[data-slip-key="synthetic-archive-slip"]').waitFor();
         assert(await pending.count() === 0 && await alert.count() === 0, 'The recovered archive must clear pending and error feedback');
-        assert(await screen.locator('[data-summary-count="pending"]').textContent() === '25', 'The recovered archive must show its actual count');
+        assert(await screen.locator('[data-summary-count="pending"]').textContent() === '65', 'The recovered archive must show its actual count');
         assert(await sameDocumentAndHeader(), 'The recovered archive must not reload or remount shared navigation');
         assert(requests.length === 2 && requests.every(request => request === query),
           'The quiet fallback and manual retry must request the same canonical cohort once each');
@@ -425,6 +459,64 @@ export async function verifyColdBestSlipsRetry(page, origin) {
     await page.context().clearCookies({ name: cookie });
     page.off('pageerror', onError);
   }
+}
+
+/** Settle slips between requests and verify a single coherent numbered window. */
+export async function verifyBestSlipsContinuation(page, origin) {
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  const cookie = "synthetic-best-slips-epoch", results = [];
+  const screen = page.locator("[data-best-slips-page]");
+  const load = screen.locator("[data-show-more]");
+  const validSlips = () => screen.locator("[data-slip-key]").evaluateAll(rows => rows.map(row => row.dataset.slipKey));
+  const pending = () => screen.locator('[data-summary-count="pending"]').textContent();
+  const windowAt = through => url => url.origin === origin && url.pathname === "/api/best-slips" && url.searchParams.get("through") === String(through);
+  const epoch = value => page.context().addCookies([{ name: cookie, value, url: origin }]);
+  const readWindow = async (through) => {
+    const [response] = await Promise.all([page.waitForResponse(value => windowAt(through)(new URL(value.url()))), load.click()]);
+    assert(response.ok(), "The numbered window must be available");
+    return response.json();
+  };
+  try {
+    for (const { theme, width } of [{ theme: "light", width: 390 }, { theme: "dark", width: 1440 }]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.context().clearCookies({ name: cookie });
+      await page.goto(origin + "/en/best-slips");
+      await page.evaluate(value => localStorage.setItem("goal-hint-theme", value), theme);
+      await page.reload();
+      await page.waitForFunction(value => document.querySelector('meta[name="color-scheme"]')?.content === value, theme);
+      await load.waitFor();
+      const original = await validSlips();
+      assert(original.length === 20 && await pending() === "65", "The active period starts with 20 visible slips and ready counts");
+      await page.route(windowAt(2), route => route.fulfill({ status: 503, json: { error: "unavailable" } }), { times: 1 });
+      await load.click();
+      await screen.getByRole("button", { name: "Try again", exact: true }).waitFor();
+      assert(JSON.stringify(await validSlips()) === JSON.stringify(original) && await pending() === "65",
+        "A failed append keeps the accepted slips and performance counts");
+      const stableAt = performance.now(), stable = await readWindow(2);
+      await screen.locator('[data-slip-key="synthetic-archive-slip-40"]').waitFor();
+      assert(stable.reusedPrefix && stable.pages.length === 1 && (await validSlips()).length === 40,
+        "An unchanged archive sends only the next page");
+      const stableMs = Math.round(performance.now() - stableAt);
+      await epoch("settled");
+      const settledAt = performance.now(), settled = await readWindow(3);
+      await screen.locator('[data-slip-key="synthetic-archive-slip-64"]').waitFor();
+      const updated = await validSlips();
+      assert(!settled.reusedPrefix && settled.pages.length === 3 && updated.length === 60 && new Set(updated).size === 60
+        && updated[0] === "synthetic-archive-slip-5" && await pending() === "61",
+      "A live settlement rebases in one request with unique rows and fresh counts");
+      const settledMs = Math.round(performance.now() - settledAt);
+      await page.context().clearCookies({ name: cookie });
+      await page.reload();
+      await load.waitFor();
+      await epoch("shrink");
+      const shrunk = await readWindow(2);
+      await load.waitFor({ state: "hidden" });
+      assert(!shrunk.reusedPrefix && shrunk.pages.length === 1 && (await validSlips()).length === 15 && await pending() === "15",
+        "A continuation that reaches the new end presents the full current result");
+      results.push({ theme, width, stableMs, settledMs, stableRows: 40, rebasedRows: 60, terminalRows: 15 });
+    }
+    return results;
+  } finally { await page.context().clearCookies({ name: cookie }); }
 }
 
 /** Run against verify-app-loading-rendering.py's isolated server using a Playwright page. */

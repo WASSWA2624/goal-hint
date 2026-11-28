@@ -24,7 +24,7 @@ import { FeedPerformancePlaceholder, FeedPerformanceSummary } from "@/components
 import type { FeedPerformanceSeed } from "@/domain/feed-performance-summary";
 import { ServerThemeUntilHydrated } from "@/styles/provider";
 import { LoadingTheme } from "@/styles/loading-theme";
-import type { ReportingDate } from "@/domain/calendar";
+import type { ReportingDate, UtcInstant } from "@/domain/calendar";
 import { feedQueryHref, isFeedDatePreset, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import { synchronizeFeedStatusDates } from "@/domain/feed-controls";
 import { publicPolicy } from "@/domain/public-policy";
@@ -70,7 +70,27 @@ const Results = styled(FeedStack)`
 /** The retained-result label keeps body colour on desktop. */
 const PreviousNote = styled(FeedNote)`${media.desktop} { color: inherit; }`;
 const StableFeedHeader = memo(FeedHeader);
+const ignoreLoadingAction = () => {};
 type FeedObservation = { initial: MatchFeedResponse; data: MatchFeedResponse };
+
+/** Render the actual control layout before a streamed list delivers its first observation. */
+export function FeedSurfaceLoading({ query, today, asOf }: { query: FeedQuery; today: ReportingDate; asOf: UtcInstant }) {
+  const { startDate: from, endDate: to } = resolveFeedDates(query, today);
+  const messages = createMessages(query.locale);
+  return <FeedStateProvider initial={{ query, today, data: null }}>
+    <LoadingTheme><FeedStack $gap="sm" data-matches-loading aria-busy="true">
+      <StableFeedHeader query={query} today={today} showAccount />
+      <div inert>
+        <FeedFilters scope={feedQueryHref(query, today)} query={query} today={today} dateQuery={query} dateToday={today}
+          leagues={noLeagues} onApply={ignoreLoadingAction} searchText={query.search}
+          onSearchChange={ignoreLoadingAction} onSearchSubmit={ignoreLoadingAction} pending
+          performance={<PerformanceSection><FeedPerformancePlaceholder query={query} data={{ range: { from, to }, asOf }} /></PerformanceSection>} />
+      </div>
+      <VisuallyHidden role="status">{messages.text("feed.filters.loading")}</VisuallyHidden>
+      <MatchResults><ResultsToolbar query={query} today={today} total={null} first={0} last={0} /></MatchResults>
+    </FeedStack></LoadingTheme>
+  </FeedStateProvider>;
+}
 
 /** Memoized with stable callbacks, so header and filter state changes skip the list. */
 const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, searchPending,

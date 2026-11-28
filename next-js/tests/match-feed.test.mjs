@@ -104,12 +104,43 @@ test('invalid through options never reach a stored reader', async () => {
     assert.equal((await response.json()).error.code, 'invalid-query');
   }
 });
+test('a checked continuation strips the prefix option, applies access, and returns its proof with a single page', async () => {
+  const hash = 'a'.repeat(64), accesses = [];
+  const handler = createMatchFeedHandler(async (parameters, context) => {
+    assert.equal(parameters.toString(), 'date=2026-10-09&page=3');
+    assert.deepEqual(context.continuation, { firstPage: 1, hash });
+    if (accesses.length > 2) throw new MatchFeedError('changed');
+    return emptyPage();
+  }, undefined, async () => { accesses.push(true); return fullAccess(); });
+  const search = `date=2026-10-09&page=3&leagues=0&prefix=1%3A${hash}`;
+  const success = await handler(request(search));
+  assert.equal(success.status, 200);
+  assert.equal(success.headers.get('cache-control'), 'private, no-store');
+  const body = await success.json();
+  assert.equal(body.prefix, hash);
+  assert.deepEqual(matchFeedResponseSchema.parse(body.page).leagues, []);
+  assert.equal(accesses.length, 2);
+  const conflict = await handler(request(search));
+  assert.equal(conflict.status, 409);
+  assert.equal(matchFeedErrorSchema.parse(await conflict.json()).error.code, 'changed');
+  for (const query of ['prefix=', `prefix=01:${hash}`, `prefix=10001:${hash}`, `prefix=1:${hash}&through=2`,
+    `prefix=1:${hash}&prefix=1:${hash}`, 'prefix=1:bad']) {
+    assert.equal((await handler(request(query))).status, 400);
+  }
+});
 test('an oversized window fails before returning partial pages', async () => {
   const handler = createMatchFeedHandler(async () => emptyPage(), undefined, fullAccess,
     async () => [{ ...emptyPage(), message: 'x'.repeat(1_048_576) }]);
   const response = await handler(request('date=2026-10-09&pageSize=30&through=2'));
   assert.equal(response.status, 503);
   assert.equal((await response.json()).error.code, 'unavailable');
+});
+test('a multi-page window may exceed one MiB in aggregate when each response page fits its individual budget', async () => {
+  const fixture = { ...emptyPage(), message: 'x'.repeat(550_000) };
+  const handler = createMatchFeedHandler(async () => emptyPage(), undefined, fullAccess, async () => [fixture, fixture]);
+  const response = await handler(request('date=2026-10-09&pageSize=30&through=2'));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).pages.length, 2);
 });
 for (const [error, status, code, retry] of [[new Error('mysql://private:password@internal/prompt-log'), 503, 'unavailable', '5'],
   [new MatchFeedError('rate-limited', 17), 429, 'rate-limited', '17']]) {

@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { hashFeedContinuation, supportsFeedContinuation } from '../src/domain/feed-continuation.ts';
 import { appendFeedPage, applyServerFeedPage, checkedFeedPage, checkedFeedWindow, continueFeedPages, FeedPaginationError, feedPageApiHref, feedPageHref, feedWindowApiHref, initialLoadedFeed, observeFeedPage, replaceFeedPages, supportsFeedWindow } from '../src/domain/feed-pagination.ts';
 import { readJson } from '../src/state/refresh-base.ts';
-import { readRefreshFeedWindow } from '../src/state/refresh-api.ts';
+import { readRefreshFeedContinuation, readRefreshFeedWindow } from '../src/state/refresh-api.ts';
 import { nextLoadedPage } from '../src/domain/browse-period.ts';
 import { feedCheckpointSchema, matchingFeedCheckpoint, readFeedCheckpoints, restorationRules, writeFeedCheckpoint } from '../src/domain/feed-navigation.ts';
 import { resolveFeedDates, feedQueryKey, feedQueryRules } from '../src/domain/feed-query.ts';
@@ -123,8 +124,8 @@ test('the refresh transport distinguishes HTTP 409 from temporary outage and wai
 });
 
 test('an atomic continuation pins the active cohort and starts at the explicit first page when in bounds', () => {
-  assert.equal(supportsFeedWindow(1, 4, 50), true);
-  assert.equal(supportsFeedWindow(1, 5, 50), false);
+  assert.equal(supportsFeedWindow(1, 6, 50), true);
+  assert.equal(supportsFeedWindow(1, 7, 50), false);
   for (const invalid of [[0, 1, 50], [1, 2, 0], [1, 2.5, 50], [10_000, 10_001, 50]]) {
     assert.equal(supportsFeedWindow(...invalid), false);
   }
@@ -132,6 +133,61 @@ test('an atomic continuation pins the active cohort and starts at the explicit f
   assert.deepEqual(Object.fromEntries(target.searchParams), {
     result: 'pending', date: today, sort: 'live-first', page: '2', leagues: '0', through: '3',
   });
+});
+
+test('checked continuation accepts several single pages while the live data revision advances', async () => {
+  const batch = (number) => {
+    const total = 293, totalPages = 6, pageSize = 50;
+    return page(number, Array.from({ length: Math.min(pageSize, total - (number - 1) * pageSize) },
+      (_, index) => `match-${(number - 1) * pageSize + index}`), String(number).repeat(64),
+    { total, totalPages, pageSize, nextPage: number < totalPages ? number + 1 : null,
+      links: { next: number < totalPages ? `/api/matches?page=${number + 1}` : null,
+        previous: number > 1 ? `/api/matches?page=${number - 1}` : null },
+      coverage: { ...page(1, ['a', 'b']).coverage, knownFixtures: total } });
+  };
+  let view = initialLoadedFeed(batch(1));
+  const fallback = async () => assert.fail('Stable membership must only request the next page');
+  const calls = [];
+  for (let nextPage = 2; nextPage <= 6; nextPage++) {
+    assert.ok(supportsFeedContinuation(view.firstPage, nextPage, view.data.pageSize));
+    const old = view.records;
+    view = await continueFeedPages(view, fallback, async delay => {
+      assert.equal(delay, 0);
+      return true;
+    }, { readWindow: fallback, readContinuation: async () => {
+      calls.push(nextPage);
+      if (nextPage === 3 && calls.at(-2) === 2) throw new FeedPaginationError('unavailable', 0);
+      return batch(nextPage);
+    } });
+    assert.ok(old.every((record, index) => record === view.records[index]));
+    assert.equal(view.records.length, Math.min(293, 50 * nextPage));
+    assert.equal(new Set(view.records.map(record => record.fixtureId)).size, view.records.length);
+    assert.equal(view.data.paginationVersion, String(nextPage).repeat(64));
+  }
+  assert.deepEqual(calls, [2, 3, 3, 4, 5, 6]);
+  assert.equal(view.data.nextPage, null);
+});
+
+test('checked continuation verifies a response proof and rebases only if the prefix no longer matches', async t => {
+  const applied = query('pageSize=2');
+  const initial = initialLoadedFeed(page(1, ['a', 'b']));
+  const prefix = { firstPage: 1, hash: await hashFeedContinuation(1, ['a', 'b']) };
+  const requested = t.mock.method(globalThis, 'fetch', async href => {
+    const url = new URL(href, 'https://unit.test');
+    assert.equal(url.searchParams.get('prefix'), `1:${prefix.hash}`);
+    assert.equal(url.searchParams.get('page'), '2');
+    assert.equal(url.searchParams.has('through'), false);
+    return Response.json({ prefix: prefix.hash, page: page(2, ['c', 'd'], otherVersion) });
+  });
+  const readNext = () => readRefreshFeedContinuation(applied, today, 2, prefix, new AbortController().signal);
+  assert.equal((await readNext()).page, 2);
+  requested.mock.mockImplementation(async () => Response.json({ prefix: 'wrong', page: page(2, ['c', 'd']) }));
+  await assert.rejects(readNext(), error => error.code === 'invalid-response');
+  requested.mock.mockImplementation(async () => new Response(null, { status: 409 }));
+  const readWindow = async () => [page(1, ['e', 'a'], otherVersion), page(2, ['b', 'c'], otherVersion)];
+  const result = await continueFeedPages(initial, async () => assert.fail('Rebase must stay atomic'), async () => false,
+    { readContinuation: readNext, readWindow });
+  assert.deepEqual(result.records.map(row => row.fixtureId), ['e', 'a', 'b', 'c']);
 });
 
 test('an atomic continuation accepts a complete pinned generation or verified real end only', () => {

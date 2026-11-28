@@ -2,7 +2,6 @@ import "server-only";
 
 import { cache, Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
-import { AppLoading } from "@/components/navigation/navigation-progress";
 import { getReportingDate, type UtcInstant } from "@/domain/calendar";
 import { breadcrumbStructuredData, feedDiscovery, homeStructuredData, serializeStructuredData } from "@/domain/discovery";
 import { homeHref } from "@/domain/navigation";
@@ -26,7 +25,7 @@ import { publicOddsEnabled } from "@/server/odds/public-odds-policy";
 import { feedMetadata } from "@/server/seo/metadata";
 import { getDiscoveryPolicy } from "@/server/seo/policy";
 import { isDocumentRequest, PublicReadUnavailableError } from "@/server/seo/read-status";
-import { MatchFeedPage } from "./match-feed-page";
+import { MatchFeedLoading, MatchFeedPage } from "./match-feed-page";
 import { getShellInstant } from "./public-shell";
 
 type Props = { params: Promise<{ locale: string; date?: string }>;
@@ -54,7 +53,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
           feedQueryHref(synchronizeFeedStatusDates(query, today), today) !== feedQueryHref(query, today)) return null;
       // The stored reader re-parses this exact bounded representation before reading.
       parseMatchFeedQuery(serializeFeedQuery(query, today), getReportingDate(at), parsing);
-      return { query, today, discovery };
+      return { query, today, discovery, at };
     } catch (error) {
       if (error instanceof MatchFeedError && error.code === "invalid-query") return null;
       throw error;
@@ -118,14 +117,14 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
     if (result.error === "unavailable" && !streaming && policy().index && discovery.eligible && await document()) throw new PublicReadUnavailableError();
     return { query, today, result, discovery, access, summary, providerOdds };
   }
-  async function Content({ props, streaming }: { props: Props; streaming: boolean }) {
+  async function Content({ props, streaming, preloaded = false }: { props: Props; streaming: boolean; preloaded?: boolean }) {
     // Keep an optional audit out of browser HTML and route transitions. The
     // accepted list supplies the snapshot against which the browser checks it.
     const includeSummary = !await browser() && await document();
     const { query, today, result, access, discovery, summary, providerOdds } = await resolve(props, includeSummary, streaming);
     // Start the exact browser audit while the accepted list hydrates. The client
     // consumes this request through its normal cohort and viewer checks.
-    const summaryHref = streaming && !result.error && result.data && result.data.state !== "data-unavailable"
+    const summaryHref = streaming && !preloaded && !result.error && result.data && result.data.state !== "data-unavailable"
       && !emptyFeedPerformanceReply(query, result.data) ? feedPerformanceApiHref(query, today) : null;
     const messages = createMessages(query.locale);
     const { tier, signedIn } = result.data?.access ?? access;
@@ -148,8 +147,17 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
       return feedMetadata(query, today, result, policy(), discovery);
     },
     async Page(props: Props) {
-      if (!await browserView(props.params, props.searchParams)) return Content({ props, streaming: false });
-      return <Suspense fallback={<AppLoading />}><Content props={props} streaming /></Suspense>;
+      const view = await browserView(props.params, props.searchParams);
+      if (!view) return Content({ props, streaming: false });
+      // Native browser visits can begin the small aggregate while the first
+      // page loads. Partial router prefetches must not start an aggregate.
+      const eagerSummary = view.discovery.home && await browserDocument?.() ? feedPerformanceApiHref(view.query, view.today) : null;
+      return <>
+        {eagerSummary && <link rel="preload" as="fetch" href={eagerSummary} crossOrigin="anonymous" />}
+        <Suspense fallback={<MatchFeedLoading query={view.query} today={view.today} asOf={view.at} />}>
+          <Content props={props} streaming preloaded={eagerSummary !== null} />
+        </Suspense>
+      </>;
     },
   };
 }

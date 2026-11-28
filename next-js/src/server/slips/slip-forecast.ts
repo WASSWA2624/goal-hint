@@ -20,6 +20,7 @@ import { publicationBarrierFromRow, storedPublicationBarrier } from "../predicti
 import { readGoalMarketSettlement } from "../predictions/goal-market-store.ts";
 import { fixtureResultFromRow, fixtureResultMatchesCanonical, resultStatus, storedFixtureResult, type StoredFixtureResult } from "../results/result-read.ts";
 import { cycleEligibilityFor, storedSettlementRevision } from "../settlement/settlement-read.ts";
+import { readArchivedSlipRevisions } from "./slip-archive-revisions.ts";
 import { projectSlipAdditionalGoalForecast, projectSlipTotal15Forecast, readArchivedSlipGoalExtensions,
   readSlipGoalExtensions, type SlipGoalExtension } from "./slip-goal-forecast.ts";
 
@@ -291,7 +292,7 @@ function scheduleProjection(row: HistoryRow): CutoffSchedule {
     actualStartedAt: row.actualStartedAt === null ? null : historyTime(row.actualStartedAt) };
 }
 /** Keep archive reads bounded by batches rather than one database round trip per original leg. */
-async function prefetchForecasts(tx: Tx, cycleIds: readonly string[], revisionIds: readonly string[], cache: ForecastCache) {
+async function prefetchForecasts(tx: Tx, cycleIds: readonly string[], revisionIds: readonly string[], cache: ForecastCache, editorial: boolean) {
   for (const ids of batches(cycleIds)) {
     const requested = new Set(ids), rows = await tx.predictionCycle.findMany({ where: { id: { in: ids } } });
     const schedules = await tx.predictionSchedule.findMany({ where: { cycleId: { in: ids } }, orderBy: [{ cycleId: "asc" }, { version: "asc" }] });
@@ -314,6 +315,11 @@ async function prefetchForecasts(tx: Tx, cycleIds: readonly string[], revisionId
     }
   }
   for (const ids of batches(revisionIds)) {
+    ids.forEach((id) => cache.revisions.set(id, null));
+    if (editorial) {
+      for (const [id, revision] of await readArchivedSlipRevisions(tx, ids)) cache.revisions.set(id, revision);
+      continue;
+    }
     const requested = new Set(ids), rows = await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT *,
       integrity=SHA2(CONCAT(id, ':', requestHash, ':', CAST(candidateJson AS CHAR)),256) AS validIntegrity
       FROM PredictionSet WHERE id IN (${Prisma.join(ids)})`);
@@ -324,7 +330,6 @@ async function prefetchForecasts(tx: Tx, cycleIds: readonly string[], revisionId
       if (typeof row.setId !== "string" || !requested.has(row.setId)) return historyFail("invalid-state");
       const values = byRevision.get(row.setId) ?? []; values.push(row); byRevision.set(row.setId, values);
     }
-    ids.forEach((id) => cache.revisions.set(id, null));
     const seen = new Set<string>();
     for (const row of rows) {
       if (typeof row.id !== "string" || !requested.has(row.id) || seen.has(row.id)) return historyFail("invalid-state");
@@ -349,7 +354,7 @@ export async function readSlipForecastResults(tx: Tx, selections: readonly SlipM
   const references = selections.flatMap((selection) => selection.forecast ? [selection.forecast] : []);
   const cycleIds = [...new Set(references.map((reference) => reference.cycleId))], revisionIds = [...new Set(references.map((reference) => reference.revisionId))];
   if (Math.max(cycleIds.length, revisionIds.length) > slipForecastReadRules.prefetchThreshold) {
-    await timedRequestPhase("slip-forecast-evidence", () => prefetchForecasts(tx, cycleIds, revisionIds, { cycles, revisions, schedules }));
+    await timedRequestPhase("slip-forecast-evidence", () => prefetchForecasts(tx, cycleIds, revisionIds, { cycles, revisions, schedules }, editorial));
   }
   const goalExtensions = await timedRequestPhase("slip-goal-evidence", async () => {
     const extensions = new Map<string, SlipGoalExtension>();

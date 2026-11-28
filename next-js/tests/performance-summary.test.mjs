@@ -58,7 +58,7 @@ test('late older or equal-clock different summaries cannot replace a verified ne
   assert.equal(canReplaceFeedPerformance(accepted, accepted), true);
 });
 
-test('summary generation relaxation requires the exact href, server cohort and anonymous viewer', () => {
+test('a newer summary requires the exact request, server cohort and authenticated access projection', () => {
   const fresh = summary(101, 'b');
   assert.throws(() => checkedFeedPerformance(fresh, list, { ...observation, currentHref: '/api/matches/summary?date=2026-11-27' }), changed);
   assert.throws(() => checkedFeedPerformance(summary(101, 'a'), list, { ...observation, currentHref: '/api/matches/summary?q=changed' }), changed);
@@ -66,7 +66,13 @@ test('summary generation relaxation requires the exact href, server cohort and a
   assert.throws(() => checkedFeedPerformance(fresh, { ...list, access: { tier: 'free', signedIn: true } }, observation), changed);
   for (const tier of ['free', 'full']) {
     const member = { tier, signedIn: true }, memberList = { ...list, access: member };
-    assert.throws(() => checkedFeedPerformance(summary(101, 'b', { access: member }), memberList, observation), changed);
+    const latest = summary(101, 'b', { access: member });
+    assert.throws(() => checkedFeedPerformance(latest, memberList, observation), changed);
+    assert.deepEqual(checkedFeedPerformance(latest, memberList, { ...observation, publicCohort: true }), latest);
+    assert.throws(() => checkedFeedPerformance(latest, list, { ...observation, publicCohort: true }), changed);
+    const seed = { href, reply: latest, observed: true };
+    assert.equal(retainedFeedPerformance(seed, href, memberList, true), seed);
+    assert.equal(retainedFeedPerformance(seed, href, memberList), null);
     assert.deepEqual(checkedFeedPerformance(summary(101, 'a', { access: member }), memberList, observation).access, member);
   }
 });

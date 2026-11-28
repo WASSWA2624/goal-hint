@@ -30,9 +30,11 @@ def verify_matches_document(origin):
     failure = {"Cookie": "synthetic-feed-unavailable=1"}
     status, healthy = stream(origin, "/browser-matches", browser)
     assert status == 200
-    shell_at, shell = next((at, html) for at, html in healthy if "data-app-loading" in html)
+    shell_at, shell = next((at, html) for at, html in healthy if "data-matches-loading" in html)
     list_at = next(at for at, html in healthy if "data-feed-match-results" in html)
     assert "data-feed-match-results" not in shell
+    assert 'data-feed-filters' in shell and 'data-performance-summary="matches"' in shell
+    assert '/api/matches/summary?' in shell
     assert list_at >= 1.7 and list_at - shell_at > 1, (shell_at, list_at)
     assert healthy[-1][0] < list_at + 2, (list_at, healthy[-1][0])
     assert 'rel="canonical" href="https://goalhint.com/en/matches"' in healthy[-1][1]
@@ -41,7 +43,7 @@ def verify_matches_document(origin):
     assert 'data-feed-performance-state="ready"' not in healthy[-1][1]
     status, filtered = stream(origin, "/browser-matches?country=England", browser)
     assert status == 200 and "data-feed-match-results" in filtered[-1][1]
-    assert any("data-app-loading" in html and "data-feed-match-results" not in html for _, html in filtered)
+    assert any("data-matches-loading" in html and "data-feed-match-results" not in html for _, html in filtered)
     assert 'content="noindex, follow"' in filtered[-1][1]
     worker_browser = {
         **browser, "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "same-origin", "Sec-Fetch-Site": "same-origin",
@@ -49,13 +51,13 @@ def verify_matches_document(origin):
     }
     status, worker = stream(origin, "/browser-matches?result=won&when=today&sort=live-first&picks=all", worker_browser)
     assert status == 200
-    worker_shell_at = next(at for at, html in worker if "data-app-loading" in html)
+    worker_shell_at = next(at for at, html in worker if "data-matches-loading" in html)
     worker_list_at = next(at for at, html in worker if "data-feed-match-results" in html)
     assert worker_list_at >= 1.7 and worker_list_at - worker_shell_at > 1, (worker_shell_at, worker_list_at)
     status, outage = stream(origin, "/browser-matches", {**browser, **failure})
     assert status == 200 and 'data-feed-initial-retry="true"' in outage[-1][1]
     assert "data-feed-list-recovery" not in outage[-1][1]
-    assert any("data-app-loading" in html and "data-feed-initial-retry" not in html for _, html in outage)
+    assert any("data-matches-loading" in html and "data-feed-initial-retry" not in html for _, html in outage)
     assert "data-feed-match-results" not in outage[-1][1]
     status, crawler_healthy = stream(origin, "/browser-matches", crawler)
     assert status == 200 and 'data-feed-performance-state="ready"' in crawler_healthy[-1][1]

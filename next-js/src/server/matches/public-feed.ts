@@ -5,6 +5,7 @@ import type { FeedParameters } from "../../domain/feed-query.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { getDatabase } from "../database/client.ts";
 import { getRuntimePolicy } from "../config/runtime-policy.ts";
+import type { CacheDescriptor } from "../cache/public-cache.ts";
 import { createMysqlPublicResponseCache } from "../cache/mysql-public-cache.ts";
 import { createMatchFeedService, type MatchFeedReadContext } from "./feed-service.ts";
 import { createMatchFeedSummaryService } from "./feed-summary-service.ts";
@@ -34,9 +35,11 @@ export async function readPublicMatchFeedWindow(parameters: FeedParameters, thro
 }
 
 /** Independently bounded aggregate request; list navigation keeps its 30s limit. */
-export function readPublicMatchFeedSummary(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock) {
+export function readPublicMatchFeedSummary(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock,
+  scheduleCacheFill?: CacheDescriptor<unknown>["scheduleFill"]) {
   const database = getDatabase();
   return createMatchFeedSummaryService({ database, cache: createMysqlPublicResponseCache(database), ...(clock ? { clock } : {}),
+    ...(scheduleCacheFill ? { scheduleCacheFill } : {}),
     providerOdds: publicOddsEnabled(), competitionIds: getRuntimePolicy().choices.competitionIds ?? [] }).query(parameters, { ...context, ...publicMatchProjection });
 }
 

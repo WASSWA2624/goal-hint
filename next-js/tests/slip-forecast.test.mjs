@@ -9,6 +9,7 @@ import { cycleFromRows, revisionFromRows } from '../src/server/predictions/histo
 import { goalMarketExtensionFromRow, prepareGoalMarketExtension } from '../src/server/predictions/goal-market-store.ts';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 import { bindSlipForecasts, projectSlipForecastResult, readSlipForecastResults, slipForecastReadRules } from '../src/server/slips/slip-forecast.ts';
+import { readArchivedSlipRevisions } from '../src/server/slips/slip-archive-revisions.ts';
 import { projectSlipTotal15Forecast, readArchivedSlipGoalExtensions } from '../src/server/slips/slip-goal-forecast.ts';
 import { PredictionHistoryError } from '../src/server/predictions/history-contract.ts';
 import { slipForecastFixture } from './helpers/slip-forecast-fixtures.mjs';
@@ -138,6 +139,49 @@ test('archive goal reuse requires the current verified seal and matching row ide
   }
   rows = [];
   assert.equal((await read()).size, 0);
+});
+
+test('archive revision reuse proves the current candidate and market seals and scalar bindings', async () => {
+  const source = slipForecastFixture({ localQualification: 'qualified' });
+  let row = { ...source.row, integrity: 'a'.repeat(64) }, markets = source.marketRows
+    .map((market, index) => ({ ...market, integrity: String(index).repeat(64) }));
+  const statements = [];
+  const tx = { $queryRaw: async (statement) => {
+    statements.push(statement.sql);
+    const hide = (entry, key) => ({ ...entry, [key]: statement.sql.includes('CASE WHEN')
+      && statement.values.includes(entry.integrity) ? null : entry[key] });
+    return statement.sql.includes('FROM PredictionSet')
+      ? [hide(row, 'candidateJson')] : markets.map(market => hide(market, 'payloadJson'));
+  } };
+  const read = async () => (await readArchivedSlipRevisions(tx, [row.id])).get(row.id);
+  const cold = await read();
+  assert.deepEqual(cold, revisionFromRows(row, markets));
+  assert.equal(statements.length, 2);
+  assert.ok(statements.every(sql => /SHA2\(/u.test(sql) && !sql.includes('CASE WHEN')));
+  statements.length = 0;
+  assert.equal(await read(), cold);
+  assert.equal(statements.length, 2);
+  assert.ok(statements.every(sql => /SHA2\(/u.test(sql) && sql.includes('CASE WHEN')));
+
+  row = { ...row, validIntegrity: 0 };
+  await assert.rejects(read, error => error.reason === 'invalid-state');
+  row = { ...row, validIntegrity: 1 };
+  const original = markets;
+  markets = [{ ...original[0], validIntegrity: 0 }, ...original.slice(1)];
+  await assert.rejects(read, error => error.reason === 'invalid-state');
+  markets = original.slice(1);
+  await assert.rejects(read, error => error.reason === 'invalid-state');
+
+  statements.length = 0;
+  markets = [{ ...original[0], selectedProbability: 0.1 }, ...original.slice(1)];
+  await assert.rejects(read, error => error.reason === 'invalid-state');
+  assert.equal(statements.length, 4, 'a changed binding goes through the original full-row validator');
+  markets = original;
+  row = { ...row, candidateJson: row.candidateJson + ' ', integrity: 'b'.repeat(64) };
+  const reread = await read();
+  assert.notEqual(reread, cold);
+  assert.deepEqual(reread, cold);
+  assert.equal(await read(), reread);
 });
 
 test('a formally void original cycle retains its adjudication but remains private while its replacement is live', () => {

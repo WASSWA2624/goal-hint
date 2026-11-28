@@ -6,6 +6,7 @@ import { feedPerformanceReplySchema } from "../../domain/feed-performance-summar
 import { usesPremiumFeedOracle } from "../../domain/paywall.ts";
 import { contentAccess, type AccessResolver } from "../members/gated-reads.ts";
 import { resolveViewerAccessFresh } from "../members/viewer-access.ts";
+import { timedRequestPhase } from "../http/request-timing.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { parseMatchFeedQuery } from "./feed-service.ts";
 import { readPublicMatchFeedSummary } from "./public-feed.ts";
@@ -17,14 +18,18 @@ export type FeedSummarySource = (...args: Parameters<typeof readPublicMatchFeedS
 export function createGatedFeedSummary(source: FeedSummarySource = readPublicMatchFeedSummary,
   resolveAccess: AccessResolver = resolveViewerAccessFresh) {
   return async (parameters: FeedParameters, clock: Clock = { now: () => utcInstantFromEpochMilliseconds(Date.now()) }) => {
-    const at = clock.now(), initialAccess = await contentAccess(resolveAccess);
-    const query = parseMatchFeedQuery(parameters, getReportingDate(at), { asOf: at,
-      ...(initialAccess.tier === "free" ? { providerOdds: true } : {}) });
-    if (initialAccess.tier === "free" && usesPremiumFeedOracle(query)) throw new MatchFeedError("subscription-required");
+    const at = clock.now(), today = getReportingDate(at);
+    const query = parseMatchFeedQuery(parameters, today, { asOf: at, providerOdds: true });
+    const protectedScope = usesPremiumFeedOracle(query);
+    if (protectedScope) {
+      const initialAccess = await timedRequestPhase("summary-initial-access", () => contentAccess(resolveAccess));
+      if (initialAccess.tier === "free") throw new MatchFeedError("subscription-required");
+      parseMatchFeedQuery(parameters, today, { asOf: at });
+    }
     const data = await source(parameters, { completedOnly: false }, { now: () => at });
     if (!data.performance) throw new MatchFeedError("unavailable");
-    const access = await contentAccess(resolveAccess);
-    if (access.tier === "free" && usesPremiumFeedOracle(query)) throw new MatchFeedError("subscription-required");
+    const access = await timedRequestPhase("summary-access", () => contentAccess(resolveAccess));
+    if (access.tier === "free" && protectedScope) throw new MatchFeedError("subscription-required");
     return feedPerformanceReplySchema.parse({ performance: data.performance, paginationVersion: data.paginationVersion,
       ...(data.performanceScope !== undefined ? { performanceScope: data.performanceScope } : {}),
       asOf: data.asOf, access: { tier: access.tier, signedIn: access.signedIn } });

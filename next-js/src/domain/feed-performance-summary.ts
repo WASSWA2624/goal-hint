@@ -31,7 +31,7 @@ export function emptyFeedPerformanceReply(query: FeedQuery, data: MatchFeedRespo
     asOf: data.asOf, access: data.access };
 }
 
-type SummaryObservation = Readonly<{ requestedHref: string; currentHref: string }>;
+type SummaryObservation = Readonly<{ requestedHref: string; currentHref: string; publicCohort?: boolean }>;
 
 /** A late aggregate must still belong to the visible cohort and viewer. */
 export function checkedFeedPerformance(value: unknown, data: MatchFeedResponse, observation?: SummaryObservation): FeedPerformanceReply {
@@ -45,9 +45,11 @@ export function checkedFeedPerformance(value: unknown, data: MatchFeedResponse, 
   }
   if (reply.paginationVersion !== data.performanceVersion) {
     // The digest that includes mutable source generations cannot identify a stable cohort on its own.
-    // Only an exact public guest observation can advance independently of the list's generation.
+    // An exact public observation can advance independently of the displayed list.
+    // A premium filter still needs the matching list observation.
+    const independentlyObservable = reply.access.tier === "free" && !reply.access.signedIn || observation?.publicCohort === true;
     if (!observation || !reply.performanceScope || reply.performanceScope !== data.performanceScope
-      || reply.access.tier !== "free" || reply.access.signedIn || reply.asOf <= data.asOf) {
+      || !independentlyObservable || reply.asOf <= data.asOf) {
       throw new FeedPaginationError("changed");
     }
   }
@@ -60,10 +62,11 @@ export function canReplaceFeedPerformance(current: Pick<FeedPerformanceReply, "a
 }
 
 /** A status navigation can retain confirmed metrics only for the same period snapshot and viewer. */
-export function retainedFeedPerformance(seed: FeedPerformanceSeed | null | undefined, href: string, data: MatchFeedResponse): FeedPerformanceSeed | null {
+export function retainedFeedPerformance(seed: FeedPerformanceSeed | null | undefined, href: string, data: MatchFeedResponse,
+  publicCohort = false): FeedPerformanceSeed | null {
   if (seed?.href !== href || !seed.reply) return null;
   try {
-    checkedFeedPerformance(seed.reply, data, seed.observed ? { requestedHref: seed.href, currentHref: href } : undefined);
+    checkedFeedPerformance(seed.reply, data, seed.observed ? { requestedHref: seed.href, currentHref: href, publicCohort } : undefined);
     return seed;
   } catch { return null; }
 }

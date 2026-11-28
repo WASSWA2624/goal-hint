@@ -8,12 +8,12 @@ import scenarios from "./scenarios.json";
 export const guestHistoryFixture = "synthetic-match-history-guest";
 
 /** Stable synthetic pages let browser checks exercise real filters and the 50-row boundary. */
-function fixtureCohort(query: FeedQuery, clock = Date.now()) {
+function fixtureCohort(query: FeedQuery, clock = Date.now(), deep = false) {
   const at = utcInstantFromEpochMilliseconds(clock), today = getFeedToday(query, at), range = resolveFeedDates(query, today);
   const leagues = [{ id: "england", name: "Premier League", country: "England", logoUrl: null, fixtures: 20 },
     { id: "egypt", name: "Egyptian Premier League", country: "Egypt", logoUrl: null, fixtures: 20 },
     { id: "france", name: "Ligue 1", country: "France", logoUrl: null, fixtures: 15 }];
-  const records = Array.from({ length: 55 }, (_, index) => {
+  const records = Array.from({ length: deep ? 293 : 55 }, (_, index) => {
     const status = (["live", "scheduled", "finished-regulation"] as const)[Math.floor(index / 3) % 3]!;
     const won = index < 34;
     return { ...scenarios.feed.records[0]!, fixtureId: `fixture-${index + 1}`, status,
@@ -28,22 +28,27 @@ function fixtureCohort(query: FeedQuery, clock = Date.now()) {
     && (!query.countries.length || query.countries.includes(record.competition.country))
     && (query.status === "all" || query.status === record.status || (query.status === "finished" && record.status === "finished-regulation"))
     && (!query.result || query.result === fixtureResult(record)));
-  return { at, today, range, leagues, selected };
+  return { at, today, range, leagues, selected, knownFixtures: records.length };
 }
 
 function fixtureResult(record: { status: string; score: { home: number; away: number } | null }) {
   return record.status !== "finished-regulation" ? "pending" : record.score!.home > record.score!.away ? "won" : "lost";
 }
 
-export function summaryFixture(query: FeedQuery) {
-  const { at, selected } = fixtureCohort(query);
+export function summaryFixture(query: FeedQuery, deep = false) {
+  const { at, selected } = fixtureCohort(query, Date.now(), deep);
   const performance = { total: selected.length + 1, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0, unavailable: 1 };
   for (const record of selected) performance[fixtureResult(record)]++;
   return feedPerformanceReplySchema.parse({ performance, asOf: at, access: scenarios.feed.access, paginationVersion: scenarios.feed.paginationVersion });
 }
 
-export function feedFixture(query: FeedQuery, clock = Date.now()) {
-  const { at, today, range, leagues, selected } = fixtureCohort(query, clock);
+export function fixturePrefixIds(query: FeedQuery, clock: number, firstPage: number, deep: boolean) {
+  const { selected } = fixtureCohort(query, clock, deep);
+  return selected.slice((firstPage - 1) * query.pageSize, (query.page - 1) * query.pageSize).map(({ fixtureId }) => fixtureId);
+}
+
+export function feedFixture(query: FeedQuery, clock = Date.now(), deep = false) {
+  const { at, today, range, leagues, selected, knownFixtures } = fixtureCohort(query, clock, deep);
   const { access, ...stored } = scenarios.feed; void access;
   const total = selected.length, totalPages = Math.ceil(total / query.pageSize), nextPage = query.page < totalPages ? query.page + 1 : null;
   const previousPage = query.page > 1 ? query.page - 1 : null;
@@ -51,5 +56,5 @@ export function feedFixture(query: FeedQuery, clock = Date.now()) {
     leagues, today, asOf: at, page: query.page, pageSize: query.pageSize, total, totalPages, nextPage, previousPage,
     links: { next: nextPage ? feedPageApiHref(query, today, nextPage) : null, previous: previousPage ? feedPageApiHref(query, today, previousPage) : null },
     range: { from: range.startDate, to: range.endDate, ...range.window }, performance: null,
-    coverage: { ...stored.coverage, knownFixtures: 55, matchingWithMarket: total }, run: null });
+    coverage: { ...stored.coverage, knownFixtures, matchingWithMarket: total }, run: null });
 }

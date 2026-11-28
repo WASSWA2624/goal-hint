@@ -670,6 +670,21 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
         assert.equal(exact(ODDS_BOOKMAKER, 'Over 3.5').observation.providerUpdatedAt, providerUpdatedAt);
         assert.equal(exact(ODDS_BOOKMAKER, 'Over 3.5').observation.observedAt, correctedAt);
         assert.equal(exact(6, 'Over 3.5').odd, '3.25');
+        assert.deepEqual((await recovered()).get(F.G.id), quotes, 'repeat reads preserve exact quotes and all observation clocks');
+        const warmSnapshot = exact(ODDS_BOOKMAKER, 'Over 3.5').observation.snapshotId;
+        let checkedWarm = false;
+        const mismatchingSeal = () => a.query((tx) => storedRecoveredBookmakerQuotes({ $queryRaw: async (...sql) => {
+          const rows = await tx.$queryRaw(...sql);
+          return rows.map((row) => {
+            if (row.id !== warmSnapshot) return row;
+            checkedWarm = row.body === null && asBool(row.validIntegrity);
+            // The real statement proved this hit before returning its body-free row. Simulate a failed current seal.
+            return { ...row, validIntegrity: false };
+          });
+        } }, [target], p.now(), [5]));
+        await assert.rejects(mismatchingSeal, /Database operation failed/u, 'a warm result still requires a current body seal');
+        assert.equal(checkedWarm, true);
+        assert.deepEqual((await recovered()).get(F.G.id), quotes, 'a subsequent proven read remains usable');
         const decisionAt = Date.parse('2026-10-16T10:00:00Z');
         const pointInTime = (cutoff) => a.query((tx) =>
           storedPointInTimeFeaturedBookmakerQuotes(tx, [{ ...target, decisionAt: cutoff }], p.now()));

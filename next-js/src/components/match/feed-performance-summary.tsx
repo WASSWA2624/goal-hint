@@ -9,6 +9,7 @@ import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { FeedPaginationError } from "@/domain/feed-pagination-error";
 import { getFeedToday, type FeedQuery } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
+import { usesPremiumFeedOracle } from "@/domain/paywall";
 import { createMessages } from "@/i18n/messages";
 import { useAppDispatch } from "@/state/hooks";
 import { consumeRefresh, refreshApi } from "@/state/refresh-api";
@@ -16,7 +17,8 @@ import { FeedNote } from "./feed-controls";
 import { LoadingTheme } from "@/styles/loading-theme";
 
 type Presentation = { query: FeedQuery; data: MatchFeedResponse };
-function summaryLabels({ query, data }: Presentation) {
+type SummaryLabels = { query: FeedQuery; data: { range: Pick<MatchFeedResponse["range"], "from" | "to">; asOf: number } };
+function summaryLabels({ query, data }: SummaryLabels) {
   const from = parseReportingDate(data.range.from), to = parseReportingDate(data.range.to);
   const today = getFeedToday(query, data.asOf);
   const title = query.status === "live" ? "performance.summary.live"
@@ -31,7 +33,7 @@ function summaryLabels({ query, data }: Presentation) {
 const ignoreResult = () => {};
 
 /** Render the actual heading and all outcome labels in the first HTML, with unknown values. */
-export function FeedPerformancePlaceholder(props: Presentation) {
+export function FeedPerformancePlaceholder(props: SummaryLabels) {
   return <LoadingTheme><PerformanceSummary counts={null} locale={props.query.locale} kind="matches" {...summaryLabels(props)}
     showCoverage={false} compactHeader activeResult={props.query.result} onResult={ignoreResult} onOthers={ignoreResult} disabled loading="background" /></LoadingTheme>;
 }
@@ -65,8 +67,9 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
   onGenerationChanged?: (() => Promise<void> | undefined) | undefined;
 }) {
   const href = feedPerformanceApiHref(query, today);
+  const publicCohort = !usesPremiumFeedOracle(performanceFeedQuery(query));
   const empty = useMemo(() => emptyFeedPerformanceReply(query, data), [data, query]);
-  const seed = empty ? { href, reply: empty } : retainedFeedPerformance(confirmed, href, data) ?? (initial ? use(initial) : null);
+  const seed = empty ? { href, reply: empty } : retainedFeedPerformance(confirmed, href, data, publicCohort) ?? (initial ? use(initial) : null);
   const dispatch = useAppDispatch(), messages = createMessages(query.locale);
   const [attempt, retry] = useState({ number: 0, foreground: false });
   const [releasedRetry, setReleasedRetry] = useState(0);
@@ -84,7 +87,7 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
         error: seed.failure?.code ?? "unavailable", retryAt, withinRetryBudget: retryAt - data.asOf <= refreshIntervalMs };
     }
     try {
-      const checked = checkedFeedPerformance(seed.reply, data, seed.observed ? { requestedHref: seed.href, currentHref: href } : undefined);
+      const checked = checkedFeedPerformance(seed.reply, data, seed.observed ? { requestedHref: seed.href, currentHref: href, publicCohort } : undefined);
       return { key, scope, attempt: attempt.number, summary: checked, observed: seed.observed,
         refreshAfter: checked.asOf + refreshIntervalMs, error: null, retryAt: 0, withinRetryBudget: false };
     } catch {
@@ -173,9 +176,9 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
       if (value.access.tier !== data.access.tier || value.access.signedIn !== data.access.signedIn)
         throw new FeedPaginationError("subscription-required");
       let checked;
-      try { checked = checkedFeedPerformance(value, data, { requestedHref, currentHref }); }
+      try { checked = checkedFeedPerformance(value, data, { requestedHref, currentHref, publicCohort }); }
       catch (cause) {
-        // Legacy replies and authenticated readers can qualify only through one matching list observation.
+        // Legacy replies and premium filters need one matching list observation.
         if (cause instanceof FeedPaginationError && cause.code === "changed"
           && (!value.performanceScope || !data.performanceScope || value.performanceScope === data.performanceScope)
           && value.paginationVersion && value.paginationVersion !== data.performanceVersion && value.asOf >= data.asOf
@@ -210,7 +213,7 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
       if (accessChanged) { pendingGeneration.current = null; onConfirmed?.(null); onAccessChanged?.(); }
     });
     return () => controller.abort();
-  }, [attempt, dispatch, key, needsRead, onAccessChanged, onConfirmed, onGenerationChanged, scope]);
+  }, [attempt, dispatch, key, needsRead, onAccessChanged, onConfirmed, onGenerationChanged, publicCohort, scope]);
   const failed = !empty && !loading && !counts && current?.error;
   const stale = !empty && Boolean(matchingScope?.summary && (matchingScope.error || matchingScope.key !== key));
   const summaryCounts = useMemo(() => counts ? { ...counts, cancelled: counts.cancelled ?? 0 } : null, [counts]);

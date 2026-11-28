@@ -1,7 +1,9 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { getDayBoundsInTimeZone } from "../../domain/device-calendar.ts";
+import { feedContinuationEvidence, supportsFeedContinuation, type FeedContinuationPrefix } from "../../domain/feed-continuation.ts";
 import { isLocalFootballDevelopment } from "../../domain/development-demo.ts";
 import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock, type ReportingDate, type ReportingDateRange } from "../../domain/calendar.ts";
 import { activeFeedFilterCount, feedQueryKey, getFeedToday, parseFeedQuery, resolveFeedDates, serializeFeedQuery, feedQueryRules, maximumCompetitionScope, type FeedParameters, type FeedQuery } from "../../domain/feed-query.ts";
@@ -74,7 +76,7 @@ export async function storedFeedVersions(tx: Prisma.TransactionClient, query: Fe
 }
 
 export type MatchFeedReadContext = Readonly<{ locale?: string; routeDate?: string; completedOnly?: boolean;
-  publishedOnly?: boolean; publishedForecasts?: boolean; predictedMatchesOnly?: boolean }>;
+  publishedOnly?: boolean; publishedForecasts?: boolean; predictedMatchesOnly?: boolean; continuation?: FeedContinuationPrefix }>;
 
 /** Public readers supply their verified odds permission. */
 export function createMatchFeedService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[]; clock?: Clock; cache?: PublicResponseCache;
@@ -95,6 +97,11 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
     if (through !== undefined && (!Number.isSafeInteger(through) || through <= query.page || through > feedQueryRules.maximumPage ||
       recordLimit > maximumFeedWindowRecords)) throw new MatchFeedError("invalid-query");
     const offset = (query.page - 1) * query.pageSize;
+    const continuation = context.continuation;
+    if (continuation && (through !== undefined || !/^[a-f0-9]{64}$/u.test(continuation.hash)
+      || !supportsFeedContinuation(continuation.firstPage, query.page, query.pageSize))) throw new MatchFeedError("invalid-query");
+    const firstOffset = continuation ? (continuation.firstPage - 1) * query.pageSize : offset;
+    const prefixLength = offset - firstOffset;
     const today = getFeedToday(query, asOf), range = resolveFeedDates(query, today);
     const historyBefore = publishedOnly ? historicalFeedCutoff(query, range, today) : null;
     const messages = createMessages(query.locale);
@@ -155,10 +162,17 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         const exactMatches = sql.exact ? Number(matching.exact ?? 0) : null;
         type SelectedRow = { id: string; projected?: number | bigint | boolean } &
           Partial<{ [Field in keyof FeedSelectedPick]: FeedSelectedPick[Field] | null }>;
-        const rows = await tx.$queryRaw<SelectedRow[]>(Prisma.sql`SELECT STRAIGHT_JOIN f.id
+        const selected = await timedRequestPhase(continuation ? "list-continuation-order" : "list-order",
+          () => tx.$queryRaw<SelectedRow[]>(Prisma.sql`SELECT STRAIGHT_JOIN f.id
           ${sql.projectPick ? Prisma.sql`,(${sql.displayUsesProjection}) AS projected,${selectedFeedPickColumns}` : Prisma.empty}
           ${sql.pageJoins} ${sql.searchJoin} WHERE ${sql.where}
-          ORDER BY ${sql.order} LIMIT ${recordLimit} OFFSET ${offset}`);
+          ORDER BY ${sql.order} LIMIT ${prefixLength + recordLimit} OFFSET ${firstOffset}`));
+        if (continuation) {
+          const prefix = selected.slice(0, prefixLength).map(({ id }) => id);
+          const actual = createHash("sha256").update(feedContinuationEvidence(continuation.firstPage, prefix)).digest("hex");
+          if (prefix.length !== prefixLength || actual !== continuation.hash) return null;
+        }
+        const rows = continuation ? selected.slice(prefixLength) : selected;
         if (rows.length !== Math.min(recordLimit, Math.max(0, total - offset)) || new Set(rows.map(({ id }) => id)).size !== rows.length)
           throw new MatchFeedError("unavailable");
         const dates = await storedFeedCoverage(tx, sourceRange), partial = dates.some((date) => !date.authoritative);
@@ -239,6 +253,8 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 }));
       const read = async () => {
         const pages = await readStoredPages();
+        // The database boundary wraps thrown transaction errors as unavailable.
+        if (pages === null) throw new MatchFeedError("changed");
         // The snapshot is complete. Release the connection before response-only validation and serialization.
         return timedRequestPhase("list-response", async () => pages.map((page) => {
           const response = storedMatchFeedResponseSchema.parse(page);
@@ -258,7 +274,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         && range.dayCount === 1 && range.startDate === reportingToday
         && (query.result === undefined || query.result === "pending")
         && activeFeedFilterCount(query) === Number(query.result === "pending");
-      const readCached = <T>(load: () => Promise<T>, parse: (value: unknown) => T) => cache ? timedRequestPhase("list-cache", () => {
+      const readCached = <T>(load: () => Promise<T>, parse: (value: unknown) => T) => cache && !continuation ? timedRequestPhase("list-cache", () => {
         const descriptor = publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
           deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
           query: { ...query, ...(through === undefined ? {} : { through }), projection: 34, providerOdds, completedOnly: context.completedOnly === true,

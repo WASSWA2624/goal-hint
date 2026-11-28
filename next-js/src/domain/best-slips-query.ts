@@ -11,7 +11,7 @@ export type BestSlipsStatus = typeof bestSlipsStatuses[number];
 export function matchesBestSlipsStatus(result: PredictionResult, filter: BestSlipsStatus): boolean {
   return filter === "all" || matchesPredictionResult(result, filter);
 }
-export const bestSlipsQueryRules = Object.freeze({ maximumDays: 366, pageSize: slipPageSize, scanDays: 31, maximumPage: 9999 });
+export const bestSlipsQueryRules = Object.freeze({ maximumDays: 366, pageSize: slipPageSize, scanDays: 31, maximumPage: 9999, maximumWindowPages: 3 });
 export type BestSlipsQuery = Readonly<{
   period: BestSlipsPeriod; status: BestSlipsStatus; oddsBand?: BestSlipOddsBand; from?: ReportingDate; to?: ReportingDate;
   probMin?: number; probMax?: number; matchesMin?: number; matchesMax?: number;
@@ -20,6 +20,7 @@ export type BestSlipsQuery = Readonly<{
 export const bestSlipsRangeFields = ["probMin", "probMax", "matchesMin", "matchesMax"] as const;
 export type BestSlipsRangeField = typeof bestSlipsRangeFields[number];
 export type BestSlipsDates = Readonly<{ from: ReportingDate | null; to: ReportingDate | null }>;
+export type BestSlipsWindow = Readonly<{ through: number; knownVersion?: string }>;
 export class BestSlipsQueryError extends Error {
   readonly code: "invalid-query" | "invalid-date" | "invalid-range" | "range-too-large";
   constructor(code: BestSlipsQueryError["code"]) {
@@ -29,6 +30,15 @@ export class BestSlipsQueryError extends Error {
 const fail = (code: BestSlipsQueryError["code"]): never => { throw new BestSlipsQueryError(code); };
 const defaultBestSlipsStatus = "pending";
 export const defaultBestSlipsQuery = (): BestSlipsQuery => ({ period: "today", status: defaultBestSlipsStatus, oddsBand: defaultBestSlipOddsBand, page: 1 });
+
+export function parseBestSlipsWindow(query: BestSlipsQuery, through: string, knownVersion?: string): BestSlipsWindow {
+  if (query.period === "all" || query.cursor !== undefined || !/^[1-9]\d{0,3}$/u.test(through)
+    || knownVersion !== undefined && !/^[0-9a-f]{64}$/u.test(knownVersion)) return fail("invalid-query");
+  const lastPage = Number(through);
+  if (lastPage < query.page || lastPage > bestSlipsQueryRules.maximumPage
+    || lastPage - query.page >= bestSlipsQueryRules.maximumWindowPages) return fail("invalid-query");
+  return { through: lastPage, ...(knownVersion === undefined ? {} : { knownVersion }) };
+}
 
 function customDates(from: unknown, to: unknown): BestSlipsDates {
   let start: ReportingDate, end: ReportingDate;

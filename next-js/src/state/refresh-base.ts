@@ -15,7 +15,8 @@ function readFailure(response: Response) {
   return new FeedPaginationError(code, Number.isFinite(delay) ? Math.max(0, delay) : undefined);
 }
 
-export async function readJson(href: string, signal: AbortSignal, timeoutMs: number = liveRefreshRules.timeoutMs): Promise<unknown> {
+export async function readJson(href: string, signal: AbortSignal, timeoutMs: number = liveRefreshRules.timeoutMs,
+  maximumBytes: number = matchFeedRules.maximumResponseBytes): Promise<unknown> {
   const controller = new AbortController();
   const canceled = () => controller.abort(signal.reason), clearDeadline = startRequestDeadline(controller, timeoutMs);
   if (signal.aborted) canceled(); else signal.addEventListener("abort", canceled, { once: true });
@@ -23,9 +24,9 @@ export async function readJson(href: string, signal: AbortSignal, timeoutMs: num
     const response = await fetch(href, { signal: controller.signal,
       cache: "no-store", credentials: "same-origin" });
     if (!response.ok) throw readFailure(response);
-    const text = await response.text(), max = matchFeedRules.maximumResponseBytes;
+    const text = await response.text();
     // A UTF-16 code unit encodes to at most 3 UTF-8 bytes, so only a possibly oversized body is encoded.
-    if (text.length > max || (text.length * 3 > max && new TextEncoder().encode(text).length > max)) {
+    if (text.length > maximumBytes || (text.length * 3 > maximumBytes && new TextEncoder().encode(text).length > maximumBytes)) {
       throw new FeedPaginationError("invalid-response");
     }
     try { return JSON.parse(text); } catch { throw new FeedPaginationError("invalid-response"); }

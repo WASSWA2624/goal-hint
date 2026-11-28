@@ -5,7 +5,7 @@ import type { SlipsBrowseResult } from "@/domain/best-slips";
 import { bestSlipsPageSearch, bestSlipsQueryRules, parseBestSlipsQuery, serializeBestSlipsQuery, type BestSlipsQuery } from "@/domain/best-slips-query";
 import { nextLoadedPage } from "@/domain/browse-period";
 import { startRequestDeadline } from "@/domain/request-deadline";
-import { acceptsSlipBrowseAccess, appendSlipPage, canRetainSlipBrowseSeed, isSlipBrowseUnavailable, isUnverifiedSlipBrowseSeed,
+import { acceptsSlipBrowseAccess, appendSlipPage, canRetainSlipBrowseSeed, checkedSlipBrowseWindow, isSlipBrowseUnavailable, isUnverifiedSlipBrowseSeed,
   nextSlipPageQuery, observeSlipPage, sameSlipBrowseQuery, slipBrowseWindow, type SlipBrowsePage } from "@/domain/slip-browse-window";
 import { singleSlipPage } from "@/domain/slip-pagination";
 import { shareUnchanged } from "@/domain/structural-sharing";
@@ -111,8 +111,8 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
       }
       return { ...result, browse: result.browse };
     };
-    const read = async (query: BestSlipsQuery): Promise<SlipBrowsePage> => {
-      const response = await fetch(`${endpoint}?${serializeBestSlipsQuery(query)}`, { signal: controller.signal, cache: "no-store", credentials: "same-origin" });
+    const readJson = async (parameters: URLSearchParams) => {
+      const response = await fetch(`${endpoint}?${parameters}`, { signal: controller.signal, cache: "no-store", credentials: "same-origin" });
       if (!active || controller.signal.aborted) throw new Error("aborted");
       if (response.status === 401 || response.status === 403) {
         if (!isUnverifiedSlipBrowseSeed(latest.current[0]!)) clearAccess(false);
@@ -125,14 +125,39 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
         throw new Error("limited");
       }
       if (!response.ok) throw new Error([502, 503, 504].includes(response.status) ? "unavailable" : "response");
-      return verify(await response.json(), query);
+      return response.json();
+    };
+    const read = async (query: BestSlipsQuery): Promise<SlipBrowsePage> => verify(await readJson(serializeBestSlipsQuery(query)), query);
+    const readWindow = async (query: BestSlipsQuery, through: number, prefix?: readonly SlipBrowsePage[]) => {
+      const params = serializeBestSlipsQuery(query);
+      params.set("through", String(through));
+      const knownVersion = prefix?.at(-1)?.browse.version;
+      if (knownVersion) params.set("knownVersion", knownVersion);
+      const reply: { pages?: SlipsBrowseResult[]; reusedPrefix?: boolean } | null = await readJson(params);
+      if (!reply || !Array.isArray(reply.pages) || !reply.pages.length || reply.pages.length > bestSlipsQueryRules.maximumWindowPages
+        || typeof reply.reusedPrefix !== "boolean") throw new Error("changed");
+      if (reply.reusedPrefix) {
+        if (!prefix || !knownVersion || reply.pages.length !== 1) throw new Error("changed");
+        return appendSlipPage(prefix, verify(reply.pages[0]!, { ...query, page: through }));
+      }
+      const pages = reply.pages.map((page, index) => verify(page, { ...query, page: query.page + index }));
+      return checkedSlipBrowseWindow(query, through, pages);
     };
     void (async () => {
       let next: readonly SlipBrowsePage[];
       if (intent.mode === "append" && intent.depth === 0) {
-        next = appendSlipPage(latest.current, await read(intent.query));
+        const prefix = latest.current, firstQuery = prefix[0]!.browse.query, version = prefix.at(-1)!.browse.version;
+        // A single audit either confirms the accepted membership or rebases
+        // the whole displayed window before advancing the requested page.
+        next = firstQuery.period !== "all" && version && /^[a-f0-9]{64}$/u.test(version)
+          && intent.query.page - firstQuery.page < bestSlipsQueryRules.maximumWindowPages
+          ? await readWindow(firstQuery, intent.query.page, prefix)
+          : appendSlipPage(prefix, await read(intent.query));
       } else if (intent.mode === "background") {
         next = observeSlipPage(latest.current, await read(intent.query));
+      } else if (intent.depth > 1 && intent.depth <= bestSlipsQueryRules.maximumWindowPages && intent.query.period !== "all"
+        && latest.current[0]!.browse.version && /^[a-f0-9]{64}$/u.test(latest.current[0]!.browse.version!)) {
+        next = await readWindow(intent.query, intent.query.page + intent.depth - 1);
       } else {
         const first = intent.initialResult ? await waitForInitialResult(intent.initialResult, controller.signal) : null;
         next = [first && first.state !== "data-unavailable" ? verify(first, intent.query) : await read(intent.query)];
@@ -140,7 +165,6 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
         while (next.length < intent.depth && (query = nextSlipPageQuery(next.at(-1)!))) {
           next = appendSlipPage(next, await read(query));
         }
-        next = shareUnchanged(latest.current, next);
       }
       if (!active || controller.signal.aborted) return;
       if (intent.pushHistory) {
@@ -149,7 +173,8 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
       }
       if (intent.mode === "append") savePosition(next.length);
       restoreScroll.current = intent.scrollY;
-      setPages(intent.scrollY === undefined ? next : [...next]);
+      const retained = shareUnchanged(latest.current, next);
+      setPages(intent.scrollY === undefined ? retained : [...retained]);
       setFailed(null);
     })().catch((cause: unknown) => {
       if (!active || pending.current !== controller) return;

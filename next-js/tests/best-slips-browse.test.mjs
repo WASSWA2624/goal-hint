@@ -113,6 +113,57 @@ test('publication pages show 20 slips and preserve every original rank across pa
   }
 });
 
+test('numbered Best Slips continue from one snapshot and rebase after a status change', async () => {
+  const f = fixture(1, 53);
+  for (const id of f.outcomes.keys()) f.outcomes.set(id, "pending");
+  const filters = query({ status: "pending" });
+  const open = await f.store.browse(filters, today);
+  f.transactions.length = 0;
+  f.resultBatches.length = 0;
+  const prefix = await f.store.browseWindow(filters, today, false, { through: 3, knownVersion: open.browse.version });
+  assert.equal(f.transactions.length, 1);
+  assert.equal(f.transactions[0].isolationLevel, "RepeatableRead");
+  assert.deepEqual(f.resultBatches, [53]);
+  assert.equal(prefix.reusedPrefix, true);
+  assert.deepEqual(prefix.pages.map(page => [page.browse.query.page, page.slips.length]), [[3, 13]]);
+
+  for (const id of [...f.outcomes.keys()].slice(0, 15)) f.outcomes.set(id, "won");
+  f.transactions.length = 0;
+  f.resultBatches.length = 0;
+  let accessChecks = 0;
+  const handler = createBestSlipsHandler({
+    now: () => now,
+    windowSnapshot: (selected, window) => f.store.browseWindow(selected, today, false, window),
+    access: async () => { accessChecks++; return free; },
+  });
+  const route = 'https://goalhint.test/api/best-slips?period=last30&status=pending';
+  const response = await handler(new Request(route + `&through=3&knownVersion=${open.browse.version}`));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  const rebased = await response.json();
+  assert.equal(accessChecks, 1);
+  assert.equal(f.transactions.length, 1);
+  assert.deepEqual(f.resultBatches, [53]);
+  assert.equal(rebased.reusedPrefix, false);
+  assert.deepEqual(rebased.pages.map(page => [page.browse.query.page, page.slips.length, page.browse.hasMore]), [[1, 20, true], [2, 18, false]]);
+  assert.equal(rebased.pages[0].browse.version, rebased.pages[1].browse.version);
+  assert.notEqual(rebased.pages[0].browse.version, open.browse.version);
+  assert.deepEqual(rebased.pages[0].summary, rebased.pages[1].summary);
+  assert.equal(rebased.pages[0].statistics.won, 15);
+  const slips = rebased.pages.flatMap(page => page.slips);
+  assert.equal(new Set(slips.map(view => view.id)).size, 38);
+  assert.ok(slips.every(view => !view.slip && view.preview.every(leg => leg.pick === null)));
+
+  const expired = await f.store.browseWindow({ ...filters, page: 3 }, today, false, { through: 4 });
+  assert.deepEqual(expired.pages.map(page => [page.browse.query.page, page.slips.length, page.browse.hasMore]), [[3, 0, false]]);
+  for (const parameters of ["through=4", "through=0", "through=2&through=3", "through=2&knownVersion=invalid",
+    `knownVersion=${open.browse.version}`]) {
+    assert.equal((await handler(new Request(route + '&' + parameters))).status, 400);
+  }
+  assert.equal((await handler(new Request('https://goalhint.test/api/best-slips?period=all&through=2'))).status, 400);
+  assert.equal(accessChecks, 1);
+});
+
 test('extended publications page every sealed slot and keep canonical links across the old stride', async () => {
   const f = fixture(1, 67), oddsBand = '1.5-5', parent = f.publications[0];
   const midnight = Date.parse(`${today}T00:00:00+03:00`), firstAt = midnight + 10_000;

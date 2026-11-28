@@ -72,6 +72,25 @@ export function appendSlipPage(pages: readonly SlipBrowsePage[], page: SlipBrows
   return [...pages, page];
 }
 
+/** Numbered rebases carry one sealed membership and one current observation. */
+export function checkedSlipBrowseWindow(query: BestSlipsQuery, through: number, pages: readonly SlipBrowsePage[]): readonly SlipBrowsePage[] {
+  const first = pages[0];
+  if (!first || pages.length > bestSlipsQueryRules.maximumWindowPages || !sameSlipBrowseQuery(first.browse.query, query)
+    || first.browse.total === null || first.browse.pageSize !== bestSlipsQueryRules.pageSize) throw new Error("changed");
+  const { total, pageSize } = first.browse;
+  const lastPage = Math.max(query.page, Math.min(through, Math.ceil(total / pageSize)));
+  if (pages.length !== lastPage - query.page + 1
+    || first.slips.length !== Math.min(pageSize, Math.max(0, total - (query.page - 1) * pageSize))
+    || first.browse.hasMore !== (query.page * pageSize < total)
+    || new Set(first.slips.map(slipViewKey)).size !== first.slips.length) throw new Error("changed");
+  let accepted: readonly SlipBrowsePage[] = [first];
+  for (const page of pages.slice(1)) {
+    if (page.summary?.asOf !== first.summary?.asOf || page.browse.bandTotal !== first.browse.bandTotal) throw new Error("changed");
+    accepted = appendSlipPage(accepted, page);
+  }
+  return accepted;
+}
+
 export function slipBrowseWindow(pages: readonly SlipBrowsePage[]): SlipBrowsePage {
   const first = pages[0]!, last = pages.at(-1)!;
   if (first === last) return first;

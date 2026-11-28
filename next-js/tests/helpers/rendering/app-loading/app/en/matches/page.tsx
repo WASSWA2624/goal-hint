@@ -17,12 +17,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
     document: async () => true, resolveAccess: async () => ({ ...access, mode: "off" }),
     read: async parameters => {
       if (feedUnavailable) throw new Error("Synthetic match feed outage");
-      return feedFixture(parseFeedQuery(parameters, { today }), guest ? at - 25_000 : at);
+      return feedFixture(parseFeedQuery(parameters, { today }), guest ? at - 25_000 : at, guest);
     },
     readSummary: async parameters => {
       await new Promise(resolve => setTimeout(resolve, 1_800));
       if (fail === "1") throw new Error("Synthetic summary outage");
-      return { ...summaryFixture(parseFeedQuery(parameters, { today })), access };
+      return { ...summaryFixture(parseFeedQuery(parameters, { today }), guest), access };
     },
   });
   return route.Page({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve(input) });

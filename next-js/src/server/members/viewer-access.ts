@@ -5,6 +5,7 @@ import { cookies } from "next/headers.js";
 import type { PaywallMode } from "../../domain/subscription-settings.ts";
 import { renewalDue } from "../../domain/wallet.ts";
 import { getAnalyticsServices, type AnalyticsServices } from "../analytics/analytics-http.ts";
+import { analyticsSessionCookieName } from "../analytics/analytics-config.ts";
 import { readCookie } from "../http/private-http.ts";
 import { createAccessCodes } from "./access-codes.ts";
 import { memberCookieName, memberSessionRules, memberTokenHash, validMemberToken } from "./member-sessions.ts";
@@ -98,3 +99,10 @@ export const resolveViewerAccessFresh = async (): Promise<ViewerAccess> => {
 };
 export const resolveViewerAccess = cache(resolveViewerAccessFresh);
 export const viewerAccessFromRequest = (request: Request) => resolveRequest((name) => readCookie(request, name));
+
+/** Public content projections only use tier and sign-in. Preference cookies cannot grant either. */
+export function viewerContentAccessFromRequest(request: Request): Promise<ViewerAccess> {
+  const hasCredentials = developmentMemberToken(undefined) !== undefined || [true, false].some(secure =>
+    Boolean(readCookie(request, analyticsSessionCookieName(secure))) || validMemberToken(readCookie(request, memberCookieName(secure))));
+  return hasCredentials ? viewerAccessFromRequest(request) : Promise.resolve({ tier: "free", signedIn: false, mode: "free" });
+}

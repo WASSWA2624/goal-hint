@@ -41,13 +41,16 @@ export function projectBookmakerOdds(quotes: StoredCurrentBookmakerQuotes | null
   kind: PreMatchBookmakerOdds["kind"], maximumBytes = Infinity, fallbackBookmakerIds = configuredFallbackBookmakers()): PreMatchBookmakerOdds | null {
   if (!quotes) return null;
   const policy = { primaryBookmakerId: quotes.primaryBookmakerId, ...(fallbackBookmakerIds.length ? { fallbackBookmakerIds } : {}) };
+  // Feed overlays enforce their own response bound after projection. Only the
+  // independently bounded detail panel needs to serialize each item to size it.
+  const byteLength = maximumBytes === Infinity ? () => 0 : (value: unknown) => Buffer.byteLength(JSON.stringify(value), "utf8");
   // Leave room for the occurrence, version and containing detail field.
-  let remaining = maximumBytes - 256 - Buffer.byteLength(JSON.stringify(policy), "utf8"), limited = false;
+  let remaining = maximumBytes - 256 - byteLength(policy), limited = false;
   const ordered = [...quotes.bookmakers].sort((left, right) => Number(right.bookmakerId === quotes.primaryBookmakerId)
     - Number(left.bookmakerId === quotes.primaryBookmakerId) || left.bookmakerId - right.bookmakerId);
   const books = ordered.flatMap(({ bookmakerId, bookmakerName, offers }) => {
     const parsedName = safeBookmaker.safeParse(bookmakerName), name = parsedName.success ? parsedName.data : null;
-    const headerBytes = Buffer.byteLength(JSON.stringify({ bookmakerId, name, markets: [] }), "utf8") + 1;
+    const headerBytes = byteLength({ bookmakerId, name, markets: [] }) + 1;
     remaining -= headerBytes;
     const markets = offers.flatMap(({ betId, betName, values, observedAt, checkedAt, providerUpdatedAt }) => {
       const selections = values.flatMap(({ label, odd, observation }) => {
@@ -59,12 +62,12 @@ export function projectBookmakerOdds(quotes: StoredCurrentBookmakerQuotes | null
       });
       const market = bookmakerMarketSchema.safeParse({ betId, name: betName, selections });
       if (!market.success) return [];
-      let entry = market.data, bytes = Buffer.byteLength(JSON.stringify(entry), "utf8") + 1;
+      let entry = market.data, bytes = byteLength(entry) + 1;
       if (bytes > remaining) { limited = true; return []; }
       if (observedAt !== undefined && checkedAt !== undefined) {
         const extended = bookmakerMarketSchema.safeParse({ ...entry, observation: { observedAt, checkedAt, providerUpdatedAt } });
         if (extended.success) {
-          const extendedBytes = Buffer.byteLength(JSON.stringify(extended.data), "utf8") + 1;
+          const extendedBytes = byteLength(extended.data) + 1;
           if (extendedBytes <= remaining) { entry = extended.data; bytes = extendedBytes; }
         }
       }

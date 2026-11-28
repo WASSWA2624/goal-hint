@@ -1,15 +1,17 @@
 import type { ReportingDate } from "../domain/calendar.ts";
-import { checkedFeedPage, checkedFeedWindow, FeedPaginationError, feedPageApiHref, feedWindowApiHref } from "../domain/feed-pagination.ts";
+import type { FeedContinuationPrefix } from "../domain/feed-continuation.ts";
+import { checkedFeedPage, checkedFeedWindow, FeedPaginationError, feedContinuationApiHref, feedPageApiHref, feedWindowApiHref } from "../domain/feed-pagination.ts";
 import type { FeedQuery } from "../domain/feed-query.ts";
 import type { MatchFeedResponse } from "../domain/match-feed.ts";
+import { maximumFeedWindowBytes } from "../domain/match-feed-rules.ts";
 import { feedPerformanceApiHref, feedPerformanceReplySchema, type FeedPerformanceReply } from "../domain/feed-performance-summary.ts";
 import { failure, publicRefreshApi, readJson } from "./refresh-base.ts";
 
 export { consumeRefresh } from "./refresh-base.ts";
 
-async function readFeedJson(href: string, signal: AbortSignal, timeoutMs?: number) {
+async function readFeedJson(href: string, signal: AbortSignal, timeoutMs?: number, maximumBytes?: number) {
   try {
-    return await readJson(href, signal, timeoutMs);
+    return await readJson(href, signal, timeoutMs, maximumBytes);
   } catch (error) {
     signal.throwIfAborted();
     if (error instanceof FeedPaginationError) throw error;
@@ -25,8 +27,16 @@ export async function readRefreshFeedPage(query: FeedQuery, today: ReportingDate
 
 export async function readRefreshFeedWindow(query: FeedQuery, today: ReportingDate, firstPage: number, through: number,
   signal: AbortSignal, timeoutMs?: number) {
-  return checkedFeedWindow(await readFeedJson(feedWindowApiHref(query, today, firstPage, through), signal, timeoutMs),
+  return checkedFeedWindow(await readFeedJson(feedWindowApiHref(query, today, firstPage, through), signal, timeoutMs, maximumFeedWindowBytes),
     query, today, firstPage, through);
+}
+
+export async function readRefreshFeedContinuation(query: FeedQuery, today: ReportingDate, page: number, prefix: FeedContinuationPrefix,
+  signal: AbortSignal, timeoutMs?: number) {
+  const result = await readFeedJson(feedContinuationApiHref(query, today, page, prefix), signal, timeoutMs);
+  if (!result || typeof result !== "object" || Object.keys(result).length !== 2 || !("prefix" in result)
+    || result.prefix !== prefix.hash || !("page" in result)) throw new FeedPaginationError("invalid-response");
+  return checkedFeedPage(result.page, query, today, page);
 }
 
 /** Feed-only endpoints share the base cache and do not enter the initial match-detail bundle. */

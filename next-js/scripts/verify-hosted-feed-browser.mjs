@@ -230,30 +230,34 @@ async function qualifyCoverage(page, origin, build, observations, state, path, a
   throw new ReadinessError(path === matches ? "production-matches-cohort-uncovered" : "production-best-slips-cohort-uncovered");
 }
 
-async function verifyMore(page, observations, kind) {
+async function verifyMore(page, observations, kind, maximum = 2) {
   const matchesFeed = kind === "matches";
   const pagination = matchesFeed ? "[data-feed-pagination]" : "[data-best-slips-pagination]";
   const row = matchesFeed ? "[data-feed-match-results] [data-fixture-id]" : "[data-slip-list] [data-slip-key]";
   const identity = matchesFeed ? "data-fixture-id" : "data-slip-key";
   const button = page.locator(`${pagination} [data-show-more]`);
-  if (!await button.isVisible()) return;
-  const initialRows = await page.locator(`${row}:visible`).count();
-  requireReady(initialRows > 0, `${kind}-append-needs-rows`);
-  const started = performance.now();
-  diagnostic.phase = `${kind}-load-more`;
-  await button.click({ timeout: remaining(started) });
-  const appended = await page.waitForFunction(({ row, identity, initialRows, pagination }) => {
-    const results = Array.from(document.querySelectorAll(row))
-      .filter(item => item.getClientRects().length && getComputedStyle(item).visibility === "visible")
-      .map(item => item.getAttribute(identity));
-    const pending = document.querySelector(`${pagination} [data-show-more][aria-busy="true"]`);
-    if (pending || results.length <= initialRows) return null;
-    return { rows: results.length, unique: new Set(results).size };
-  }, { row, identity, initialRows, pagination }, { timeout: remaining(started) });
-  const result = await appended.jsonValue();
-  await appended.dispose();
-  requireReady(result.rows === result.unique, `${kind}-append-duplicate-rows`);
-  observations.push({ phase: diagnostic.phase, initialRows, rows: result.rows, listMs: Math.round(performance.now() - started) });
+  for (let attempt = 1; attempt <= maximum && await button.isVisible(); attempt++) {
+    const initialRows = await page.locator(`${row}:visible`).count();
+    requireReady(initialRows > 0, `${kind}-append-needs-rows`);
+    const started = performance.now();
+    diagnostic.phase = `${kind}-load-more-${attempt}`;
+    await button.click({ timeout: remaining(started) });
+    const appended = await page.waitForFunction(({ row, identity, initialRows, pagination }) => {
+      if (document.querySelector(`${pagination} [data-show-more-status], ${pagination} [data-pagination-retry]`)) return { failed: true };
+      const results = Array.from(document.querySelectorAll(row))
+        .filter(item => item.getClientRects().length && getComputedStyle(item).visibility === "visible")
+        .map(item => item.getAttribute(identity));
+      const control = document.querySelector(`${pagination} [data-show-more]`);
+      if (control?.getAttribute("aria-busy") === "true" || control && results.length <= initialRows) return null;
+      return { rows: results.length, unique: new Set(results).size, terminal: results.length <= initialRows };
+    }, { row, identity, initialRows, pagination }, { timeout: remaining(started) });
+    const result = await appended.jsonValue();
+    await appended.dispose();
+    requireReady(!result.failed, `${kind}-append-unavailable`);
+    requireReady(result.rows === result.unique, `${kind}-append-duplicate-rows`);
+    observations.push({ phase: diagnostic.phase, initialRows, rows: result.rows, listMs: Math.round(performance.now() - started),
+      ...(result.terminal && { terminal: true }) });
+  }
 }
 
 async function verifyStagedSlipFault(page) {

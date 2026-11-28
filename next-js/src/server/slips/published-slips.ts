@@ -4,7 +4,8 @@ import { z } from "zod";
 import { getReportingDate, getReportingDayBounds, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange } from "../../domain/calendar.ts";
 import { bestSlipCombinationIdentity, bestSlipDailyCriteria, bestSlipExactTotal, bestSlipView, compareBestSlips, jointSlipProbability, qualifiedJointModel, type BestSlip, type BestSlipView, type BestSlipsResult, type JointSlipModel } from "../../domain/best-slips.ts";
 import { bestSlipBandRank, bestSlipExactRange, bestSlipOddsBands, bestSlipBandLimit, bestSlipOddsBandFor, bestSlipPublicationBands, bestSlipPublicRank, dailyBestSlipBandLimit, defaultBestSlipOddsBand, maximumBestSlipLocalRank, maximumBestSlipPublicRank, type BestSlipOddsBand } from "../../domain/best-slip-odds-bands.ts";
-import { bestSlipsQueryRules, matchesBestSlipsRanges, matchesBestSlipsStatus, parseBestSlipsCursor, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
+import { bestSlipsQueryRules, matchesBestSlipsRanges, matchesBestSlipsStatus, parseBestSlipsCursor, parseBestSlipsQuery, parseBestSlipsWindow,
+  resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery, type BestSlipsWindow } from "../../domain/best-slips-query.ts";
 import type { ReportingDate } from "../../domain/calendar.ts";
 import { bestSlipActivePublicationDays, bestSlipAppendBatchSize, bestSlipFixtureInterval, bestSlipFixtureWindow, bestSlipKickoffBufferMs, bestSlipPublicationHour, bestSlipPublicationIntervalMs } from "../../domain/best-slip-publication-hour.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
@@ -263,7 +264,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
 }: { bindForecasts?: typeof bindSlipForecasts; resolveResults?: typeof readSlipForecastResults; verifyOffers?: typeof verifyFeaturedSlipOffers } = {}) {
   const transactionOptions = { isolationLevel: "RepeatableRead", timeout: 30_000 } as const;
   const transaction = <T>(run: (tx: Prisma.TransactionClient) => Promise<T>) => database.transaction(run, transactionOptions);
-  return Object.freeze({
+  const store = Object.freeze({
     async hourlyState(day: ReportingDate) {
       parseReportingDate(day);
       return transaction(async tx => {
@@ -546,9 +547,15 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         return null;
       });
     },
-    /** Date/result browsing reuses original-cycle adjudication and keeps active rows behind the caller's access gate. */
     async browse(input: BestSlipsQuery, today: ReportingDate, completedOnly = false): Promise<BestSlipsResult> {
+      return (await store.browseWindow(input, today, completedOnly)).pages[0]!;
+    },
+    /** Apply the same original-cycle adjudication to every requested page in one snapshot. */
+    async browseWindow(input: BestSlipsQuery, today: ReportingDate, completedOnly = false,
+      window?: BestSlipsWindow): Promise<Readonly<{ pages: readonly BestSlipsResult[]; reusedPrefix: boolean }>> {
       const query = parseBestSlipsQuery(serializeBestSlipsQuery(input), today), dates = resolveBestSlipsDates(query, today);
+      const requested = window ? parseBestSlipsWindow(query, String(window.through), window.knownVersion) : undefined;
+      const through = requested?.through ?? query.page;
       const cursor = query.cursor === undefined ? null : parseBestSlipsCursor(query.cursor), allDates = query.period === "all";
       const dailyView = dates.from !== null && dates.from === dates.to;
       const previousDay = query.period === "today" && !completedOnly ? addReportingDays(today, -1) : undefined;
@@ -627,7 +634,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             if (!matchesBestSlipsStatus(category, query.status)) continue;
             if (!allDates) membership.push(row.id);
             const position = total++;
-            if (!allDates && (position < offset || position >= offset + pageSize)) continue;
+            if (!allDates && (position < offset || position >= through * pageSize)) continue;
             views.push(publishedSlipView(entry, slipResults, outcome, status, completed));
             if (allDates && views.length > pageSize) break;
           }
@@ -646,14 +653,22 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           parents.delete(id);
           batches.delete(id);
         }
-        return { day: today, state: "generated", slips: retained,
-          ...publicationCoverage(parents, batches), statistics: periodStatistics,
-          summary: { ...dates, asOf, statistics: periodStatistics },
-          browse: { query, version: allDates ? null : evidenceFingerprint({ bandTotal, membership }), total: allDates ? null : total,
-            bandTotal: allDates ? null : bandTotal, ...(dailyBandLimit === undefined ? {} : { dailyBandLimit }), pageSize,
-            hasMore: allDates ? nextCursor !== null : offset + retained.length < total, nextCursor,
-            from: allDates ? overflow ? scannedThrough : oldest ? parseReportingDate(parents.get(oldest.id)!.day) : null : dates.from,
-            to: allDates ? selected[0] ? parseReportingDate(parents.get(selected[0].id)!.day) : null : dates.to } };
+        const version = allDates ? null : evidenceFingerprint({ bandTotal, membership });
+        const coverage = publicationCoverage(parents, batches);
+        const lastPage = Math.max(query.page, Math.min(through, Math.ceil(total / pageSize)));
+        const reusedPrefix = lastPage === through && through > query.page && requested?.knownVersion === version;
+        const firstPage = reusedPrefix ? through : query.page;
+        const pages = Array.from({ length: lastPage - firstPage + 1 }, (_, index): BestSlipsResult => {
+          const page = firstPage + index, start = (page - query.page) * pageSize;
+          return { day: today, state: "generated", slips: allDates ? retained : views.slice(start, start + pageSize),
+            ...coverage, statistics: periodStatistics, summary: { ...dates, asOf, statistics: periodStatistics },
+            browse: { query: { ...query, page }, version, total: allDates ? null : total, bandTotal: allDates ? null : bandTotal,
+              ...(dailyBandLimit === undefined ? {} : { dailyBandLimit }), pageSize, nextCursor,
+              hasMore: allDates ? nextCursor !== null : page * pageSize < total,
+              from: allDates ? overflow ? scannedThrough : oldest ? parseReportingDate(parents.get(oldest.id)!.day) : null : dates.from,
+              to: allDates ? selected[0] ? parseReportingDate(parents.get(selected[0].id)!.day) : null : dates.to } };
+        });
+        return { pages, reusedPrefix };
       }), { ...transactionOptions, maxWait: 5_000 });
     },
     async history(input: PublishedSlipHistoryQuery, completedOnly = false): Promise<PublishedSlipHistory> {
@@ -698,6 +713,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
       });
     },
   });
+  return store;
 }
 
 type PublishedSlipEntry = Readonly<{ row: SlipRow; parent: Publication; snapshot: z.infer<typeof snapshotSchema>;

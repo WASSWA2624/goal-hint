@@ -10,10 +10,11 @@ const route = createBestSlipsRoute({ access: async () => ({ tier: "free", signed
   read: async query => {
     await new Promise(resolve => setTimeout(resolve, 1_800));
     const day = getReportingDate(utcInstantFromEpochMilliseconds(Date.now()));
-    if ((await cookies()).get("synthetic-best-slips-unavailable")?.value === "1") {
+    const profile = await cookies();
+    if (profile.get("synthetic-best-slips-unavailable")?.value === "1") {
       return emptySlipBrowsePage(day, query, "data-unavailable");
     }
-    return archiveFixture(query);
+    return archiveFixture(query, profile.get("synthetic-best-slips-epoch")?.value);
   } });
 
 export default function Page(props: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {

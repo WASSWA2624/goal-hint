@@ -1,5 +1,6 @@
 import type { ReportingDate } from "./calendar.ts";
 import { feedDiscovery } from "./discovery.ts";
+import type { FeedContinuationPrefix } from "./feed-continuation.ts";
 import { FeedPaginationError } from "./feed-pagination-error.ts";
 import { defaultFeedDatePreset, FeedQueryError, feedQueryHref, feedQueryRules, pinnedDateSelection, resolveFeedDates, serializeFeedQuery, type FeedQuery } from "./feed-query.ts";
 import { fixtureAdvance, mergeFixtureObservation } from "./fixture-reconciliation.ts";
@@ -24,6 +25,9 @@ export function feedPageHref(query: FeedQuery, today: ReportingDate, page: numbe
 }
 export function feedPageApiHref(query: FeedQuery, today: ReportingDate, page: number): string {
   return `/api/matches?${serializeFeedQuery({ ...pinnedFeedQuery(query, today), page }, today)}`;
+}
+export function feedContinuationApiHref(query: FeedQuery, today: ReportingDate, page: number, prefix: FeedContinuationPrefix): string {
+  return `${feedPageApiHref(query, today, page)}&leagues=0&prefix=${prefix.firstPage}%3A${prefix.hash}`;
 }
 export function supportsFeedWindow(firstPage: number, through: number, pageSize: number): boolean {
   return Number.isSafeInteger(firstPage) && firstPage >= 1 && Number.isSafeInteger(through)
@@ -78,13 +82,13 @@ export function initialLoadedFeed(data: MatchFeedResponse): LoadedFeed {
   return { data, records: data.records, firstPage: data.page, lastPage: data.page, pages: 1 };
 }
 /** All membership and whole-record replacements commit together, never partially. */
-export function appendFeedPage(view: LoadedFeed, page: MatchFeedResponse): LoadedFeed {
+export function appendFeedPage(view: LoadedFeed, page: MatchFeedResponse, prefixVerified = false): LoadedFeed {
   if (view.data.access.tier !== page.access.tier || view.data.access.signedIn !== page.access.signedIn) throw new FeedPaginationError("changed");
   if (page.page !== view.data.nextPage || page.page !== view.lastPage + 1) {
     throw new FeedPaginationError("invalid-response");
   }
-  if (view.data.paginationVersion === null || page.paginationVersion !== view.data.paginationVersion || page.total !== view.data.total ||
-    page.search?.exact !== view.data.search?.exact) {
+  if (page.paginationVersion === null || !prefixVerified && (view.data.paginationVersion === null
+    || page.paginationVersion !== view.data.paginationVersion || page.total !== view.data.total || page.search?.exact !== view.data.search?.exact)) {
     throw new FeedPaginationError("changed");
   }
   const known = new Set(view.records.map((record) => record.fixtureId));
@@ -116,9 +120,10 @@ export function replaceFeedPages(previous: LoadedFeed, pages: readonly MatchFeed
 
 /** Recover one transient read and rebase a changed window without publishing partial membership. */
 export async function continueFeedPages(view: LoadedFeed, read: (page: number) => Promise<MatchFeedResponse>,
-  waitForRetry: (delayMs: number) => Promise<boolean>, { rebase = false, readWindow }: {
+  waitForRetry: (delayMs: number) => Promise<boolean>, { rebase = false, readWindow, readContinuation }: {
     rebase?: boolean;
     readWindow?: (() => Promise<readonly MatchFeedResponse[]>) | undefined;
+    readContinuation?: (() => Promise<MatchFeedResponse>) | undefined;
   } = {}): Promise<LoadedFeed> {
   const nextPage = view.data.nextPage;
   if (nextPage === null) return view;
@@ -133,18 +138,18 @@ export async function continueFeedPages(view: LoadedFeed, read: (page: number) =
       return verified();
     }
   };
-  if (readWindow) return replaceFeedPages(view, await recover(readWindow));
-  const readPage = (page: number) => recover(async () => {
-    const result = await read(page);
+  const readPage = (page: number, load = () => read(page)) => recover(async () => {
+    const result = await load();
     if (result.state === "data-unavailable") throw new FeedPaginationError("unavailable");
     return result;
   });
-  if (!rebase) {
-    try { return appendFeedPage(view, await readPage(nextPage)); }
+  if (!rebase && (readContinuation || !readWindow)) {
+    try { return appendFeedPage(view, await readPage(nextPage, readContinuation), Boolean(readContinuation)); }
     catch (error) {
       if (!(error instanceof FeedPaginationError) || error.code !== "changed") throw error;
     }
   }
+  if (readWindow) return replaceFeedPages(view, await recover(readWindow));
   const pages = [await readPage(view.firstPage)];
   for (let page = view.firstPage + 1; page <= nextPage && pages.at(-1)?.nextPage === page; page++) {
     pages.push(await readPage(page));

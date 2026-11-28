@@ -33,6 +33,24 @@ function deferred() {
   return { promise, resolve };
 }
 
+test('a scheduled cache fill returns the audited value first and rechecks generation and expiry when applied', async () => {
+  const state = memory(), queued = [];
+  const lazy = { ...descriptor(), scheduleFill: write => queued.push(write) };
+  assert.equal((await state.cache.read(lazy, state.load)).version, '1');
+  assert.equal(queued.length, 1);
+  state.invalidate();
+  await queued.shift()();
+  assert.equal((await state.cache.read(lazy, state.load)).version, '2');
+  await queued.shift()();
+  assert.equal((await state.cache.read(lazy, state.load)).version, '2');
+  assert.equal(queued.length, 0);
+  state.invalidate();
+  await state.cache.read(lazy, state.load);
+  state.advance(5_000);
+  await queued.shift()();
+  assert.equal((await state.cache.read(lazy, state.load)).version, '4');
+});
+
 test('canonical keys resolve relative dates and isolate all allowed query and policy dimensions', () => {
   const today = '2026-10-09';
   const key = (input, extra = {}) => {

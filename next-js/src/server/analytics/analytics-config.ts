@@ -28,6 +28,8 @@ export type AnalyticsConfig = Readonly<{
   key(purpose: string, value: string): string;
 }>;
 
+export const analyticsSessionCookieName = (production: boolean) => `${production ? "__Host-" : ""}goal-hint-analytics`;
+
 export async function createAnalyticsConfig(policy: RuntimePolicy): Promise<AnalyticsConfig> {
   const production = policy.mode === "production";
   const settings = policy.choices.analytics;
@@ -52,7 +54,7 @@ export async function createAnalyticsConfig(policy: RuntimePolicy): Promise<Anal
     admin, adminProblem, usingDevelopmentCredentials,
     retentionDays: settings.retentionDays ?? analyticsRules.defaultRetentionDays,
     geoSource: settings.geoSource,
-    cookies: Object.freeze({ session: `${prefix}goal-hint-analytics`, exclude: `${prefix}goal-hint-analytics-exclude`, secure: production }),
+    cookies: Object.freeze({ session: analyticsSessionCookieName(production), exclude: `${prefix}goal-hint-analytics-exclude`, secure: production }),
     key(purpose: string, value: string) {
       if (secret === null) throw new Error("Analytics keying is unavailable without GOAL_HINT_ANALYTICS_SECRET.");
       return createHmac("sha256", secret).update(`${purpose}\0${value}`).digest("hex");

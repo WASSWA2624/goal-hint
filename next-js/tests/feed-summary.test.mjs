@@ -51,15 +51,17 @@ test('summary HTTP uses the ordinary gated feed boundary and returns only comple
   assert.doesNotMatch(JSON.stringify(value), /fixtureId|forecast|prices|revisionId|records/);
 });
 
-test('a cookieless summary has guest access and no membership dependency', async () => {
+test('a summary without viewer credentials has guest access and no membership dependency', async () => {
   let reads = 0;
   const handler = createMatchFeedSummaryHandler(async () => { reads++; return stored(); }, { now: () => now });
   const url = 'https://example.test/api/matches/summary?when=today';
-  const response = await handler(new Request(url));
-  assert.equal(response.status, 200);
-  assert.deepEqual((await response.json()).access, { tier: 'free', signedIn: false });
+  for (const cookie of ['', 'preferences=1; __Host-goal-hint-member=invalid']) {
+    const response = await handler(new Request(url, { headers: { cookie } }));
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).access, { tier: 'free', signedIn: false });
+  }
   assert.equal((await handler(new Request(`${url}&picks=only`))).status, 403);
-  assert.equal(reads, 1);
+  assert.equal(reads, 2);
 });
 
 test('confirmed metrics survive an empty status table and cannot cross a period, source version or viewer change', () => {
@@ -116,10 +118,11 @@ test('an audit rechecks expired access before returning private-filter counts or
   const full = await fullAccess(), free = { tier: 'free', signedIn: false, mode: 'off' };
   for (const parameters of ['when=today&picks=only', 'when=today']) {
     let checks = 0;
-    const handler = createMatchFeedSummaryHandler(async () => stored(), { now: () => now }, async () => checks++ === 0 ? full : free);
+    const protectedScope = parameters.includes('picks=only');
+    const handler = createMatchFeedSummaryHandler(async () => stored(), { now: () => now }, async () => checks++ === 0 && protectedScope ? full : free);
     const response = await handler(new Request(`https://example.test/api/matches/summary?${parameters}`));
-    assert.equal(checks, 2);
-    assert.equal(response.status, parameters.includes('picks=only') ? 403 : 200);
+    assert.equal(checks, protectedScope ? 2 : 1);
+    assert.equal(response.status, protectedScope ? 403 : 200);
     const body = await response.json();
     if (response.ok) assert.deepEqual(body.access, { tier: 'free', signedIn: false });
     else assert.equal(body.error.code, 'subscription-required');

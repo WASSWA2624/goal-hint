@@ -89,6 +89,6 @@ export type FeedPageResult = Readonly<{ data: MatchFeedResponse; error: null } |
   { data: null; error: "rate-limited" | "unavailable" | "subscription-required" }>;
 export type MatchFeedRecord = z.infer<typeof matchFeedRecordSchema>;
 export const matchFeedErrorSchema = z.strictObject({ error: z.strictObject({
-  code: z.enum(["invalid-query", "not-found", "rate-limited", "unavailable", "subscription-required"]), message: z.string().max(256),
+  code: z.enum(["invalid-query", "not-found", "rate-limited", "unavailable", "subscription-required", "changed"]), message: z.string().max(256),
   recoverable: z.boolean(), retryAfterSeconds: z.number().int().positive().max(60).nullable(),
 }) });

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { execFile } from "./helpers/command-runtime.mjs";
 import { promisify } from 'node:util';
 import test from 'node:test';
+import { hashFeedContinuation } from '../src/domain/feed-continuation.ts';
 import { matchFeedResponseSchema, matchFeedRules } from '../src/domain/match-feed.ts';
 import { parseFixtureSnapshot } from '../src/domain/fixture-snapshot.ts';
 import { selectedCardPrice } from '../src/domain/match-card.ts';
@@ -145,7 +146,16 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
         assert.ok(pages.every((page) => page.paginationVersion === original.paginationVersion && page.asOf === original.asOf));
         assert.deepEqual(pages[0], original);
         assert.equal(new Set(pages.flatMap(({ records }) => records.map(({ fixtureId }) => fixtureId))).size, 72);
-        assert.notEqual((await service.query(input)).paginationVersion, original.paginationVersion);
+        const refreshed = await service.query(input);
+        assert.notEqual(refreshed.paginationVersion, original.paginationVersion);
+        const originalIds = original.records.map(({ fixtureId }) => fixtureId);
+        const hash = await hashFeedContinuation(1, originalIds);
+        const next = await service.query({ ...input, page: '2' }, { continuation: { firstPage: 1, hash } });
+        assert.deepEqual(next.records, pages[1].records);
+        assert.equal(next.paginationVersion, refreshed.paginationVersion);
+        const incorrectHash = await hashFeedContinuation(1, originalIds.toReversed());
+        await assert.rejects(service.query({ ...input, page: '2' }, { continuation: { firstPage: 1, hash: incorrectHash } }),
+          error => error.code === 'changed');
       } finally { await update(retrievedAt); }
     });
     await t.test('case-insensitive team and league aliases and country search precede pagination', async () => {
