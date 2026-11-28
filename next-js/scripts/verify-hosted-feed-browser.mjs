@@ -168,17 +168,20 @@ async function qualifyCoverage(page, origin, build, observations, state, path, a
 async function verifyStagedSlipFault(page) {
   const start = performance.now();
   diagnostic.phase = "best-slips-injected-503";
-  const api = url => url.pathname === "/api/best-slips";
+  const api = url => url.pathname === "/api/best-slips" && url.searchParams.get("period") === "yesterday"
+    && url.searchParams.get("status") === "all";
   const pageContainer = page.locator("[data-best-slips-page]");
   const figures = pageContainer.locator("[data-summary-count]");
   const rows = pageContainer.locator("[data-slip-key]");
   const previousFigures = await figures.allTextContents(), previousRows = await rows.count();
   await pageContainer.locator("[data-best-slips-filter-trigger]").click({ timeout: remaining(start) });
   const dialog = page.getByRole("dialog");
-  await dialog.locator("[data-slip-period-select]").selectOption("yesterday", { timeout: remaining(start) });
-  await dialog.locator('select[name="status"]').selectOption("all", { timeout: remaining(start) });
+  await dialog.locator("[data-slip-period-select]").click({ timeout: remaining(start) });
+  await dialog.getByRole("option", { name: "Yesterday", exact: true }).click({ timeout: remaining(start) });
+  await dialog.getByRole("combobox", { name: /^Status:/u }).click({ timeout: remaining(start) });
+  await dialog.getByRole("option", { name: "All slips", exact: true }).click({ timeout: remaining(start) });
   await page.route(api, route => route.fulfill({ status: 503, json: { error: "unavailable" } }), { times: 1 });
-  await dialog.getByRole("button", { name: "Apply", exact: true }).click({ timeout: remaining(start) });
+  await dialog.getByRole("button", { name: "Apply Filters", exact: true }).click({ timeout: remaining(start) });
   const failure = pageContainer.locator("[data-best-slips-update-failed]");
   await failure.waitFor({ timeout: remaining(start) });
   requireReady(await rows.count() === previousRows && JSON.stringify(await figures.allTextContents()) === JSON.stringify(previousFigures),
