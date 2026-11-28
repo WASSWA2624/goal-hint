@@ -143,7 +143,7 @@ export async function verifyBestSlipsNavigation(page, origin) {
     const headers = response.request().headers();
     if (new URL(response.url()).pathname === '/en/best-slips'
       && (headers['next-router-prefetch'] || headers['next-router-segment-prefetch'])) {
-      speculative.push(response.text().catch(() => null));
+      void response.text().then(body => speculative.push(body), () => {});
     }
   };
   const screen = page.locator('[data-best-slips-page]');
@@ -247,9 +247,8 @@ export async function verifyBestSlipsNavigation(page, origin) {
       }
     }
     assert(errors.length === 0, errors.join('\n'));
-    const prefetched = (await Promise.all(speculative)).filter(body => body !== null);
-    assert(prefetched.every(body => !body.includes('synthetic-archive-slip')), 'Speculative Best Slips prefetches may not stream an archive row');
-    results.push({ screen: 'best-slips-prefetch', checkedFlightResponses: prefetched.length });
+    assert(speculative.every(body => !body.includes('synthetic-archive-slip')), 'Speculative Best Slips prefetches may not stream an archive row');
+    results.push({ screen: 'best-slips-prefetch', checkedFlightResponses: speculative.length });
     return results;
   } finally {
     page.off('pageerror', onError);
@@ -276,12 +275,13 @@ export async function verifyMatchesContinuation(page, origin) {
     await page.locator('[data-best-slips-page]').waitFor();
   }
   async function heldRead(action, check) {
-    const calls = [], first = Promise.withResolvers(), release = Promise.withResolvers();
-    const intercept = async route => {
+    const calls = [], continuing = [], first = Promise.withResolvers(), release = Promise.withResolvers();
+    const intercept = route => {
       calls.push(new URL(route.request().url()));
       first.resolve();
-      await release.promise;
-      await route.continue();
+      const result = release.promise.then(() => route.continue());
+      continuing.push(result);
+      return result;
     };
     await page.route(listEndpoint, intercept);
     try {
@@ -290,13 +290,14 @@ export async function verifyMatchesContinuation(page, origin) {
       await check(calls, release.resolve, started);
     } finally {
       release.resolve();
-      await page.unroute(listEndpoint, intercept);
+      try { await Promise.all(continuing); }
+      finally { await page.unroute(listEndpoint, intercept); }
     }
   }
-  await page.goto(origin);
   await page.context().addCookies([{ name: guest, value: '1', url: origin }]);
   try {
     for (const { theme, width } of [{ theme: 'light', width: 390 }, { theme: 'dark', width: 1440 }]) {
+      await page.goto(origin);
       await page.setViewportSize({ width, height: 900 });
       await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
       await page.goto(matches.href);
@@ -304,7 +305,8 @@ export async function verifyMatchesContinuation(page, origin) {
       await page.waitForFunction(() => document.querySelectorAll('[data-feed-match-results] [data-fixture-id]').length === 50);
       await openSlips();
       await heldRead(() => page.goBack({ waitUntil: 'commit' }), async (calls, release) => {
-        assert(calls.length === 1 && calls[0].searchParams.get('page') === '1', 'The return quietly requests one current list page');
+        assert(calls.length === 1 && (calls[0].searchParams.get('page') ?? '1') === '1' && !calls[0].searchParams.has('through'),
+          'The return quietly requests one current list page');
         assert(await rows.count() === 50 && await list.getAttribute('aria-busy') !== 'true',
           'An older snapshot of the same guest page remains usable while its history refresh is held');
         release();
