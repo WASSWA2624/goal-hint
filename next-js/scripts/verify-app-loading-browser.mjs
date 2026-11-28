@@ -204,14 +204,24 @@ export async function verifyBestSlipsNavigation(page, origin) {
       await page.evaluate(() => { window.fixtureArchiveHeader = document.querySelector('[data-app-header]'); });
       const requests = [];
       const { promise: held, resolve: release } = Promise.withResolvers();
-      let scheduled;
+      const committed = Promise.withResolvers();
+      let scheduled, apiStartedAt;
       const intercept = route => {
         requests.push(new URL(route.request().url()).search);
         if (requests.length !== 1) return route.continue();
+        apiStartedAt = performance.now();
+        committed.resolve();
         scheduled = held.then(() => fail ? route.fulfill({ status: 503, json: { error: 'unavailable' } }) : route.continue());
         return scheduled;
       };
+      const shellFlight = url => url.pathname === '/en/best-slips';
+      const holdShell = async route => {
+        const headers = route.request().headers();
+        if (headers.rsc && !headers['next-router-prefetch'] && !headers['next-router-segment-prefetch']) await committed.promise;
+        await route.continue();
+      };
       await page.route(archive, intercept);
+      await page.route(shellFlight, holdShell);
       try {
         const navigation = page.locator('[data-responsive-navigation]:visible').first();
         const link = navigation.locator('a[data-nav-key="best-slips"]:visible').first();
@@ -250,6 +260,8 @@ export async function verifyBestSlipsNavigation(page, origin) {
         assert(await headerIsStable(), 'The archive updates within the initial Best Slips document and shared header');
         assert(requests.length === (fail ? 2 : 1) && requests.every(request => request === query),
           'The route starts one archive request and retry preserves the same query');
+        const archiveStartMs = Math.round(apiStartedAt - started);
+        assert(archiveStartMs <= shellMs, 'The archive request starts before the navigation controls are ready');
         const readyMs = Math.round(performance.now() - started), initialRequests = requests.length;
         const load = screen.locator('[data-show-more]'), secondPage = url => archive(url) && url.searchParams.get('through') === '2';
         const next = Promise.withResolvers();
@@ -269,7 +281,7 @@ export async function verifyBestSlipsNavigation(page, origin) {
             'Show More appends a full page and preserves the period count');
           assert(await page.evaluate(() => window.fixtureFirstSlip === document.querySelector('[data-slip-key]')),
             'Appending the archive leaves the first rendered row mounted');
-          results.push({ screen: 'best-slips-navigation', theme, width, shellMs, readyMs, initialRequests, retry: fail,
+          results.push({ screen: 'best-slips-navigation', theme, width, shellMs, readyMs, archiveStartMs, initialRequests, retry: fail,
             loadMorePendingMs: pendingMs, loadMoreReadyMs: Math.round(performance.now() - moreStarted), rows: unique });
         } finally {
           next.resolve();
@@ -277,7 +289,9 @@ export async function verifyBestSlipsNavigation(page, origin) {
         }
       } finally {
         release();
+        committed.resolve();
         await scheduled;
+        await page.unroute(shellFlight, holdShell);
         await page.unroute(archive, intercept);
         await page.context().clearCookies({ name: unavailableSeed });
       }

@@ -9,9 +9,11 @@ import { acceptsSlipBrowseAccess, appendSlipPage, canRetainSlipBrowseSeed, check
   nextSlipPageQuery, observeSlipPage, sameSlipBrowseQuery, slipBrowseWindow, type SlipBrowsePage } from "@/domain/slip-browse-window";
 import { singleSlipPage } from "@/domain/slip-pagination";
 import { shareUnchanged } from "@/domain/structural-sharing";
+import { takeBestSlipsNavigation } from "./best-slips-navigation-read";
 
 type Mode = "append" | "replace" | "refresh" | "background";
-type Intent = { query: BestSlipsQuery; mode: Mode; revision: number; depth: number; pushHistory: boolean; scrollY?: number | undefined };
+type Intent = { query: BestSlipsQuery; mode: Mode; revision: number; depth: number; pushHistory: boolean; scrollY?: number | undefined;
+  navigationRead?: true | undefined };
 type Failure = { mode: Mode; issue: "changed" | "access" | "limited" | "unavailable"; retryable: boolean };
 const historyKey = "goalHintBestSlips";
 
@@ -96,7 +98,10 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
       return { ...result, browse: result.browse };
     };
     const readJson = async (parameters: URLSearchParams) => {
-      const response = await fetch(`${endpoint}?${parameters}`, { signal: controller.signal, cache: "no-store", credentials: "same-origin" });
+      const href = `${endpoint}?${parameters}`;
+      const prepared = intent.navigationRead ? await takeBestSlipsNavigation(href, controller.signal) : null;
+      controller.signal.throwIfAborted();
+      const response = prepared ?? await fetch(href, { signal: controller.signal, cache: "no-store", credentials: "same-origin" });
       if (!active || controller.signal.aborted) throw new Error("aborted");
       if (response.status === 401 || response.status === 403) {
         if (!isUnverifiedSlipBrowseSeed(latest.current[0]!)) clearAccess(false);
@@ -174,13 +179,13 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
     };
   }, [endpoint, initial, intent, onAccessChanged]);
   const request = useCallback((query: BestSlipsQuery, mode: Mode,
-    { depth, pushHistory, scrollY }: Pick<Intent, "depth" | "pushHistory" | "scrollY">) => {
+    { depth, pushHistory, scrollY, navigationRead }: Pick<Intent, "depth" | "pushHistory" | "scrollY" | "navigationRead">) => {
     const now = Date.now();
     if (lock.current || now < retryAfter.current || mode === "background" && now - lastPassiveRead.current < 5_000) return;
     if (mode === "background") lastPassiveRead.current = now;
     lock.current = mode; setBusy(mode !== "background");
     if (mode !== "background") setFailed(null);
-    setIntent((current) => ({ query, mode, depth, pushHistory, scrollY, revision: current.revision + 1 }));
+    setIntent((current) => ({ query, mode, depth, pushHistory, scrollY, navigationRead, revision: current.revision + 1 }));
   }, []);
   const cancel = useCallback(() => {
     pending.current?.abort(); pending.current = null; lock.current = null; restoreScroll.current = undefined;
@@ -249,7 +254,7 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
     if (initialRequest && !restoresWindow) {
       const current = latest.current[0]!;
       if (isUnverifiedSlipBrowseSeed(current) && sameSlipBrowseQuery(current.browse.query, initialRequest.browse.query)) {
-        request(initialRequest.browse.query, "refresh", { depth: 1, pushHistory: false });
+        request(initialRequest.browse.query, "refresh", { depth: 1, pushHistory: false, navigationRead: true });
       }
     }
     const leaving = (event: MouseEvent) => {

@@ -334,7 +334,7 @@ async function run() {
       const slipFlight = routeHeaders.rsc === "1";
       if (url.origin !== origin || (!slipFlight && !["/api/matches", "/api/matches/summary", "/api/best-slips"].includes(url.pathname))) return;
       if (isInitialArchive(url, origin) && [502, 503, 504].includes(response.status())
-        && ["best-slips-route-commit", "best-slips-navigation-list", "best-slips-cold-list"].includes(diagnostic.phase))
+        && ["best-slips-trigger", "best-slips-route-commit", "best-slips-navigation-list", "best-slips-cold-list"].includes(diagnostic.phase))
         initialArchiveFailure ??= { href: response.url(), status: response.status() };
       const id = headers["x-request-id"], duration = headers["server-timing"]?.match(/\bapp;dur=(\d+)\b/u)?.[1];
       diagnostic.apiResponses.push({ path: url.pathname, status: response.status(),
