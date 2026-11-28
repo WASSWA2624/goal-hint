@@ -13,6 +13,17 @@ const accountRoutes = Object.fromEntries(fixtureStates.map(state => [state, crea
 /** Synthetic scenarios never touch an account database or message provider. */
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const parameters = await searchParams, jar = await cookies();
-  const Account = accountRoutes[await fixtureState(parameters)]!;
+  const state = await fixtureState(parameters), source = fixtureServices(state);
+  const Account = parameters.deferred === "settings" || parameters.deferred === "identity" ? createAccountRoute({
+    auth: async () => {
+      if (parameters.deferred === "identity") throw new Error("Synthetic identity read failure");
+      return source();
+    },
+    services: async () => {
+      await new Promise(resolve => setTimeout(resolve, 1_800));
+      return source();
+    },
+    plans: async () => fixtureCheckoutPlans,
+  }) : accountRoutes[state]!;
   return <><Account locale="en" searchParams={searchParams} /><RefreshProbe initialScenario={typeof parameters.scenario === "string" ? parameters.scenario : jar.get("member-fixture-scenario")?.value ?? "success"} /></>;
 }

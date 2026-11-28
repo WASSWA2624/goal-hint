@@ -122,6 +122,28 @@ test('list-only reads defer performance and cannot reuse the full-response cache
   assert.deepEqual({ ...responses[0], performance: null }, responses[1]);
 });
 
+test('unfiltered Today page variants share a live list lease without relaxing invalidation', async () => {
+  const { database } = emptyDatabase(asOf), descriptors = [];
+  const service = createMatchFeedService({ database, competitionIds: [39], clock: { now: () => asOf },
+    includePerformance: false, cache: { read: async descriptor => {
+      descriptors.push(descriptor);
+      throw new Error('synthetic descriptor capture');
+    } } });
+  const context = { predictedMatchesOnly: true, publishedForecasts: true };
+  for (const query of [
+    { when: 'today', result: 'pending', page: '2' },
+    { date: reportingToday, result: 'pending', page: '2' },
+    { when: 'today', result: 'pending' },
+    { when: 'today', result: 'won' },
+    { when: 'today', result: 'pending', country: 'England' },
+  ]) await assert.rejects(service.query(query, context));
+  assert.deepEqual(descriptors.map(({ lifetimeMs }) => lifetimeMs), [20_000, 20_000, 20_000, 5000, 5000]);
+  assert.equal(descriptors[0].key, descriptors[1].key);
+  assert.notEqual(descriptors[0].key, descriptors[2].key);
+  assert.deepEqual(descriptors[0].tags, [`date:${reportingToday}`, 'global:catalog', 'global:progress']);
+  assert.equal(descriptors[0].deadlineAt, descriptors[3].deadlineAt);
+});
+
 test('pagination pins local dates and retains timezone across midnight', () => {
   const q = query('when=next-7-days&tz=Asia%2FTehran&q=Example'), day = getFeedToday(q, asOf);
   assert.equal(feedPageHref(q, day, 2), '/en/predictions/2026-10-14?to=2026-10-20&tz=Asia%2FTehran&q=Example&page=2&picks=all&sort=kickoff');

@@ -1,6 +1,8 @@
 """Verify the account's initial production HTML using the shared rendering harness."""
+import http.client
 import json
 import re
+import time
 from html import unescape
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
@@ -8,6 +10,38 @@ from urllib.error import HTTPError
 from urllib.request import Request, build_opener, urlopen
 from lib.rendering import NoRedirect, Server, build_fixture, create_fixture, environment, match, no_match, parse_args, request, visible_html
 from lib.runtime import ROOT, main_guard
+
+
+def verify_deferred_account(origin):
+    def stream(path, marker):
+        connection = http.client.HTTPConnection(urlsplit(origin).netloc, timeout=10)
+        start = time.monotonic()
+        connection.request("GET", path, headers={"Accept-Encoding": "identity"})
+        with connection.getresponse() as response:
+            assert response.status == 200
+            chunks, first = [], None
+            while chunk := response.read1(65536):
+                chunks.append(chunk)
+                if first is None and marker in b"".join(chunks):
+                    first = time.monotonic() - start
+        connection.close()
+        return first, time.monotonic() - start, visible_html(b"".join(chunks).decode())
+
+    guest, complete, html = stream("/en/account?state=signed-out&deferred=settings", b"data-account-auth")
+    assert guest is not None and guest < complete - 1, (guest, complete)
+    authentication_form(html, "login", "Login")
+
+    workspace, complete, html = stream("/en/account?state=signed-in&deferred=settings", b"data-account-workspace")
+    assert workspace is not None and workspace < complete - 1, (workspace, complete)
+    match("Change password", html)
+
+    unavailable = request(origin, "/en/account?state=signed-in&deferred=identity&section=payments")
+    html = visible_html(unavailable.text)
+    assert unavailable.status == 200 and unavailable.headers.get("Set-Cookie") is None
+    match(r'data-account-unavailable', html)
+    match(r'href="/en/account\?[^"]*section=payments', html)
+    no_match(r'data-account-workspace|data-account-auth|256 700 000 101', html)
+    print(f"Account controls precede delayed settings and panels ({guest:.2f}s guest, {workspace:.2f}s member). Identity failure offers a private-safe retry.", flush=True)
 
 
 def auth_card(html):
@@ -246,7 +280,19 @@ def trial_visibility(origin):
 
 
 def account_workspace(html):
-    return match(r'<article\b[^>]*data-account-details[^>]*>([\s\S]*?)</main>', html).group(1)
+    content = match(r'<article\b[^>]*data-account-details[^>]*>([\s\S]*?)</main>', html).group(1)
+    # The streamed panel is emitted after the shell. Reconstruct only the
+    # fragments assigned to boundaries inside the Account article.
+    for boundary in re.findall(r'<template id="B:([\w-]+)"></template>', content):
+        start = match(rf'<div hidden id="S:{re.escape(boundary)}">', html).end()
+        depth = 1
+        for tag in re.finditer(r'</?div(?=[\s>])[^>]*>', html[start:]):
+            depth += -1 if tag[0].startswith("</") else 1
+            if depth == 0:
+                content += html[start:start + tag.start()]
+                break
+        assert depth == 0, "The streamed Account boundary did not complete."
+    return content
 
 
 def user_dashboard(origin):
@@ -450,6 +496,7 @@ def main():
         config.write_text(config.read_text().replace("agentRules: false,", "agentRules: false, typescript: { ignoreBuildErrors: true },"))
         build_fixture(directory, env=env, timeout=600)
     with Server(directory, env=env, ready="/en/account") as server:
+        verify_deferred_account(server.origin)
         for state, expected in [("off", "Login"), ("signed-out", "Phone number"),
                 ("signed-in", "256 700 000 101"), ("unavailable", "Login"),
                 ("active", "Expires"), ("ended", "Expired"), ("blocked", "We couldn&#x27;t complete this.")]:

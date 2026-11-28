@@ -18,7 +18,9 @@ export function PrivacyContent({ locale }: { locale: string }) {
   const effectiveOn = publishedNoticeDate(privacyNotice);
   const visibleSections = effectiveOn ? sections.filter(id => id !== "release") : sections;
   const values = { entries: messages.number(restorationRules.maximumEntries), minutes: messages.number(restorationRules.maximumAgeMilliseconds / 60_000),
-    seconds: messages.number(publicCacheRules.mutableMs / 1000), hours: messages.number(publicCacheRules.immutableMs / 3_600_000) };
+    seconds: messages.number(publicCacheRules.mutableMs / 1000),
+    feedSeconds: messages.number(Math.max(publicCacheRules.todayFeedListMs, publicCacheRules.todayFeedSummaryMs) / 1000),
+    hours: messages.number(publicCacheRules.immutableMs / 3_600_000) };
   const paragraphs = { access: ["body", "cookie"], payments: ["body", "images", "flutterwave", "messages", "retention", "basis"], requests: ["body", "logs"], search: ["body", "counter", "refresh"], storage: [],
     tracking: ["body", "data", "minimization", "scope"], images: ["body", "recipients"], football: ["body", "permissions"], retention: ["body", "expiry", "accounts", "tax", "backups"],
     choices: ["body", "inputs", "contact", "complaint", "correspondence", "correspondenceRetention", "correspondenceScope"], release: ["body"] } as const;

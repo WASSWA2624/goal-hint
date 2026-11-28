@@ -52,6 +52,13 @@ export function SlipAccessRequired({ locale, showAccount = false, signedIn = fal
   </SlipStack>;
 }
 
+export function SlipBuilderChrome({ locale, showAccount }: { locale: string; showAccount: boolean }) {
+  return <>
+    <AppBrandBar locale={locale} showAccount={showAccount} />
+    <BuilderHeader><SlipHeading>{createMessages(locale).text("slips.title")}</SlipHeading></BuilderHeader>
+  </>;
+}
+
 type CriteriaGroup = "targets" | "limits" | "kickoff" | "markets";
 type BuilderDialog = "advanced" | "markets";
 /** Responsive copies keep the action's existing desktop structure and stable dimensions. */
@@ -63,6 +70,30 @@ function SlipBuildActionLabel({ locale, restricted }: {
     <span data-action-label="mobile">{text}</span>
     <span data-action-label="desktop">{text}</span>
   </BuildActionLabel>;
+}
+
+export function SlipBuilderLoading({ locale, criteria, jointEstimates }: { locale: string; criteria: SlipCriteria; jointEstimates: boolean }) {
+  const messages = createMessages(locale), id = useId();
+  return <SlipStack data-slip-builder-page aria-busy="true">
+    <BuilderPanel data-slip-builder-loading aria-labelledby={`${id}-criteria`}>
+      <SlipCriteriaHeading id={`${id}-criteria`} locale={locale} />
+      <CriteriaForm as="div">
+        <SettingsLayout>
+          <SlipCriteriaSummary locale={locale} criteria={criteria}
+            showJoint={jointEstimates || criteria.totalProbMin !== undefined || criteria.totalProbMax !== undefined} />
+          <BuilderOptions data-slip-builder-options>
+            <div data-slip-criteria-options>
+              <BuilderFilters dialogId={`${id}-advanced`} open={false} count={0} disabled>{messages.text("filters.title")}</BuilderFilters>
+            </div>
+            <div data-criteria-actions data-toolbar-group="actions">
+              <BuildButton type="button" disabled><SlipIcon /><SlipBuildActionLabel locale={locale} restricted={false} /></BuildButton>
+            </div>
+          </BuilderOptions>
+        </SettingsLayout>
+      </CriteriaForm>
+    </BuilderPanel>
+    <VisuallyHidden role="status">{messages.text("navigation.loading")}</VisuallyHidden>
+  </SlipStack>;
 }
 const groupFields = {
   targets: ["slips", "totalMin", "totalMax", "teamsMin", "teamsMax"],
@@ -104,6 +135,7 @@ type Props = Readonly<{
   error?: SlipCriteriaIssue | null; initialInputs?: SlipInputs; initialTimeZone?: string; initialMarkets?: readonly SlipMarketFamily[];
   initialOutcomes?: SlipCriteria["outcomes"];
   initialReuse?: boolean; showAccount?: boolean; premiumOnly?: boolean; signedIn?: boolean;
+  entryState?: "ready" | "access-unavailable"; hideChrome?: boolean;
   jointEstimates?: boolean;
   providerOdds?: boolean;
   configurationId?: string | null; applyDefault?: boolean;
@@ -112,7 +144,7 @@ type Props = Readonly<{
 /** The native GET form and enhanced navigation use the same strict criteria parser. */
 export function SlipBuilder({ locale, today, criteria, result: receivedResult, error: initialError = null, initialInputs = {}, initialTimeZone, initialMarkets,
   initialOutcomes, initialReuse, showAccount = false, premiumOnly = false, signedIn = false, jointEstimates = false, configurationId = null,
-  applyDefault = false, providerOdds = publicPolicy.features.providerOdds }: Props) {
+  applyDefault = false, providerOdds = publicPolicy.features.providerOdds, entryState = "ready", hideChrome = false }: Props) {
   const messages = createMessages(locale), router = useRouter(), prefix = useId();
   const [clearedResult, setClearedResult] = useState<SlipBuildPageResult | null>(null);
   const result = clearedResult === receivedResult ? null : receivedResult;
@@ -318,6 +350,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending || entryState !== "ready" || premiumOnly) return;
     const parameters = new URLSearchParams();
     new FormData(event.currentTarget).forEach((value, key) => { if (typeof value === "string") parameters.append(key, value); });
     const configuration = parameters.get("configuration");
@@ -382,10 +415,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
   </Note>}{errorMessage("kickoff")}</>;
 
   return <SlipStack data-slip-builder-page aria-busy={pending} onInputCapture={markInteracted} onClickCapture={markInteracted} onKeyDownCapture={markInteracted}>
-    <AppBrandBar locale={locale} showAccount={showAccount} />
-    <BuilderHeader>
-      <SlipHeading>{messages.text("slips.title")}</SlipHeading>
-    </BuilderHeader>
+    {!hideChrome && <SlipBuilderChrome locale={locale} showAccount={showAccount} />}
     <BuilderPanel data-slip-builder-toolbar aria-labelledby={`${prefix}-criteria`}>
       <SlipCriteriaHeading id={`${prefix}-criteria`} locale={locale} />
       <CriteriaForm id={formId} data-enhanced={enhanced} action={action} method="get" ref={formRef} onSubmit={submit} noValidate>
@@ -437,7 +467,9 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
               </BuilderFilters>
             </div>
             <div data-criteria-actions data-toolbar-group="actions">
-              {premiumOnly ? <BuildLink data-slip-access-action href={subscriptionHref(signedIn, action, "login")} prefetch={false}>
+              {entryState === "access-unavailable" ? <BuildButton data-slip-access-action type="button" disabled={pending} onClick={recheckAccess}>
+                <ResetIcon />{messages.text("feed.retry")}
+              </BuildButton> : premiumOnly ? <BuildLink data-slip-access-action href={subscriptionHref(signedIn, action, "login")} prefetch={false}>
                 <LockIcon /><SlipBuildActionLabel locale={locale} restricted />
               </BuildLink> : <BuildButton data-slip-access-action type="submit" disabled={pending}>
                 <SlipIcon /><SlipBuildActionLabel locale={locale} restricted={false} />
@@ -447,11 +479,12 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
         </SettingsLayout>
       </CriteriaForm>
     </BuilderPanel>
-    <Results ref={resultsRef} data-slip-state={result?.state ?? "idle"} aria-busy={pending} aria-label={messages.text("slips.generated")}>
+    <Results ref={resultsRef} data-slip-state={entryState === "ready" ? result?.state ?? "idle" : entryState} aria-busy={pending} aria-label={messages.text("slips.generated")}>
       {generated && <BuilderFeedback role="status" data-slip-build-feedback><p>{messages.plural(
         data.slips.length < criteria.slips ? "slips.generatedFewer" : "slips.generatedCount", data.slips.length,
         { requested: messages.number(criteria.slips) })}</p></BuilderFeedback>}
-      {premiumOnly || pending && !generated ? null : generated ? <>
+      {entryState === "access-unavailable" ? <BuilderFeedback role="alert"><p>{messages.text("account.unavailable")}</p></BuilderFeedback>
+        : premiumOnly || pending && !generated ? null : generated ? <>
         <SlipMatchRefreshProvider slips={shownSlips} enabled={!pending} onAccessRevoked={recheckAccess} accessFallback={accessRequired}
           {...(result.matchStates ? { initialStates: result.matchStates } : {})}>
         <SlipList data-slip-list>{shownSlips.map((slip, index) => {
@@ -470,7 +503,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       {result?.searchLimited && <Note>{messages.text("slips.limited")}</Note>}
       {result?.partialCoverage && <Note>{messages.text("slips.partial")}</Note>}
       {result && <Note>{messages.text(desktop ? "slips.generatedAt" : "slips.asOf", { time: messages.reportingInstant(utcInstantFromEpochMilliseconds(result.asOf)) })}</Note>}
-      {!result && !providerOdds && <Note>{messages.text("slips.oddsNotice")}</Note>}
+      {entryState === "ready" && !result && !providerOdds && <Note>{messages.text("slips.oddsNotice")}</Note>}
       <VisuallyHidden role="status" aria-live="polite">{pending ? messages.text("slips.building") : ""}</VisuallyHidden>
     </Results>
   </SlipStack>;

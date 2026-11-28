@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { Suspense, use, useId, useRef, useState, useSyncExternalStore, type ComponentProps, type FormEvent } from "react";
+import { AppLoading } from "@/components/navigation/navigation-progress";
 import { TextLink } from "@/components/ui/controls";
 import { CriteriaDialog, CriteriaDialogButton } from "@/components/ui/criteria-dialog";
 import { PhoneInput } from "@/components/ui/phone-input";
@@ -22,9 +23,15 @@ const subscribe = () => () => {};
 const clientReady = () => true;
 const serverReady = () => false;
 
+function RecoveryWithContact({ contact, ...props }: Omit<ComponentProps<typeof PasswordRecoveryDialog>, "contact"> & {
+  contact: AdminContact | Promise<AdminContact>;
+}) {
+  return <PasswordRecoveryDialog {...props} contact={"then" in contact ? use(contact) : contact} />;
+}
+
 /** New members can start using the account as soon as registration succeeds. */
 export function AccountAuthForm({ locale, view = "login", returnTo, checkout = false, contact }: {
-  locale: string; view?: AccountAuthView; returnTo: string | null; checkout?: boolean; contact: AdminContact;
+  locale: string; view?: AccountAuthView; returnTo: string | null; checkout?: boolean; contact: AdminContact | Promise<AdminContact>;
 }) {
   const m = createMessages(locale), [phone, setPhone] = useState("256");
   const [password, setPassword] = useState("");
@@ -93,7 +100,9 @@ export function AccountAuthForm({ locale, view = "login", returnTo, checkout = f
         </>}>
         <bdi dir="ltr">+{formatPhone(confirmation.phone)}</bdi>
       </CriteriaDialog>}
-      {recoveryOpen && <PasswordRecoveryDialog locale={locale} contact={contact} phone={phone} returnTo={returnTo} checkout={checkout} onClose={closeRecovery} />}
+      {recoveryOpen && <Suspense fallback={<AppLoading />}>
+        <RecoveryWithContact locale={locale} contact={contact} phone={phone} returnTo={returnTo} checkout={checkout} onClose={closeRecovery} />
+      </Suspense>}
       <AccountFormFooter>
         <AccountSecondaryActions aria-label={m.text("account.formActions")} data-account-secondary-actions>
           {action === "login" && <AccountLink href={href("forgot")} prefetch={false} aria-haspopup="dialog" onClick={event => {

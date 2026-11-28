@@ -5,7 +5,7 @@ import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, va
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import { observeCache, type CacheOutcome, type ReadFamily } from "../monitoring/server-measurements.ts";
 
-export const publicCacheRules = Object.freeze({ mutableMs: 5000, immutableMs: 6 * 60 * 60 * 1000,
+export const publicCacheRules = Object.freeze({ mutableMs: 5000, todayFeedListMs: 20_000, todayFeedSummaryMs: 30_000, immutableMs: 6 * 60 * 60 * 1000,
   // A year-long feed range (366 days plus two zone-window days) keeps one date tag per day beside the global tags.
   maximumBytes: 1024 * 1024, maximumTags: 380, maximumPending: 128, recoveryBatch: 100 });
 export type CacheDescriptor<T> = Readonly<{ key: string; tags: readonly string[]; lifetimeMs: number;

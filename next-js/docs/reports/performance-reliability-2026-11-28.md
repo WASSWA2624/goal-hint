@@ -228,6 +228,14 @@ The unified package passed 119 focused Node tests and the affected browser and d
 
 Production accepted the exact staging package through the standard HTTPS and migration gates. Both environments verified all 95 required migrations against their existing databases, with zero pending migrations. The final hosted audit matched both release receipts, found one active build per environment and found both interrupted deployment records clear.
 
+## Production resource contention
+
+Under live traffic, Matches and member-session failures often occurred before their main SQL phases. A new TLS connection using the web account completed a read in 44 ms. MariaDB was below the server-wide connection limit. InnoDB was using its default 128 MiB buffer against about 169 GiB of production data and indexes. An immediate five-second pre-change interval recorded 69,910 physical reads. The live change to 4 GiB kept the same MariaDB process and uptime. Warmed samples fell to roughly 700–2,450 physical reads per second, with CPU I/O wait falling from 8.8–12.3% to 1.1–2.2%.
+
+In equal follow-up five-minute windows, Matches Today Pending page one still returned 503 about 62% of the time. At that point Passenger reported one production Node process with 74 active sessions. Its main thread used about 97–98% of one CPU core on repeated observations, with all five database connections in use. The host had 12 CPUs and no CPU quota for the process. Increasing database cache capacity addressed the disk pressure. A second production web process targets the remaining request concentration.
+
+The web package lets Login and Register render independently of support settings, presents Builder criteria while access and generated results load, and gives Users a visible pending state inside the verified admin shell. The standard Today feed can share or reuse exact page reads for up to 20 seconds under the existing source-generation checks. Focused tests preserved authentication, native Builder submission, cursor and page identity, and immediate source invalidation.
+
 ## Reproduction
 
 - Run the pinned runtime in `next-js/`. Run the focused tests for worker, account, administrator, Matches, Best Slips, sharing and request timing. Use the disposable MySQL test fixture for database runs.

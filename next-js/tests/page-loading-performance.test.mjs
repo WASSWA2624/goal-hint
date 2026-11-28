@@ -11,6 +11,7 @@ const modules = {
   '@/components/members/subscription-summary-card': exportsFor(['SubscriptionSummaryCard']),
   '@/components/members/free-trial-control': exportsFor(['FreeTrialControl']),
   '@/components/ui/controls': exportsFor(['ButtonLink']),
+  '@/components/ui/layout': exportsFor(['Stack']),
   '@/components/ui/visually-hidden': exportsFor(['VisuallyHidden']),
   '@/components/admin/users-editor': exportsFor(['UsersEditor']),
   '@/components/analytics/dashboard/dashboard-styles': exportsFor(['Notice']),
@@ -23,6 +24,7 @@ const modules = {
   '@/server/members/account-login-redirect': 'export const redirectToAccountLogin = () => { throw new Error("Login required"); };',
   '@/server/members/plans': 'export const createPlansService = () => ({ list: async () => [] });',
   '../members/plans.ts': 'export const plansServiceFor = () => ({ list: () => globalThis.performancePlans() });',
+  '@/styles/loading-theme': exportsFor(['LoadingTheme']),
   './public-shell': exportsFor(['PublicShell']),
 };
 registerServerRouteTestLoader({ source, modules });
@@ -108,14 +110,19 @@ test('user details load as soon as their identity is known without waiting for p
     globalThis.performancePlans = () => offers;
     globalThis.performanceUser = async id => { reads.push(id); return { id }; };
     try {
-      const rendering = Page({ searchParams: Promise.resolve(explicit ? { accountId: selected } : {}) });
+      const rendering = await Page({ searchParams: Promise.resolve(explicit ? { accountId: selected } : {}) });
+      const pending = nodes(rendering.props.fallback);
+      assert.ok(pending.some(node => node.props?.['data-users-loading'] === true && node.props?.['aria-busy'] === 'true'));
+      assert.ok(pending.some(node => node.props?.role === 'status'
+        && node.props.children === (explicit ? 'Loading users and the selected account…' : 'Loading users…')));
+      const workspace = rendering.props.children;
       await new Promise(setImmediate);
       assert.deepEqual(reads, explicit ? [selected] : []);
       finishDirectory({ accounts: [{ id: selected }], page: 2, pages: 3, total: 73 });
       await new Promise(setImmediate);
       assert.deepEqual(reads, [selected], 'Default details should start when the directory arrives, while plans are pending.');
       finishPlans(plans);
-      const editor = await rendering;
+      const editor = await workspace.type(workspace.props);
       assert.equal(editor.props.detail.id, selected);
       assert.deepEqual(editor.props.accounts, [{ id: selected }]);
       assert.deepEqual(editor.props.initialPaging, { page: 2, pages: 3, total: 73 });

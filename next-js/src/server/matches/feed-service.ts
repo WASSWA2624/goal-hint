@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getDayBoundsInTimeZone } from "../../domain/device-calendar.ts";
 import { isLocalFootballDevelopment } from "../../domain/development-demo.ts";
 import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock, type ReportingDate, type ReportingDateRange } from "../../domain/calendar.ts";
-import { feedQueryKey, getFeedToday, parseFeedQuery, resolveFeedDates, serializeFeedQuery, feedQueryRules, maximumCompetitionScope, type FeedParameters, type FeedQuery } from "../../domain/feed-query.ts";
+import { activeFeedFilterCount, feedQueryKey, getFeedToday, parseFeedQuery, resolveFeedDates, serializeFeedQuery, feedQueryRules, maximumCompetitionScope, type FeedParameters, type FeedQuery } from "../../domain/feed-query.ts";
 import { matchFeedRules, storedMatchFeedResponseSchema, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { createMessages, type TextKey } from "../../i18n/messages.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -21,7 +21,7 @@ import { feedPerformanceCacheKey, readFeedPerformance, restrictFeedPredictionSql
 import { adjustPerformanceAvailability, filterFeedResult, readFeedResultOverrides, resultOverridesFor } from "./feed-result-filter.ts";
 import { withFeedOdds, withUpcomingFeaturedOutcomes } from "./feed-odds.ts";
 import { performanceFeedQuery } from "../../domain/feed-performance-summary.ts";
-import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
+import { publicCacheDescriptor, publicCacheRules, type PublicResponseCache } from "../cache/public-cache.ts";
 import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
 import { prepareDemoRange } from "../demo/read-seed.ts";
 import { timedRequestPhase } from "../http/request-timing.ts";
@@ -99,8 +99,8 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       if (query.search) await limiter.consume();
       const read = () => timedRequestPhase("list-transaction", () => database.transaction(async (tx) => {
         // Source writes (including live clock updates) and the generations commit atomically.
-        const versions = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly,
-          publishedOnly, historyBefore, providerOdds, publishedForecasts, predictedMatchesOnly);
+        const versions = await timedRequestPhase("list-generation", () => storedFeedVersions(tx, query, today, sourceRange,
+          competitionIds, context.completedOnly, publishedOnly, historyBefore, providerOdds, publishedForecasts, predictedMatchesOnly));
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
         const baseSql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly, publishedOnly, historyBefore, publishedForecasts);
         const useDefaultFeatured = isDefaultFeaturedScope(query);
@@ -218,12 +218,21 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         if (Buffer.byteLength(JSON.stringify(response), "utf8") > matchFeedRules.maximumResponseBytes) throw new MatchFeedError("unavailable");
         return freezeEvidence(response);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 }));
-      const response = cache ? await timedRequestPhase("list-cache", () => cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
-        deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: 34, providerOdds, completedOnly: context.completedOnly === true,
-          publishedOnly, publishedForecasts, predictedMatchesOnly, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } },
-        scope: [...competitionIds].sort((a, b) => a - b),
-        parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read)) : await read();
+      const todayList = predictedMatchesOnly && publishedForecasts && !publishedOnly && !context.completedOnly
+        && options.includePerformance === false && !query.zone && query.pageSize === feedQueryRules.pageSize
+        && range.dayCount === 1 && range.startDate === reportingToday
+        && (query.result === undefined || query.result === "pending")
+        && activeFeedFilterCount(query) === Number(query.result === "pending");
+      const response = cache ? await timedRequestPhase("list-cache", () => {
+        const descriptor = publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
+          deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
+          query: { ...query, projection: 34, providerOdds, completedOnly: context.completedOnly === true,
+            publishedOnly, publishedForecasts, predictedMatchesOnly, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } },
+          scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedMatchFeedResponseSchema.parse(value) });
+        // Keep a normal live-refresh window for busy Today pages. The same
+        // date, catalog and progress generations still invalidate immediately.
+        return cache.read(todayList ? { ...descriptor, lifetimeMs: publicCacheRules.todayFeedListMs } : descriptor, read);
+      }) : await read();
       const current = providerOdds ? await withFeedOdds(database, response, asOf, allowInPlayOdds, !publishedForecasts) : response;
       const useCompleteForecast = publishedForecasts && isDefaultFeaturedScope(query);
       return useCompleteForecast ? withUpcomingFeaturedOutcomes(database, current, asOf, providerOdds) : current;

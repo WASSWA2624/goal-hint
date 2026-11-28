@@ -30,9 +30,12 @@ export const StatusCopy = styled.span`
   }
 `;
 
-export const SlipStack = styled(Stack)`
+export const SlipStack = styled(Stack)<{ $builderFrame?: boolean }>`
   gap: var(--gh-spacing-2_5);
-  ${media.belowDesktop} { &[data-slip-builder-page], &[data-best-slips-page] { gap: var(--gh-spacing-1_5); } }
+  ${media.belowDesktop} {
+    ${({ $builderFrame }) => $builderFrame && "gap: var(--gh-spacing-1_5);"}
+    &[data-slip-builder-page], &[data-best-slips-page] { gap: var(--gh-spacing-1_5); }
+  }
   ${media.desktop} {
     gap: var(--gh-spacing-3);
   }

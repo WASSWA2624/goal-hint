@@ -6,7 +6,7 @@ import { getDayBoundsInTimeZone } from "../../domain/device-calendar.ts";
 import { feedPerformanceReplySchema, performanceFeedQuery } from "../../domain/feed-performance-summary.ts";
 import { activeFeedFilterCount, feedQueryRules, getFeedToday, maximumCompetitionScope, resolveFeedDates, type FeedParameters } from "../../domain/feed-query.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
-import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
+import { publicCacheDescriptor, publicCacheRules, type PublicResponseCache } from "../cache/public-cache.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { prepareDemoRange } from "../demo/read-seed.ts";
 import { timedRequestPhase } from "../http/request-timing.ts";
@@ -24,7 +24,6 @@ import { createMysqlPublicSearchLimiter } from "./search-limit.ts";
 const storedSummarySchema = feedPerformanceReplySchema.omit({ access: true }).extend({
   total: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
 }).refine((value) => value.performance.total === value.total);
-const todaySummaryLeaseMs = 30_000;
 
 /** Aggregate reads share the feed's scope, ranking, audit and invalidation rules, without hydrating a discarded page. */
 export function createMatchFeedSummaryService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[];
@@ -79,7 +78,7 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
       // Counts depend on the same catalog and source dates as storedFeedVersions.
       return await timedRequestPhase("summary-cache", () => cache.read({ ...descriptor,
         tags: descriptor.tags.filter((tag) => tag !== "global:progress"),
-        lifetimeMs: publicToday ? todaySummaryLeaseMs : descriptor.lifetimeMs }, read));
+        lifetimeMs: publicToday ? publicCacheRules.todayFeedSummaryMs : descriptor.lifetimeMs }, read));
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;
       throw new MatchFeedError("unavailable");
