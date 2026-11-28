@@ -9,7 +9,7 @@ import { adjacentDays, archiveWindowDays, dayLinkRel, emptyArchiveIsMissing } fr
 import { parseFeedQuery, resolveFeedDates } from '../src/domain/feed-query.ts';
 import { feedDiscovery } from '../src/domain/discovery.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
-import { isDocumentRequest, PublicReadUnavailableError } from '../src/server/seo/read-status.ts';
+import { isBrowserDocumentRequest, isDocumentRequest, PublicReadUnavailableError } from '../src/server/seo/read-status.ts';
 import { fullAccess } from './helpers/full-access.ts';
 import { liveDetail } from './helpers/live-refresh-fixtures.mjs';
 import { fixture } from './helpers/client-state-fixtures.mjs';
@@ -63,11 +63,26 @@ test('client navigations are recognised by their fetch metadata; crawlers and ad
   }
 });
 
+test('only browser document navigation enters the progressive Matches route', async () => {
+  const request = (values) => isBrowserDocumentRequest(async () => new Headers(values));
+  const chrome = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/131.0.0.0 Mobile Safari/537.36';
+  const navigation = { 'user-agent': chrome, 'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate' };
+  assert.equal(await request(navigation), true);
+  const audit = chrome.replace('Chrome/', 'HeadlessChrome/') + ' Chrome-Lighthouse';
+  assert.equal(await request({ ...navigation, 'user-agent': audit }), true);
+  for (const changes of [{ 'user-agent': 'Googlebot/2.1' }, { 'user-agent': `${audit} Googlebot/2.1` }, { rsc: '1' },
+    { 'sec-fetch-dest': 'empty' }, { 'sec-fetch-mode': 'same-origin' }]) {
+    assert.equal(await request({ ...navigation, ...changes }), false);
+  }
+  assert.equal(await request({ 'user-agent': chrome }), false);
+});
+
 // The route factories are TSX with bundler-style imports. Resolve `@/` and extensionless paths, compile JSX, and replace
 // the shell clock and page views with stubs, so each factory's own status decisions can be observed directly.
 const source = new URL('../src/', import.meta.url).href;
 const navigation = new URL('../node_modules/next/dist/client/components/navigation.react-server.js', import.meta.url).href;
 const stubs = { './public-shell': 'data:text/javascript,export const getShellInstant = async () => globalThis.seoStatusInstant;',
+  '@/components/navigation/navigation-progress': 'data:text/javascript,export function AppLoading() { return null; }',
   './match-feed-page': 'data:text/javascript,export function MatchFeedPage() { return null; }',
   './match-detail-page': 'data:text/javascript,export function MatchDetailPage() { return null; }' };
 registerHooks({
@@ -144,19 +159,21 @@ test('only an explicit recommendation filter narrows the page and streamed summa
   }
 });
 
-test('the list can seed zero pick outcomes for its own generation when no outcome filter narrows it', async () => {
+test('the list can seed zero pick outcomes for its own generation without starting a separate audit', async () => {
   const access = { tier: 'full', signedIn: false }, performanceVersion = 'a'.repeat(64);
+  let summaryReads = 0;
   const page = createFeedRoute({ instant: async () => at, policy: closed, document: fullDocument,
     resolveAccess: fullAccess, read: async (input) => {
       const imported = input.get('when') !== 'tomorrow', total = imported && !input.has('result') ? 192 : 0;
       return { records: [], total, state: !imported ? 'data-unavailable' : total ? 'ready' : 'no-filter-matches',
         coverage: { knownFixtures: imported ? 192 : 0, matchingWithMarket: total ? 34 : 0, matchingWithPerformancePick: 0 },
         performanceVersion, asOf: at, access };
-    }, readSummary: async () => { throw new Error('audit unavailable'); } });
-  const feed = view(await page.Page(props({})), 'MatchFeedPage');
+    }, readSummary: async () => { summaryReads++; throw new Error('audit unavailable'); } });
+  const feed = view(await page.Page(props({}, { result: 'all' })), 'MatchFeedPage');
   const seed = await feed.summary;
   assert.deepEqual(seed.reply, { performance: { total: 192, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0, unavailable: 192 },
     paginationVersion: performanceVersion, asOf: at, access });
+  assert.equal(summaryReads, 0);
   const filtered = view(await page.Page(props({}, { result: 'won' })), 'MatchFeedPage');
   assert.equal((await filtered.summary).reply, null);
   const missingCoverage = view(await page.Page(props({}, { when: 'tomorrow' })), 'MatchFeedPage');
@@ -177,6 +194,17 @@ test('the paginated browsing feed keeps its retry and noindex metadata when a st
 
 test('the default Today collection uses its indexable document recovery', async () => {
   await assert.rejects(feed().Page(props({})), failed);
+  await assert.rejects(feed().generateMetadata(props({})), failed);
+});
+
+test('browser streaming keeps the canonical failure in-page while a crawler gets the existing error', async () => {
+  const browser = createFeedRoute({ browserDocument: async () => true, instant: async () => at,
+    read: unavailable, document: fullDocument, policy: indexing, resolveAccess: fullAccess });
+  const rendered = await browser.Page(props({}));
+  assert.equal(rendered.type, Symbol.for('react.suspense'));
+  const content = await rendered.props.children.type(rendered.props.children.props);
+  assert.equal(view(content, 'MatchFeedPage').result.error, 'unavailable');
+  assert.equal((await browser.generateMetadata(props({}))).robots.index, false);
   await assert.rejects(feed().generateMetadata(props({})), failed);
 });
 
@@ -338,7 +366,7 @@ test('the detail price lookup overlaps the primary read and still follows viewer
   await fullProjection.previewPromise;
 });
 
-test('feed summary starts beside the list, streams independently and is never read for metadata', async () => {
+test('feed summary waits for an accepted list, streams independently and is never read for metadata', async () => {
   let finishList, finishSummary, summaries = 0;
   const list = new Promise(resolve => { finishList = resolve; });
   const summary = new Promise(resolve => { finishSummary = resolve; });
@@ -352,7 +380,7 @@ test('feed summary starts beside the list, streams independently and is never re
     } });
   const rendering = page.Page(props({}));
   await new Promise(setImmediate);
-  assert.equal(summaries, 1, 'The audit starts before the primary stored read completes.');
+  assert.equal(summaries, 0, 'The audit does not compete with the primary stored read.');
   finishList();
   const rendered = view(await rendering, 'MatchFeedPage');
   assert.equal(rendered.result.error, null, 'An unresolved audit cannot hold the primary page.');

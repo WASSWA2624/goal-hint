@@ -2,8 +2,10 @@ import "server-only";
 
 import { privatePaths } from "../../domain/private-paths.ts";
 import type { Admin } from "../analytics/analytics-auth.ts";
-import { createLoginHandler, createLogoutHandler, getAnalyticsServices, requireAdmin, verifyAdminSession, type AnalyticsServices,
+import { createLoginHandler, createLogoutHandler, getAnalyticsServices, readAdminSession, verifyAdminSession, type AnalyticsServices,
   type SignInOptions } from "../analytics/analytics-http.ts";
+import { readCookie } from "../http/private-http.ts";
+import { memberCookieName } from "../members/member-sessions.ts";
 import { ownerSignInAudit } from "./audit.ts";
 
 /**
@@ -21,9 +23,9 @@ export function verifyOwner(services: AnalyticsServices, memberToken: string | u
   return verifyAdminSession(services, memberToken);
 }
 
-/** The administrator signed in on this request, or null. */
+/** Return a verified administrator or null. A storage failure must reach the request guard. */
 export function requireOwner(services: AnalyticsServices, request: Request): Promise<Owner | null> {
-  return requireAdmin(services, request);
+  return readAdminSession(services, readCookie(request, memberCookieName(services.config.production)));
 }
 
 /** `POST /api/admin/login`: old bookmarks return to the single login without accepting credentials. */

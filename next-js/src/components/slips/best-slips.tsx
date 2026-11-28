@@ -4,7 +4,7 @@ import { memo, useCallback, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { TextLink } from "@/components/ui/controls";
-import { Stack } from "@/components/ui/layout";
+import { MutedText, Stack } from "@/components/ui/layout";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { matchesHref } from "@/domain/navigation";
 import type { SlipsBrowseResult } from "@/domain/best-slips";
@@ -40,9 +40,14 @@ export function BestSlips({ result, locale, signedIn = false }: { result: SlipsB
       scannedDates={listWindow?.total === null ? listWindow : undefined}
       summary={content.summary} statistics={content.summary ? content.summary.statistics : content.statistics} countSummary={content.state === "generated" || content.state === "awaiting-publication" && listWindow?.bandTotal === 0
         ? <BestSlipsSummary result={content} locale={locale} /> : null} onChange={browse.change} />
+    {browse.stale && <MutedText role="status" data-best-slips-stale>{m.text("bestSlips.filters.stale")}</MutedText>}
+    {browse.readError && content.state !== "data-unavailable" && <CriteriaPanel role="alert" data-best-slips-update-failed><Stack $gap="sm">
+      <h2>{m.text(browse.readError === "limited" ? "bestSlips.filters.rateLimited" : "bestSlips.filters.updateUnavailable")}</h2>
+      <FilterButton type="button" onClick={browse.retry} disabled={browse.updating}>{m.text("bestSlips.filters.retry")}</FilterButton>
+    </Stack></CriteriaPanel>}
     {content.state === "data-unavailable" ? <CriteriaPanel role="alert"><Stack $gap="sm">
       <h2>{m.text("bestSlips.filters.dataUnavailable")}</h2>
-      <FilterButton type="button" onClick={browse.retry}>{m.text("bestSlips.filters.retry")}</FilterButton>
+      <FilterButton type="button" onClick={browse.retry} disabled={browse.updating}>{m.text("bestSlips.filters.retry")}</FilterButton>
     </Stack></CriteriaPanel>
     : content.slips.length === 0 && listWindow && content.state === "generated" ? <CriteriaPanel role="status"><Stack $gap="sm">
       <h2>{m.text(searchContinues ? "bestSlips.filters.emptyPage" : listWindow.bandTotal === 0 ? "bestSlips.filters.emptyBand" : "bestSlips.filters.empty", { oddsRange })}</h2>

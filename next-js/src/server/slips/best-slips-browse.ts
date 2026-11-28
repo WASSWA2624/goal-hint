@@ -5,6 +5,7 @@ import { bestSlipsQueryRules, parseBestSlipsQuery, resolveBestSlipsDates, serial
 import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "../../domain/calendar.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
 import { getDatabase } from "../database/client.ts";
+import { timedRequestPhase } from "../http/request-timing.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
 import { publicOddsEnabled } from "../odds/public-odds-policy.ts";
 import { gateBestSlips } from "./slip-preview.ts";
@@ -38,7 +39,7 @@ function createBestSlipsSnapshotReader({ read = readPublishedBestSlips, provider
     try {
       // The browse reader aggregates the entire selected period before outcome
       // filtering and pagination. Reuse that snapshot for both list and summary.
-      const result = await read(query, day, locale, false);
+      const result = await timedRequestPhase("archive", () => read(query, day, locale, false));
       const state = result.state === "generated" && dates.from === day && dates.to === day
         && (result.browse?.bandTotal ?? result.statistics?.total) === 0
         ? "awaiting-publication" : result.state;

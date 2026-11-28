@@ -1,4 +1,4 @@
 import { createBestSlipsHandler } from "@/server/slips/best-slips-http";
-import { readBest } from "../../best";
+import { readBestSnapshot } from "../../best";
 import { requestAccess } from "../../stored";
-export const GET = createBestSlipsHandler({ read: readBest, access: requestAccess });
+export const GET = createBestSlipsHandler({ snapshot: readBestSnapshot, access: requestAccess });

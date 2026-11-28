@@ -12,7 +12,8 @@ export const feedPerformanceReplySchema = z.strictObject({
 });
 export type FeedPerformanceReply = z.infer<typeof feedPerformanceReplySchema>;
 /** A server-started read is tied to its canonical summary scope, never the visible list page. */
-export type FeedPerformanceSeed = Readonly<{ href: string; reply: FeedPerformanceReply | null }>;
+export type FeedPerformanceSeed = Readonly<{ href: string; reply: FeedPerformanceReply | null;
+  failure?: { code: FeedPaginationError["code"]; retryAt?: number } }>;
 
 export function feedPerformanceApiHref(query: FeedQuery, today: ReportingDate): string {
   return feedPageApiHref(performanceFeedQuery(query), today, 1).replace("/api/matches?", "/api/matches/summary?");

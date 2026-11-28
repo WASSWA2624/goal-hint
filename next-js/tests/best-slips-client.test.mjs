@@ -3,7 +3,7 @@ import test from 'node:test';
 import { bestSlipsRangeKey, findBestSlipsSnapshot, projectBestSlipsSnapshot, rememberBestSlipsSnapshot } from '../src/domain/best-slips-client.ts';
 import { slipStatusCategory } from '../src/domain/slip-status.ts';
 import { slipPageSize } from '../src/domain/slip-pagination.ts';
-import { appendSlipPage, nextSlipPageQuery, observeSlipPage, slipBrowseWindow } from '../src/domain/slip-browse-window.ts';
+import { appendSlipPage, canRetainSlipBrowseSeed, nextSlipPageQuery, observeSlipPage, slipBrowseWindow } from '../src/domain/slip-browse-window.ts';
 
 const day = '2026-10-30';
 const query = (overrides = {}) => ({ period: 'today', status: 'all', page: 1, ...overrides });
@@ -65,6 +65,27 @@ test('a passive Best Slips read keeps loaded offsets and merges updates by stabl
   assert.equal(observed.slips[3], source.slips[3]);
   assert.equal(observed.browse.total, 25);
   assert.equal(observed.browse.bandTotal, 30);
+});
+
+test('a failed or late Best Slips seed keeps confirmed counts only for the same query and access', () => {
+  const prior = page(daily(['won', 'pending']));
+  const confirmed = { ...prior, summary: { from: day, to: day, asOf: 100, statistics: prior.statistics } };
+  const accepted = [confirmed];
+  const failed = page({ ...daily([]), state: 'data-unavailable', statistics: null });
+  assert.equal(canRetainSlipBrowseSeed(accepted, failed), true);
+  assert.equal(observeSlipPage(accepted, failed), accepted);
+  assert.equal(canRetainSlipBrowseSeed(accepted, { ...failed, entitled: false }), false);
+  assert.equal(canRetainSlipBrowseSeed(accepted, { ...failed, day: '2026-10-31' }), false);
+  const anotherBand = { ...failed, browse: { ...failed.browse, query: query({ oddsBand: '5-10' }) } };
+  assert.equal(canRetainSlipBrowseSeed(accepted, anotherBand), false);
+  assert.equal(observeSlipPage(accepted, anotherBand), accepted);
+  const stale = { ...confirmed, summary: { ...confirmed.summary, asOf: 99 } };
+  assert.equal(canRetainSlipBrowseSeed(accepted, stale), true);
+  assert.equal(observeSlipPage(accepted, stale), accepted);
+  const healthyZero = page(daily([]));
+  const verified = { ...healthyZero, summary: { from: day, to: day, asOf: 101, statistics: healthyZero.statistics } };
+  assert.deepEqual(slipBrowseWindow(observeSlipPage([failed], verified)).statistics,
+    { total: 0, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0 });
 });
 
 test('a complete daily cohort projects every status instantly while pending groups all unsettled progress', () => {

@@ -96,6 +96,37 @@ export async function verifyAppLoading(page, origin) {
       results.push({ screen: 'matches', theme, retry: true, requests: summaryRequests });
     }
     await page.clock.install();
+    const summaryUrl = /\/api\/matches\/summary(?:\?|$)/u;
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
+      let attempts = 0;
+      const failOnce = async route => {
+        if (++attempts === 1) await route.fulfill({ status: 503, headers: { 'Retry-After': '12' }, body: '{}' });
+        else await route.continue();
+      };
+      await page.route(summaryUrl, failOnce);
+      try {
+        await page.goto(`${origin}/en/matches?fail=1`);
+        const unavailable = page.locator('[data-feed-performance-state="unavailable"]');
+        const retry = unavailable.locator('[data-performance-retry]');
+        await unavailable.waitFor();
+        const rows = await page.locator('[data-fixture-id]').count();
+        const failed = page.waitForResponse(response => summaryUrl.test(response.url()) && response.status() === 503);
+        await retry.click();
+        await failed;
+        await unavailable.waitFor();
+        await page.waitForFunction(() => document.querySelector('[data-performance-retry]')?.disabled);
+        await page.clock.fastForward(11_000);
+        assert(attempts === 1, 'A transient summary failure must respect Retry-After');
+        await page.clock.fastForward(2_000);
+        await page.locator('[data-feed-performance-state="ready"]').waitFor();
+        assert(attempts === 2 && rows === await page.locator('[data-fixture-id]').count(), 'The same cohort auto-recovers without clearing the list');
+        assert(await page.getByRole('progressbar', { name: /loading/i }).count() === 0, 'Automatic recovery stays quiet');
+        results.push({ screen: 'matches', theme, automaticRetry: true, attempts, retainedRows: rows });
+      } finally {
+        await page.unroute(summaryUrl, failOnce);
+      }
+    }
     for (const theme of ['light', 'dark']) {
       await page.emulateMedia({ reducedMotion: theme === 'dark' ? 'reduce' : 'no-preference' });
       await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);

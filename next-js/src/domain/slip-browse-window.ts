@@ -17,11 +17,27 @@ export function sameSlipBrowseAccess(left: SlipsBrowseResult, right: SlipsBrowse
   return left.entitled === right.entitled && left.access?.tier === right.access?.tier && left.access?.signedIn === right.access?.signedIn;
 }
 
+export function isSlipBrowseUnavailable({ state }: SlipsBrowseResult) {
+  return state === "data-unavailable" || state === "rate-limited";
+}
+
+export function sameSlipBrowseQuery(left: BestSlipsQuery, right: BestSlipsQuery) {
+  return serializeBestSlipsQuery(left).toString() === serializeBestSlipsQuery(right).toString();
+}
+
+export function canRetainSlipBrowseSeed(pages: readonly SlipBrowsePage[], incoming: SlipBrowsePage) {
+  const first = pages[0]!, last = pages.at(-1)!;
+  return !isSlipBrowseUnavailable(first) && first.day === incoming.day && sameSlipBrowseAccess(first, incoming)
+    && sameSlipBrowseQuery(first.browse.query, incoming.browse.query)
+    && (isSlipBrowseUnavailable(incoming) || first.state === incoming.state
+      && (pages.length > 1 || (incoming.summary?.asOf ?? -Infinity) < (last.summary?.asOf ?? -Infinity)));
+}
+
 export function appendSlipPage(pages: readonly SlipBrowsePage[], page: SlipBrowsePage): readonly SlipBrowsePage[] {
   const previous = pages.at(-1)!;
   const next = nextSlipPageQuery(previous);
   if (!next || page.day !== previous.day || !sameSlipBrowseAccess(previous, page)
-    || serializeBestSlipsQuery(next).toString() !== serializeBestSlipsQuery(page.browse.query).toString()
+    || !sameSlipBrowseQuery(next, page.browse.query)
     || previous.browse.total !== page.browse.total || previous.browse.version !== page.browse.version
     || previous.browse.pageSize !== page.browse.pageSize || page.slips.length > page.browse.pageSize) throw new Error("changed");
   const { total, pageSize, hasMore } = page.browse;
@@ -48,8 +64,10 @@ export function slipBrowseWindow(pages: readonly SlipBrowsePage[]): SlipBrowsePa
 /** A passive observation may refresh currently displayed slips and the period totals. */
 export function observeSlipPage(pages: readonly SlipBrowsePage[], page: SlipBrowsePage): readonly SlipBrowsePage[] {
   const last = pages.at(-1)!;
-  if (!sameSlipBrowseAccess(last, page) || page.day !== last.day
-    || (page.summary?.asOf ?? -Infinity) < (last.summary?.asOf ?? -Infinity)) return pages;
+  if (isSlipBrowseUnavailable(page) || !pages.some(previous => sameSlipBrowseQuery(previous.browse.query, page.browse.query))
+    || !sameSlipBrowseAccess(last, page) || page.day !== last.day
+    || !isSlipBrowseUnavailable(last) && (page.summary?.asOf ?? -Infinity) < (last.summary?.asOf ?? -Infinity)) return pages;
+  if (pages.length === 1) return shareUnchanged(pages, [page]);
   const observed = new Map(page.slips.map((slip) => [slipViewKey(slip), slip]));
   const browse = { ...last.browse };
   if (page.browse.bandTotal === undefined) delete browse.bandTotal;

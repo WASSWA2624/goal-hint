@@ -585,15 +585,20 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const statistics = { total: 0, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0 };
         const views: BestSlipView[] = [];
         let total = 0, bandTotal = 0, hasOverlap = false;
+        let scannedThrough: ReportingDate | null = null;
         const membership: string[] = [];
-        const offset = (query.page - 1) * bestSlipsQueryRules.pageSize;
+        const { pageSize } = bestSlipsQueryRules, offset = (query.page - 1) * pageSize;
         for await (const entries of readOrderedBandPages(tx, parents, batches, requestedBand, legacyDailyOrder, overlapDay)) {
+          if (allDates) scannedThrough = parseReportingDate(entries.at(-1)!.parent.day);
           const ordered = entries.filter(({ parent, snapshot }) => parent.day !== overlapDay
             || snapshot.slip.selections.every(({ kickoffAt }) => kickoffAt > asOf && kickoffAt < overlapEnd));
-          const candidates = ordered.filter(({ snapshot }) => matchesBestSlipsRanges(query, {
-            averageProbability: snapshot.slip.averageProbability, matchCount: snapshot.slip.selections.length,
-          }));
-          const needsAll = completedOnly || overlapDay !== undefined && ordered[0]?.parent.day === overlapDay;
+          const matching = ordered.filter(({ snapshot, parent, row }) => (!cursor || parent.day < cursor.day
+            || parent.day === cursor.day && publicRank(parent, row.rank) > cursor.rank) && matchesBestSlipsRanges(query, {
+              averageProbability: snapshot.slip.averageProbability, matchCount: snapshot.slip.selections.length,
+            }));
+          // The archive makes no all-history count claim. With no outcome filter, only the page and one lookahead need result evidence.
+          const candidates = allDates && query.status === "all" && !completedOnly ? matching.slice(0, pageSize + 1 - views.length) : matching;
+          const needsAll = !allDates && (completedOnly || overlapDay !== undefined && ordered[0]?.parent.day === overlapDay);
           const results = await resolveResults(tx, (needsAll ? ordered : candidates).flatMap(({ snapshot }) => snapshot.slip.selections), asOf, { editorial: true });
           const resultsFor = indexSlipResults(results);
           if (!needsAll) bandTotal += ordered.length;
@@ -613,16 +618,17 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             const outcome = slipSnapshotOutcome(snapshot.slip, slipResults), status = slipSnapshotStatus(snapshot.slip, slipResults, outcome);
             if (parent.day === overlapDay && status !== "not-started") continue;
             const category = slipStatusCategory(status);
-            statistics.total++; statistics[category]++;
-            if (cursor && (parent.day > cursor.day || parent.day === cursor.day && publicRank(parent, row.rank) <= cursor.rank)) continue;
+            if (!allDates) { statistics.total++; statistics[category]++; }
             if (!matchesBestSlipsStatus(category, query.status)) continue;
-            membership.push(row.id);
+            if (!allDates) membership.push(row.id);
             const position = total++;
-            if (allDates ? views.length > bestSlipsQueryRules.pageSize : position < offset || position >= offset + bestSlipsQueryRules.pageSize) continue;
+            if (!allDates && (position < offset || position >= offset + pageSize)) continue;
             views.push(publishedSlipView(entry, slipResults, outcome, status, completed));
+            if (allDates && views.length > pageSize) break;
           }
+          if (allDates && views.length > pageSize) break;
         }
-        const retained = views.slice(0, bestSlipsQueryRules.pageSize), overflow = views.length > retained.length;
+        const retained = views.slice(0, pageSize), overflow = views.length > retained.length;
         const last = retained.at(-1), oldest = selected.at(-1);
         const nextCursor = allDates && overflow && last ? `${last.publicationDay}:${last.rank}`
           : allDates && hasOlder && oldest ? `${parents.get(oldest.id)!.day}:${maximumBestSlipPublicRank}` : null;
@@ -639,9 +645,9 @@ export function createPublishedSlips(database: DatabaseRuntime, {
           ...publicationCoverage(parents, batches), statistics: periodStatistics,
           summary: { ...dates, asOf, statistics: periodStatistics },
           browse: { query, version: allDates ? null : evidenceFingerprint({ bandTotal, membership }), total: allDates ? null : total,
-            bandTotal: allDates ? null : bandTotal, ...(dailyBandLimit === undefined ? {} : { dailyBandLimit }), pageSize: bestSlipsQueryRules.pageSize,
+            bandTotal: allDates ? null : bandTotal, ...(dailyBandLimit === undefined ? {} : { dailyBandLimit }), pageSize,
             hasMore: allDates ? nextCursor !== null : offset + retained.length < total, nextCursor,
-            from: allDates ? oldest ? parseReportingDate(parents.get(oldest.id)!.day) : null : dates.from,
+            from: allDates ? overflow ? scannedThrough : oldest ? parseReportingDate(parents.get(oldest.id)!.day) : null : dates.from,
             to: allDates ? selected[0] ? parseReportingDate(parents.get(selected[0].id)!.day) : null : dates.to } };
       });
     },

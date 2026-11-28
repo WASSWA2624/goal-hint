@@ -69,13 +69,16 @@ test('completion controls prediction release independently of date or an early s
   assert.equal(full.entitled, true); assert.equal(full.slips.length, input.slips.length);
 });
 
-test('API expiry re-reads a custom range and returns safe previews with unchanged public totals', async () => {
-  let checks = 0;
-  const handler = createBestSlipsHandler({ now: () => at, access: async () => checks++ === 0 ? user : expired,
-    browse: async (_viewer, query) => ({ ...result([publication(yesterday), publication(today), publication(tomorrow)]), entitled: true,
-      browse: { query, total: 3, pageSize: 20, hasMore: false, nextCursor: null, from: yesterday, to: tomorrow } }) });
+test('API expiry during a single custom archive read returns safe previews with unchanged public totals', async () => {
+  let viewer = user, checks = 0, reads = 0;
+  const handler = createBestSlipsHandler({ now: () => at, access: async () => { checks++; return viewer; },
+    snapshot: async (query) => {
+      reads++; viewer = expired;
+      return { ...result([publication(yesterday), publication(today), publication(tomorrow)]),
+        browse: { query, total: 3, pageSize: 20, hasMore: false, nextCursor: null, from: yesterday, to: tomorrow } };
+    } });
   const response = await handler(new Request(`https://goalhint.com/api/best-slips?period=custom&from=${yesterday}&to=${tomorrow}`));
-  assert.equal(response.status, 200); assert.equal(checks, 3);
+  assert.equal(response.status, 200); assert.equal(checks, 1); assert.equal(reads, 1);
   assert.equal(response.headers.get('cache-control'), 'private, no-store');
   const data = await response.json();
   assert.equal(data.entitled, false); assert.ok(data.slips[0].slip);
@@ -87,7 +90,7 @@ test('API filters without a date use the viewer default, and unavailable default
   for (const viewer of [guest, expired, user]) {
     let received;
     const handler = createBestSlipsHandler({ now: () => at, access: async () => viewer,
-      browse: async (_viewer, query) => { received = query; return result([]); } });
+      snapshot: async (query) => { received = query; return result([]); } });
     const response = await handler(new Request('https://goalhint.com/api/best-slips?status=won'));
     assert.equal(response.status, 200); assert.equal(received.status, 'won');
     assert.equal(received.period, 'today'); assert.equal(received.summary, undefined);
@@ -97,20 +100,19 @@ test('API filters without a date use the viewer default, and unavailable default
   }
 });
 
-test('API re-reads an implicit default after a subscription change so date, entitlement and selections agree', async () => {
-  for (const suffix of ['', '?status=won']) {
+test('implicit default uses today and applies the access confirmed after the archive read', async () => {
+  for (const [suffix, status] of [['', 'all'], ['?status=won', 'won']]) {
     for (const [initial, final] of [[user, expired], [guest, user]]) {
-      let checks = 0;
-      const days = [];
-      const read = createPublishedBestSlipsService({ providerOdds: true, now: () => at,
-        read: async (day) => { days.push(day); return { ...result([publication(day)]), day }; } });
-      const handler = createBestSlipsHandler({ now: () => at, read, access: async () => checks++ === 0 ? initial : final,
-        browse: async (viewer, query) => { days.push(['today', 'last30'].includes(query.period) ? today : yesterday);
-          return result([publication(['today', 'last30'].includes(query.period) ? today : yesterday)]); } });
+      let viewer = initial, checks = 0, reads = 0;
+      const handler = createBestSlipsHandler({ now: () => at, access: async () => { checks++; return viewer; },
+        snapshot: async (query) => {
+          assert.equal(query.period, 'today'); assert.equal(query.status, status);
+          reads++; viewer = final;
+          return result([publication(today)]);
+        } });
       const response = await handler(new Request(`https://goalhint.com/api/best-slips${suffix}`));
       const data = await response.json(), entitled = final.tier === 'full';
-      assert.equal(response.status, 200); assert.equal(checks, 3);
-      assert.deepEqual(days, [today, today]);
+      assert.equal(response.status, 200); assert.equal(checks, 1); assert.equal(reads, 1);
       assert.equal(data.entitled, entitled); assert.equal(data.day, today);
       assert.equal(data.slips[0].publicationDay, today);
       assert.equal(!!data.slips[0].slip, entitled);
@@ -118,15 +120,17 @@ test('API re-reads an implicit default after a subscription change so date, enti
   }
 });
 
-test('a second access change during the fallback read returns no slip data', async () => {
-  let checks = 0;
-  const handler = createBestSlipsHandler({ now: () => at, access: async () => [user, expired, user][checks++],
-    browse: async (_viewer, query) => ({ ...result([publication(yesterday)]), browse: {
-      query, total: 1, pageSize: 50, hasMore: false, nextCursor: null, from: yesterday, to: yesterday,
-    } }) });
-  const response = await handler(new Request('https://goalhint.com/api/best-slips?period=yesterday'));
-  assert.equal(response.status, 503); assert.equal(checks, 3);
-  assert.doesNotMatch(await response.text(), /private-fixture|selections|probability/);
+test('unavailable access and archive reads fail closed without publishing an empty result', async () => {
+  for (const suffix of ['', '?period=yesterday']) {
+    for (const archiveFailed of [false, true]) {
+      let checks = 0;
+      const handler = createBestSlipsHandler({ now: () => at, access: async () => { checks++; throw new Error('private'); },
+        snapshot: async () => archiveFailed ? { ...result([]), state: 'data-unavailable' } : result([publication(today)]) });
+      const response = await handler(new Request(`https://goalhint.com/api/best-slips${suffix}`));
+      assert.equal(response.status, 503); assert.equal(checks, archiveFailed ? 0 : 1);
+      assert.deepEqual(await response.json(), { error: 'unavailable' });
+    }
+  }
 });
 
 test('mixed early-lost slips release only proved complete original selections and never sidecar picks', () => {

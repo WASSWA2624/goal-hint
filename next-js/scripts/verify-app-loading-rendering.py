@@ -8,10 +8,10 @@ from lib.rendering import Server, build_fixture, create_fixture, environment, pa
 from lib.runtime import ROOT, main_guard
 
 
-def stream(origin, path):
+def stream(origin, path, headers=None):
     connection = http.client.HTTPConnection(urlsplit(origin).netloc, timeout=15)
     started = time.monotonic()
-    connection.request("GET", path, headers={"Accept-Encoding": "identity"})
+    connection.request("GET", path, headers={"Accept-Encoding": "identity", **(headers or {})})
     response = connection.getresponse()
     chunks, events = [], []
     while chunk := response.read1(65536):
@@ -19,6 +19,30 @@ def stream(origin, path):
         events.append((time.monotonic() - started, "".join(chunks)))
     connection.close()
     return response.status, events
+
+
+def verify_matches_document(origin):
+    browser = {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/131.0.0.0 Mobile Safari/537.36",
+        "Sec-Fetch-Dest": "document", "Sec-Fetch-Mode": "navigate",
+    }
+    crawler = {"User-Agent": "Googlebot/2.1 (+http://www.google.com/bot.html)"}
+    failure = {"Cookie": "synthetic-feed-unavailable=1"}
+    status, healthy = stream(origin, "/browser-matches", browser)
+    assert status == 200
+    shell_at, shell = next((at, html) for at, html in healthy if "data-app-loading" in html)
+    list_at = next(at for at, html in healthy if "data-matches-feed" in html)
+    assert "data-matches-feed" not in shell
+    assert list_at >= 1.7 and list_at - shell_at > 1, (shell_at, list_at)
+    assert 'rel="canonical" href="https://goalhint.com/en/matches"' in healthy[-1][1]
+    status, outage = stream(origin, "/browser-matches", {**browser, **failure})
+    assert status == 200 and "data-feed-list-recovery" in outage[-1][1]
+    assert any("data-app-loading" in html and "data-feed-list-recovery" not in html for _, html in outage)
+    assert 'content="noindex, follow"' in outage[-1][1]
+    status, robot = stream(origin, "/browser-matches", {**crawler, **failure})
+    assert status >= 500 and robot[0][0] >= 1.7, status
+    return {"browser_shell_ms": round(shell_at * 1000), "browser_list_ms": round(list_at * 1000),
+        "crawler_outage_ms": round(robot[0][0] * 1000), "crawler_outage_status": status}
 
 
 def main():
@@ -71,7 +95,8 @@ def main():
             assert response.status == 200 and 'data-performance-dashboard' in response.text
             assert "999999.99" not in response.text and "private-pending" not in response.text
         measurements = {"streamed_shell_ms": round(shell_at * 1000), "blocking_shell_ms": round(blocked_at * 1000),
-            "history_ms": round(history_at * 1000), "predictions_ms": round(report_at * 1000)}
+            "history_ms": round(history_at * 1000), "predictions_ms": round(report_at * 1000),
+            **verify_matches_document(server.origin)}
         write_json(directory / "loading-measurements.json", measurements)
         print(f"PASS production loading and 10 complete dashboard states: {json.dumps(measurements)}", flush=True)
         if args.serve:

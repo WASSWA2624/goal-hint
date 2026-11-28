@@ -7,10 +7,12 @@ import { hashPassword, verifyPassword } from "../src/server/analytics/analytics-
 import { createAccessCodes, createAccessPeriod, lockMemberAccount } from "../src/server/members/access-codes.ts";
 import { DatabaseOperationError } from "../src/server/database/client.ts";
 import { createMemberAuthHandler, createPasswordRecoveryHandler } from "../src/server/members/member-auth-http.ts";
+import { getMemberAuthServices } from "../src/server/members/member-http.ts";
 import { createMemberTrialHandler } from "../src/server/members/member-trial-http.ts";
 import { issueMemberSession, memberTokenHash } from "../src/server/members/member-sessions.ts";
 import { isMemberAdminPhone, memberAdminCredential, parseMemberAdminPhones, verifyMemberAdminCredential } from "../src/server/members/member-admin.ts";
 import { passwordRecoveryRules } from "../src/server/members/password-recovery.ts";
+import { createMemberRateLimit } from "../src/server/members/rate-limit.ts";
 
 const phone = "256700000001", replacement = "256700000002", password = "correct horse 47";
 const browser = () => ({ member: null });
@@ -299,7 +301,12 @@ test("failed and blocked logins preserve the existing device", async () => {
   account.blockedAt = null;
   assert.ok(await f.sessionService.verify(active.token));
   for (let attempt = 0; attempt < 9; attempt++) await f.service.login(phone, "wrong password", address);
-  assert.equal((await f.service.login(phone, password, address)).status, "busy");
+  const limited = await createMemberAuthHandler("login", async () => ({
+    config: { production: false, cookies: { session: "goal-hint-analytics" } }, auth: f.service, sessions: f.sessionService,
+  }))(authRequest("login", { phone, password }, active.token));
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get("retry-after"), String(Math.ceil((900_000 - f.now() % 900_000) / 1000)));
+  assert.equal(limited.headers.get("set-cookie"), null);
   assert.ok(await f.sessionService.verify(active.token), "Throttled logins cannot sign out the current device");
   assert.ok(await f.sessionService.verify(other.token)); assert.equal(f.sessions.size, 2);
 });
@@ -627,6 +634,49 @@ test("HTTP login reports when another device was signed out and rejects its stal
   assert.equal((await third.json()).otherDeviceSignedOut, true);
   assert.equal(await f.sessionService.verify(responseToken(sameBrowser)), null);
   assert.ok(await f.sessionService.verify(responseToken(second))); assert.ok(await f.sessionService.verify(responseToken(third)));
+});
+
+test("a queued login attempt uses the throttle window active after acquiring the transaction", async () => {
+  const start = Date.parse("2026-11-28T09:15:00Z");
+  let now = start - 1, writtenWindow;
+  const database = { async transaction(run) {
+    now = start + 1_500;
+    return run({
+      async $executeRaw(_sql, _key, window) { writtenWindow = +window; },
+      rateLimitBucket: { async findUniqueOrThrow() { return { count: 11 }; } },
+    });
+  } };
+  const check = createMemberRateLimit(database, { key: () => "synthetic-key" }, () => now);
+  assert.equal(await check.retryAfter({ purpose: "password-login-phone", value: phone, maximum: 10, windowMs: 900_000 }), 899);
+  assert.equal(writtenWindow, start);
+});
+
+test("authentication service setup does not depend on subscription settings storage", async () => {
+  let databaseOperations = 0;
+  const unavailable = async () => { databaseOperations++; throw new Error("Synthetic database outage"); };
+  const database = { query: unavailable, transaction: unavailable };
+  const config = { production: false, key: () => "synthetic-key" };
+  const authServices = await getMemberAuthServices(async () => ({ database, config }));
+  assert.ok(authServices.auth);
+  assert.ok(authServices.sessions);
+  assert.equal(databaseOperations, 0);
+  const response = await createMemberAuthHandler("login", async () => authServices)(authRequest("login", { phone, password }));
+  assert.equal(response.status, 503, "Only the failed authentication read prevents sign-in");
+  assert.equal(databaseOperations, 1);
+  assert.equal(response.headers.get("set-cookie"), null);
+});
+
+test("login rotates the previous token even if the separate session lookup would fail", async () => {
+  const f = fixture(); await f.account();
+  const previous = await f.service.login(phone, password, "198.51.100.2");
+  let verificationCalls = 0;
+  const source = async () => ({ config: { production: false, cookies: { session: "goal-hint-analytics" } },
+    auth: f.service, sessions: { async verify() { verificationCalls++; throw new Error("Synthetic session read failure"); } } });
+  const response = await createMemberAuthHandler("login", source)(authRequest("login", { phone, password }, previous.token));
+  assert.equal(response.status, 200);
+  assert.equal(verificationCalls, 0);
+  assert.equal(await f.sessionService.verify(previous.token), null);
+  assert.ok(await f.sessionService.verify(responseToken(response)));
 });
 
 test("successful login goes home while administrator and restricted sessions keep their required destinations", async () => {

@@ -16,6 +16,8 @@ The Next.js application owns the shared web UI, routes, and server operations. T
 
 The latest verified web promotion in this record is `64aba48b` on 28 November 2026. Both hosted environments served Next build `s0NZodFIPRZlvqhNvg3gL` and verified 95 required migrations. Production separately published signed Android `1.0.0+8`. Staging verified the download page with an empty installer catalog. Football worker and Best Slips publisher status follow their own launchers and verification records. [Native app downloads](#native-app-downloads), [football worker reliability](#football-worker-reliability).
 
+The web reliability change ships the generated offline manifest with the matching worker and static assets. Existing clients adopt the worker through the normal browser update lifecycle. Check API request IDs, server timings, HTTP 5xx rates and cold browser navigation during staging and production validation. The release uses the established Passenger cutover and migration-ledger checks. [Reliability report](../next-js/docs/reports/performance-reliability-2026-11-28.md), [worker lifecycle](../next-js/docs/offline-startup.md).
+
 [Local launcher](../next-js/scripts/development.py), [database target guards](../next-js/scripts/database.py), [VPS staging and production runbook](../next-js/docs/deployment/how-to-deploy.md#vps-staging-and-release-promotion), [Best Slips worker operations](../next-js/docs/daily-slip-publications.md).
 
 ## Git, checks and packaging

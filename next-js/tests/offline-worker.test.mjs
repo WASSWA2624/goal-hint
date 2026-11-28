@@ -145,6 +145,7 @@ test("the anonymous connection page survives a cold offline restart without cach
   assert.deepEqual(await online.message(), { ok: true, refreshed: true, activated: true, kind: "connection-page", version: first.manifest.version });
   assert.ok(online.calls.every(({ options }) => options.credentials === "omit"));
   assert.deepEqual(online.calls.map(({ url }) => new URL(url).pathname), ["/offline-manifest.json", "/offline", first.manifest.assets[0].url]);
+  assert.deepEqual(online.calls.map(({ options }) => options.cache), ["no-store", "no-store", "default"]);
   const cold = worker({ storage: online.storage, now: at + 3 * 86_400_000 });
   cold.network.offline = true;
   assert.equal(await (await cold.request("/en/matches", { mode: "navigate" })).text(), first.entryBody);
@@ -559,13 +560,11 @@ test("HTTP authorization errors remain authoritative while an unavailable server
     assert.equal((await host.request("/en/account", { mode: "navigate" })).status, code);
   }
   const path = "/en/matches?result=won&when=today";
-  host.network.navigationStatus = 500;
-  assert.equal(await (await host.request(path, { mode: "navigate" })).text(), initial.entryBody);
-  for (const code of [502, 503, 504]) {
+  for (const code of [500, 502, 503, 504]) {
     host.network.navigationStatus = code;
     const fallback = await host.request(path, { mode: "navigate" });
     assert.equal(host.calls.at(-1).url, absolute(path));
-    assert.equal(fallback.status, 200);
+    assert.equal(fallback.status, code);
     assert.equal(fallback.headers.get("cache-control"), "no-store");
     assert.equal(await fallback.text(), initial.entryBody.replace("<html>", '<html data-goalhint-offline-reason="server-unavailable">'));
   }
@@ -601,7 +600,8 @@ test("slow live documents take precedence over the connection page while a stall
   const stalled = host.request(url, { mode: "navigate" });
   t.mock.timers.tick(15_000);
   assert.equal(fetchSignal.aborted, true);
-  assert.equal(await (await stalled).text(), initial.entryBody);
+  assert.equal(await (await stalled).text(),
+    initial.entryBody.replace("<html>", '<html data-goalhint-offline-reason="navigation-timeout">'));
 });
 
 test("an abandoned document request cancels its network work without reading saved content", async () => {

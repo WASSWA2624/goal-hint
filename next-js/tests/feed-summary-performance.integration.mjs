@@ -152,6 +152,51 @@ test('compact summaries match full stored feed counts and invalidate on genuine 
       const recentList = gateFeedResponse(await list.query(dates, scope), full);
       assert.throws(() => checkedFeedPerformance({ performance: all, asOf: recentList.asOf,
         paginationVersion: '0'.repeat(64), access: full }, recentList), (error) => error.code === 'changed');
+
+      // Grow the disposable catalog with bulk synthetic fixtures. The published
+      // outcomes still come from the verified pipeline above.
+      const seedFixture = await p.catalog.fixtureByProviderId(56_000);
+      const addFixtures = (size, firstId, firstDay, daySpan) => p.a.query(tx => tx.$executeRaw`
+        INSERT INTO FootballFixture
+          (id,provider,externalId,homeTeamId,awayTeamId,seasonId,kickoff,eatDate,status,providerStatus,retrievedAt,updatedAt)
+        SELECT UUID(),f.provider,${firstId}+cohort.item,f.homeTeamId,f.awayTeamId,f.seasonId,
+          TIMESTAMPADD(DAY,MOD(cohort.item,${daySpan}),${new Date(`${firstDay}T12:00:00Z`)}),
+          DATE(TIMESTAMPADD(DAY,MOD(cohort.item,${daySpan}),${new Date(`${firstDay}T12:00:00Z`)})),
+          'scheduled','NS',f.retrievedAt,f.updatedAt
+        FROM FootballFixture f CROSS JOIN JSON_TABLE(${JSON.stringify(Array.from({ length: size }, (_, index) => index))},
+          '$[*]' COLUMNS (item INT PATH '$')) AS cohort WHERE f.id=${seedFixture.id}`);
+      await addFixtures(1_080 - noPicks.total, 60_000, dates.from, 1);
+      const coldOptions = { database: p.a, competitionIds: [39], clock };
+      const coldList = createMatchFeedService({ ...coldOptions, includePerformance: false });
+      const coldStats = createMatchFeedSummaryService(coldOptions);
+      const largeDay = { date: dates.from };
+      const pageOne = await coldList.query(largeDay, scope), pageTwo = await coldList.query({ ...largeDay, page: '2' }, scope);
+      assert.equal(pageOne.total, 1_080);
+      assert.equal(pageOne.records.length, 50);
+      assert.equal(pageTwo.records.length, 50);
+      assert.equal(new Set([...pageOne.records, ...pageTwo.records].map(item => item.fixtureId)).size, 100);
+      assert.equal((await coldStats.query(largeDay, scope)).performance.unavailable, 1_080);
+
+      const missing = 14_010 - (await coldList.query({}, scope)).coverage.knownFixtures;
+      assert.ok(missing > 0);
+      await addFixtures(missing, 62_000, '2026-09-21', 23);
+      const publicScope = { ...scope, predictedMatchesOnly: true };
+      const samples = { day: [], broadList: [], broadStats: [] };
+      const timed = async (group, read) => {
+        const started = performance.now(), result = await read();
+        samples[group].push(Math.round(performance.now() - started));
+        return result;
+      };
+      for (let run = 0; run < 5; run++) {
+        const day = await timed('day', () => coldList.query(largeDay, scope));
+        const broadList = await timed('broadList', () => coldList.query({}, publicScope));
+        const broadStats = await timed('broadStats', () => coldStats.query({}, scope));
+        assert.equal(day.total, 1_080);
+        assert.equal(broadList.coverage.knownFixtures, 14_010);
+        assert.equal(broadStats.performance.total, 14_010);
+        assert.equal(broadStats.paginationVersion, broadList.performanceVersion);
+      }
+      t.diagnostic(`Uncached MySQL list and summary samples in milliseconds: ${JSON.stringify(samples)}`);
     });
   }, { migrationTimeoutMs: 240_000 });
 });

@@ -4,14 +4,23 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { SlipsBrowseResult } from "@/domain/best-slips";
 import { bestSlipsPageSearch, bestSlipsQueryRules, parseBestSlipsQuery, serializeBestSlipsQuery, type BestSlipsQuery } from "@/domain/best-slips-query";
 import { nextLoadedPage } from "@/domain/browse-period";
-import { appendSlipPage, nextSlipPageQuery, observeSlipPage, sameSlipBrowseAccess, slipBrowseWindow, type SlipBrowsePage } from "@/domain/slip-browse-window";
+import { startRequestDeadline } from "@/domain/request-deadline";
+import { appendSlipPage, canRetainSlipBrowseSeed, isSlipBrowseUnavailable, nextSlipPageQuery, observeSlipPage, sameSlipBrowseAccess,
+  sameSlipBrowseQuery, slipBrowseWindow, type SlipBrowsePage } from "@/domain/slip-browse-window";
 import { singleSlipPage } from "@/domain/slip-pagination";
 import { shareUnchanged } from "@/domain/structural-sharing";
 
 type Mode = "append" | "replace" | "refresh" | "background";
 type Intent = { query: BestSlipsQuery; mode: Mode; revision: number; depth: number; pushHistory: boolean; scrollY?: number | undefined };
-type Failure = { mode: Mode; changed: boolean };
+type Failure = { mode: Mode; issue: "changed" | "access" | "limited" | "unavailable"; retryable: boolean };
 const historyKey = "goalHintBestSlips";
+
+function withoutSlipAccess(page: SlipBrowsePage, signedIn: boolean): SlipBrowsePage {
+  return { ...page, state: "data-unavailable", slips: [], statistics: null,
+    ...(page.summary ? { summary: { ...page.summary, statistics: null } } : {}),
+    browse: { ...page.browse, total: null, bandTotal: null, hasMore: false, nextCursor: null },
+    entitled: false, access: { tier: "free", signedIn } };
+}
 
 function historyPosition(state: Record<string, unknown> | null) {
   const value = state?.[historyKey] as { href?: unknown; depth?: unknown; scrollY?: unknown } | undefined;
@@ -36,14 +45,18 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
   const pending = useRef<AbortController | null>(null);
   const backgroundPage = useRef<number | null>(null);
   const restoreScroll = useRef<number | undefined>(undefined);
+  const retryAfter = useRef(0);
+  const lastPassiveRead = useRef(0);
   if (seed !== initial) {
-    setBusy(false); setFailed(null); setSeed(initial);
-    const first = pages[0]!;
-    const retained = pages.length > 1 && initial.day === first.day && sameSlipBrowseAccess(first, initial)
-      && serializeBestSlipsQuery(initial.browse.query).toString() === serializeBestSlipsQuery(first.browse.query).toString();
+    const retained = canRetainSlipBrowseSeed(pages, initial);
+    setBusy(false);
+    setFailed(retained && isSlipBrowseUnavailable(initial) ? {
+      mode: "background", issue: initial.state === "rate-limited" ? "limited" : "unavailable", retryable: initial.state === "data-unavailable",
+    } : null);
+    setSeed(initial);
     if (!retained) setPages([initial]);
-    setIntent({ query: initial.browse.query, mode: retained ? "background" : "refresh", revision: retained ? intent.revision + 1 : 0,
-      depth: retained ? pages.length : 1, pushHistory: false });
+    else if (!isSlipBrowseUnavailable(initial)) setPages(observeSlipPage(pages, initial));
+    setIntent({ query: initial.browse.query, mode: "refresh", revision: 0, depth: 1, pushHistory: false });
   }
   const accepted = useMemo(() => slipBrowseWindow(pages), [pages]);
   useLayoutEffect(() => {
@@ -55,23 +68,30 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
   }, [pages]);
   useEffect(() => {
     if (intent.revision === 0) return;
+    if (intent.mode === "background" && (document.visibilityState !== "visible" || !navigator.onLine)) { lock.current = null; return; }
     const controller = new AbortController(); let active = true; lock.current = intent.mode; pending.current = controller;
-    const deadline = window.setTimeout(() => controller.abort(), 30_000);
+    const clearDeadline = startRequestDeadline(controller, 30_000);
     const clearAccess = (signedIn: boolean) => {
-      setPages(([first]) => first ? [{ ...first, slips: [], entitled: false, access: { tier: "free", signedIn } }] : [initial]);
+      setPages(([first]) => [withoutSlipAccess(first ?? initial, signedIn)]);
       onAccessChanged();
     };
     const read = async (query: BestSlipsQuery): Promise<SlipBrowsePage> => {
       const response = await fetch(`${endpoint}?${serializeBestSlipsQuery(query)}`, { signal: controller.signal, cache: "no-store", credentials: "same-origin" });
       if (!active || controller.signal.aborted) throw new Error("aborted");
-      if (response.status === 401 || response.status === 403) clearAccess(false);
-      if (!response.ok) throw new Error("unavailable");
+      if (response.status === 401 || response.status === 403) { clearAccess(false); throw new Error("access"); }
+      if (response.status === 429) {
+        const value = response.headers.get("retry-after");
+        const delay = value && (/^\d+$/u.test(value) ? Number(value) * 1000 : Date.parse(value) - Date.now());
+        retryAfter.current = Date.now() + (typeof delay === "number" && Number.isFinite(delay) ? Math.max(0, delay) : 60_000);
+        throw new Error("limited");
+      }
+      if (!response.ok) throw new Error([502, 503, 504].includes(response.status) ? "unavailable" : "response");
       const result: SlipsBrowseResult = await response.json();
       if (!active || controller.signal.aborted) throw new Error("aborted");
-      if (result?.state === "data-unavailable" || result?.state === "rate-limited") throw new Error("unavailable");
+      if (result && isSlipBrowseUnavailable(result)) throw new Error(result.state === "rate-limited" ? "limited" : "unavailable");
       if (!result?.browse || !Array.isArray(result.slips)
         || result.slips.length > result.browse.pageSize
-        || serializeBestSlipsQuery(result.browse.query).toString() !== serializeBestSlipsQuery(query).toString()) throw new Error("changed");
+        || !sameSlipBrowseQuery(result.browse.query, query)) throw new Error("changed");
       if (result.day !== initial.day) { onAccessChanged(); throw new Error("changed"); }
       const current = latest.current[0]!;
       if (!sameSlipBrowseAccess(current, result)) {
@@ -86,8 +106,7 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
       if (intent.mode === "append" && intent.depth === 0) {
         next = appendSlipPage(latest.current, await read(intent.query));
       } else if (intent.mode === "background") {
-        const observed = await read(intent.query);
-        next = latest.current.length === 1 ? shareUnchanged(latest.current, [observed]) : observeSlipPage(latest.current, observed);
+        next = observeSlipPage(latest.current, await read(intent.query));
       } else {
         next = [await read(intent.query)];
         let query: BestSlipsQuery | null;
@@ -104,44 +123,75 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
       if (intent.mode === "append") savePosition(next.length);
       restoreScroll.current = intent.scrollY;
       setPages(intent.scrollY === undefined ? next : [...next]);
+      setFailed(null);
     })().catch((cause: unknown) => {
-      if (active && pending.current === controller && intent.mode !== "background") {
-        setFailed({ mode: intent.mode, changed: cause instanceof Error && cause.message === "changed" });
-        // History traversal already moved the address. Let the server render that address after a failed client read.
-        if (intent.mode === "replace" && !intent.pushHistory) onAccessChanged();
-      }
+      if (!active || pending.current !== controller) return;
+      const message = cause instanceof Error ? cause.message : "";
+      const issue = message === "changed" || message === "access" || message === "limited" ? message : "unavailable";
+      setFailed({ mode: intent.mode, issue, retryable: message === "unavailable" || controller.signal.aborted || cause instanceof TypeError });
     }).finally(() => {
-      clearTimeout(deadline);
+      clearDeadline();
       if (pending.current === controller) { pending.current = null; lock.current = null; if (active) setBusy(false); }
     });
     return () => {
-      active = false; clearTimeout(deadline); controller.abort();
+      active = false; clearDeadline(); controller.abort();
       if (pending.current === controller) { pending.current = null; lock.current = null; }
     };
   }, [endpoint, initial, intent, onAccessChanged]);
   const request = useCallback((query: BestSlipsQuery, mode: Mode, { depth, pushHistory, scrollY }: Pick<Intent, "depth" | "pushHistory" | "scrollY">) => {
-    if (lock.current) return;
+    const now = Date.now();
+    if (lock.current || now < retryAfter.current || mode === "background" && now - lastPassiveRead.current < 5_000) return;
+    if (mode === "background") lastPassiveRead.current = now;
     lock.current = mode; setBusy(mode !== "background");
     if (mode !== "background") setFailed(null);
     setIntent((current) => ({ query, mode, depth, pushHistory, scrollY, revision: current.revision + 1 }));
   }, []);
+  const cancel = useCallback(() => {
+    pending.current?.abort(); pending.current = null; lock.current = null; restoreScroll.current = undefined;
+  }, []);
   useEffect(() => {
-    if (failed) return;
+    if (initial.state !== "data-unavailable") return;
+    // A route render that couldn't read an archive gets one quiet client attempt.
+    const timer = window.setTimeout(() => {
+      if (document.visibilityState === "visible" && navigator.onLine && sameSlipBrowseQuery(latest.current[0]!.browse.query, initial.browse.query)) {
+        request(initial.browse.query, "background", { depth: 1, pushHistory: false });
+      }
+    }, 1_000 + Math.random() * 1_000);
+    return () => window.clearTimeout(timer);
+  }, [initial, request]);
+  useEffect(() => {
+    const available = () => document.visibilityState === "visible" && navigator.onLine;
+    const resume = () => {
+      if (!available()) { if (lock.current === "background") cancel(); return; }
+      if (failed && (failed.mode !== "background" || !failed.retryable)) return;
+      const first = latest.current[0]!;
+      if (first.state !== "rate-limited" && (first.entitled || first.browse.query.period !== "all" || failed || first.state === "data-unavailable")) {
+        request(first.browse.query, "background", { depth: 1, pushHistory: false });
+      }
+    };
+    const restored = (event: PageTransitionEvent) => { if (event.persisted) resume(); };
     const timer = setInterval(() => {
       const pages = latest.current, first = pages[0]!.browse.query;
-      if (first.period !== "all" && !lock.current && document.visibilityState === "visible" && navigator.onLine) {
+      if (!failed && first.period !== "all" && !lock.current && available()) {
         const page = nextLoadedPage(backgroundPage.current, first.page, pages.at(-1)!.browse.query.page);
         backgroundPage.current = page;
         request(pages[page - first.page]!.browse.query, "background", { depth: 1, pushHistory: false });
       }
     }, 60_000);
-    return () => clearInterval(timer);
-  }, [failed, request]);
-  const cancel = useCallback(() => {
-    pending.current?.abort(); pending.current = null; lock.current = null; restoreScroll.current = undefined;
-  }, []);
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("online", resume);
+    window.addEventListener("offline", resume);
+    window.addEventListener("pageshow", restored);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("online", resume);
+      window.removeEventListener("offline", resume);
+      window.removeEventListener("pageshow", restored);
+    };
+  }, [cancel, failed, request]);
   const change = useCallback((query: BestSlipsQuery) => {
-    if (serializeBestSlipsQuery(query).toString() === serializeBestSlipsQuery(latest.current[0]!.browse.query).toString()) return;
+    if (sameSlipBrowseQuery(query, latest.current[0]!.browse.query)) return;
     savePosition(latest.current.length);
     cancel();
     backgroundPage.current = null;
@@ -171,7 +221,7 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
     const query = nextSlipPageQuery(latest.current.at(-1)!);
     if (!query) return;
     if (lock.current === "background") cancel();
-    if (failed?.mode === "append" && failed.changed) {
+    if (failed?.mode === "append" && failed.issue === "changed") {
       request(latest.current[0]!.browse.query, "append", { depth: latest.current.length + 1, pushHistory: false });
     } else request(query, "append", { depth: 0, pushHistory: false });
   };
@@ -183,18 +233,20 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
   };
   const revokeAccess = useCallback(() => {
     cancel(); setBusy(false);
-    setPages(([first]) => first ? [{ ...first, slips: [], entitled: false,
-      access: { tier: "free", signedIn: first.access?.signedIn ?? false } }] : [initial]);
+    setPages(([first]) => [withoutSlipAccess(first ?? initial, first?.access?.signedIn ?? false)]);
     onAccessChanged();
   }, [cancel, initial, onAccessChanged]);
   const loadingMore = busy && intent.mode === "append";
   return { displayQuery: accepted.browse.query, change, goToFirstPage, showMore, loadingMore,
     hasMore: nextSlipPageQuery(pages.at(-1)!) !== null, appendError: failed?.mode === "append",
+    readError: failed?.mode === "replace" || failed?.mode === "refresh" ? failed.issue : null,
+    stale: failed?.mode === "background" && failed.issue !== "access" && !isSlipBrowseUnavailable(accepted),
     entitled: accepted.entitled === true, revokeAccess,
     result: accepted, updating: busy && !loadingMore,
     retry: () => {
       if (lock.current === "background") cancel();
-      request(intent.query, intent.mode === "replace" ? "replace" : "refresh", intent);
+      if (failed?.mode === "replace") request(intent.query, "replace", intent);
+      else request(latest.current[0]!.browse.query, "refresh", { depth: latest.current.length, pushHistory: false });
     },
   };
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { accountRequest } from "../src/components/members/account-request.ts";
+import { AccountRequestError, accountRequest } from "../src/components/members/account-request.ts";
 
 test("account writes preserve body-only credentials and require a local navigation response", async t => {
   const sent = [];
@@ -36,9 +36,27 @@ test("a stalled account write times out and is never automatically retried", asy
     calls++;
     signal.addEventListener("abort", () => reject(signal.reason), { once: true });
   }));
-  const result = accountRequest("register", { phone: "256700000101", password: "synthetic" });
+  const result = accountRequest("login", { phone: "256700000101", password: "synthetic" });
   const failure = assert.rejects(result, /took too long/);
   t.mock.timers.tick(15_000);
   await failure;
   assert.equal(calls, 1);
+});
+
+test("login classifies credential refusal, throttling and gateway failure from status regardless of response shape", async t => {
+  let response;
+  const fetcher = t.mock.method(globalThis, "fetch", async () => response);
+  for (const [body, status, headers, message] of [
+    ["Unexpected upstream text", 401, {}, /phone number or password is incorrect/],
+    ["Too many attempts", 429, { "Retry-After": "60" }, /Try again in 60 seconds/],
+    ["Too many attempts", 429, { "Retry-After": "unknown" }, /Please wait/],
+    ["<html>bad gateway</html>", 502, {}, /Account access is unavailable/],
+    ["", 503, {}, /Account access is unavailable/],
+    ["", 504, {}, /Account access is unavailable/],
+  ]) {
+    response = new Response(body, { status, headers });
+    await assert.rejects(accountRequest("login", {}), failure =>
+      failure instanceof AccountRequestError && failure.status === status && message.test(failure.message));
+  }
+  assert.equal(fetcher.mock.callCount(), 6);
 });

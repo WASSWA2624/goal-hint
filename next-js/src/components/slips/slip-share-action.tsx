@@ -42,7 +42,9 @@ export function SlipShareAction({ source, sharedSlip, localSlip, locale, iconOnl
       data-share-icon-only={iconOnly ? "" : undefined} aria-label={iconOnly ? m.text("slipShare.share") : undefined}
       aria-description={!canShare ? m.text("slipShare.forbidden") : undefined} title={m.text(canShare ? "slipShare.share" : "slipShare.forbidden")}
       aria-controls={open ? id : undefined} onClick={(event) => { event.stopPropagation(); setOpen(true); }}><ShareIcon />{!iconOnly && m.text("slipShare.share")}</ShareTrigger>
-    {open && canShare && <SlipShareDrawer id={id} {...(source ? { source } : {})} {...(cached ? { initialShared: cached } : {})}
+    {open && canShare && <SlipShareDrawer id={id} {...(source ? { source } : {})}
+      {...(cached && (source?.source !== "best" || publicHref) ? { initialShared: cached } : {})}
+      {...(publicHref ? { publicHref } : {})}
       {...(localSlip ? { localSlip, presentation: { status: slipHeaderState(localSlip, results, currentStates, outcome ?? savedOutcome, status ?? savedStatus, preMatchExpired).status,
         ...(currentStates || results || sharedSlip?.selectionScores ? { selectionScores: Object.fromEntries(localSlip.selections.flatMap(selection => {
           const score = slipMatchStateForSelection(selection, currentStates)?.score ?? sharedSlip?.selectionScores?.[selection.fixtureId];

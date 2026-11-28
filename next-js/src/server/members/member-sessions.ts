@@ -6,6 +6,7 @@ import { validReferralCode } from "../../domain/referrals.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
+import { timedRequestPhase } from "../http/request-timing.ts";
 import { createMemberRateLimit, memberRateRules, takeMemberLimit } from "./rate-limit.ts";
 import { decide } from "./settings.ts";
 import { isMemberAdminPhone, memberAdminCredential } from "./member-admin.ts";
@@ -87,7 +88,8 @@ export function createMemberSessions({ database, config, now = Date.now, adminPh
       token = developmentMemberToken(token);
       if (!validMemberToken(token)) return null;
       const at = new Date(now()), hash = memberTokenHash(token);
-      const row = await database.query((tx) => tx.memberSession.findUnique({ where: { tokenHash: hash }, include: { account: true } }));
+      const row = await timedRequestPhase("member-session-read", () =>
+        database.query((tx) => tx.memberSession.findUnique({ where: { tokenHash: hash }, include: { account: true } })));
       if (!row || !row.authenticatedAt || row.passwordResetAt || row.expiresAt <= at || row.account.erasedAt || !row.account.phone
         || !row.account.passwordHash && !adminPhone(row.account.phone)) return null;
       const configured = adminPasswordHash();
@@ -95,9 +97,9 @@ export function createMemberSessions({ database, config, now = Date.now, adminPh
       if (adminPhone(row.account.phone) && !administrator) return null;
       if (!administrator && !hasMemberAdmission(row.account)) return null;
       if (at.getTime() - row.lastSeenAt.getTime() >= memberSessionRules.touchAfterMs) {
-        await database.query((tx) => tx.memberSession.updateMany({ where: { tokenHash: hash, expiresAt: { gt: at },
+        await timedRequestPhase("member-session-touch", () => database.query((tx) => tx.memberSession.updateMany({ where: { tokenHash: hash, expiresAt: { gt: at },
           lastSeenAt: { lte: new Date(at.getTime() - memberSessionRules.touchAfterMs) } },
-        data: { lastSeenAt: at, expiresAt: new Date(at.getTime() + memberSessionRules.expiryMs) } }));
+        data: { lastSeenAt: at, expiresAt: new Date(at.getTime() + memberSessionRules.expiryMs) } })));
       }
       const { blockedAt, phoneVerifiedAt, referralCode } = row.account;
       const blocked = blockedAt !== null;

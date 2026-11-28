@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import { flushSync } from "react-dom";
 import styled from "styled-components";
+import { NavigationProgress } from "@/components/navigation/navigation-progress";
 import { Header, HeaderContent, ShellFrame } from "@/components/navigation/shell-styles";
 import { HeaderBrand } from "@/components/ui/brand";
 import { DocumentButtonLink } from "@/components/ui/controls";
@@ -42,6 +43,8 @@ const Description = styled(MutedText)`
 const copy = {
   offline: { title: "You’re offline", description: "Check your Wi-Fi or mobile data connection, then try again." },
   unavailable: { title: "GoalHint is temporarily unavailable", description: "We couldn’t reach the service right now. Please try again shortly." },
+  timeout: { title: "This page took too long to respond", description: "Try loading the page again." },
+  runtime: { title: "This page couldn’t load", description: "Reload the page to try again, or return to Matches." },
   unknown: { title: "Couldn’t load this page", description: "Check your connection and try again. If the problem continues, please try again later." },
 } as const;
 
@@ -55,9 +58,11 @@ function subscribeConnection(onChange: () => void) {
 }
 
 function readFailure(): keyof typeof copy {
-  // The worker sets this only on an outgoing fallback for an observed server failure.
-  if (document.documentElement.dataset.goalhintOfflineReason === "server-unavailable") return "unavailable";
-  return navigator.onLine === false ? "offline" : "unknown";
+  // The worker adds a cause only when it observed an HTTP failure or the header deadline.
+  const reason = document.documentElement.dataset.goalhintOfflineReason;
+  if (reason === "server-unavailable") return "unavailable";
+  if (navigator.onLine === false) return "offline";
+  return reason === "navigation-timeout" ? "timeout" : "unknown";
 }
 
 const unknownFailure = () => "unknown" as const;
@@ -73,8 +78,9 @@ function canRecoverAutomatically() {
 }
 
 /** This independently served document can be read and retried without a running application. */
-export function OfflineView() {
-  const failure = useSyncExternalStore(subscribeConnection, readFailure, unknownFailure);
+export function OfflineView({ runtimeFailure = false }: { runtimeFailure?: boolean }) {
+  const connectionFailure = useSyncExternalStore(subscribeConnection, readFailure, unknownFailure);
+  const failure = runtimeFailure ? "runtime" : connectionFailure;
   const retryHref = useSyncExternalStore(subscribeDocument, retryDocument, currentDocument);
   const { title, description } = copy[failure];
   const [retrying, setRetrying] = useState(false);
@@ -96,7 +102,7 @@ export function OfflineView() {
     const onOnline = (event: Event) => {
       if (!event.isTrusted || navigator.onLine !== true || !wasOffline) return;
       wasOffline = false;
-      if (autoRetried.current || !canRecoverAutomatically()) return;
+      if (runtimeFailure || autoRetried.current || !canRecoverAutomatically()) return;
       autoRetried.current = true;
       retry();
     };
@@ -113,7 +119,7 @@ export function OfflineView() {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("pageshow", onPageShow);
     };
-  }, [retry]);
+  }, [retry, runtimeFailure]);
 
   function retryClick(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
@@ -121,7 +127,7 @@ export function OfflineView() {
   }
 
   return <Frame data-offline-view>
-    <Header><HeaderContent $wide><HeaderBrand /></HeaderContent></Header>
+    <Header><HeaderContent $wide><HeaderBrand /></HeaderContent><NavigationProgress label="Loading" /></Header>
     <Main id="main-content">
       <Notice aria-labelledby="connection-heading">
         {failure === "offline" ? <Icon strokeWidth={1.5}><path d="M3 9a14 14 0 0 1 18 0M6 12a9 9 0 0 1 12 0M9 15a4.5 4.5 0 0 1 6 0M12 19h.01M3 3l18 18" /></Icon>
@@ -131,8 +137,9 @@ export function OfflineView() {
           <Description>{description}</Description>
         </Stack>
         <DocumentButtonLink href={retryHref} aria-busy={retrying} aria-disabled={retrying} onClick={retryClick}>
-          {retrying ? "Trying again…" : "Try again"}
+          {retrying ? "Trying again…" : runtimeFailure ? "Reload" : "Try again"}
         </DocumentButtonLink>
+        {runtimeFailure && <DocumentButtonLink href="/en/matches" variant="secondary">Matches</DocumentButtonLink>}
         <VisuallyHidden role="status">{retrying ? "Trying again." : ""}</VisuallyHidden>
       </Notice>
     </Main>

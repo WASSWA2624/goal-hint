@@ -9,6 +9,7 @@ import { publicPolicy } from "../../domain/public-policy.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { prepareDemoRange } from "../demo/read-seed.ts";
+import { timedRequestPhase } from "../http/request-timing.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { isDefaultFeaturedScope } from "./default-featured-scope.ts";
@@ -29,7 +30,7 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
   clock?: Clock; cache?: PublicResponseCache; providerOdds?: boolean }>) {
   const configured = z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).min(1).max(maximumCompetitionScope).safeParse(options.competitionIds);
   if (!configured.success || new Set(configured.data).size !== configured.data.length) throw new MatchFeedError("unavailable");
-  const { database } = options, competitionIds = Object.freeze(configured.data);
+  const { cache, database } = options, competitionIds = Object.freeze(configured.data);
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
   return Object.freeze({ async query(input: FeedParameters, context: MatchFeedReadContext = {}) {
@@ -44,28 +45,30 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
     try {
       await prepareDemoRange(database, sourceRange, asOf);
       if (query.search) await createMysqlPublicSearchLimiter(database).consume();
-      const read = () => database.transaction(async (tx) => {
+      const read = () => timedRequestPhase("summary-transaction", () => database.transaction(async (tx) => {
         const { performanceVersion: paginationVersion } = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly,
           publishedOnly, historyBefore, providerOdds, publishedForecasts);
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
         const sql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly, publishedOnly, historyBefore, publishedForecasts);
-        const overrides = await readFeedResultOverrides(tx, sql, { publishedForecasts, useDefaultFeatured: isDefaultFeaturedScope(query) });
-        const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; void: bigint | Prisma.Decimal | null; cancelled: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
+        const overrides = await timedRequestPhase("summary-membership",
+          () => readFeedResultOverrides(tx, sql, { publishedForecasts, useDefaultFeatured: isDefaultFeaturedScope(query) }));
+        const [matching] = await timedRequestPhase("summary-count", () => tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; void: bigint | Prisma.Decimal | null; cancelled: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
           SELECT STRAIGHT_JOIN COUNT(*) AS total, SUM(CASE WHEN ${sql.pickAvailable} THEN 1 ELSE 0 END) AS available,
             SUM(CASE WHEN ${sql.pickAvailable} AND c.state='void' AND f.status<>'canceled' THEN 1 ELSE 0 END) AS void,
             SUM(CASE WHEN ${sql.pickAvailable} AND c.state='void' AND f.status='canceled' THEN 1 ELSE 0 END) AS cancelled
-          ${sql.countJoins} ${sql.searchJoin} WHERE ${sql.where}`);
+          ${sql.countJoins} ${sql.searchJoin} WHERE ${sql.where}`));
         if (!matching) throw new MatchFeedError("unavailable");
         const total = Number(matching.total);
-        const performance = await readFeedPerformance(tx, sql, { total, available: Number(matching.available ?? 0), void: Number(matching.void ?? 0), cancelled: Number(matching.cancelled ?? 0) },
-          options.cache ? { key: feedPerformanceCacheKey(sql, query.locale, providerOdds), nowMs: asOf } : undefined, undefined, overrides);
+        const performance = await timedRequestPhase("summary-settlements", () => readFeedPerformance(tx, sql,
+          { total, available: Number(matching.available ?? 0), void: Number(matching.void ?? 0), cancelled: Number(matching.cancelled ?? 0) },
+          cache ? { key: feedPerformanceCacheKey(sql, query.locale, providerOdds), nowMs: asOf } : undefined, undefined, overrides));
         return freezeEvidence(storedSummarySchema.parse({ performance, total, paginationVersion, asOf }));
-      }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 90_000 });
-      return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
+      }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 90_000 }));
+      return cache ? await timedRequestPhase("summary-cache", () => cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
         query: { ...query, projection: "feed-summary-v14", providerOdds, completedOnly: context.completedOnly === true,
           publishedOnly, publishedForecasts, today, dates: { from: range.startDate, to: range.endDate } },
-        scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedSummarySchema.parse(value) }), read) : await read();
+        scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedSummarySchema.parse(value) }), read)) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;
       throw new MatchFeedError("unavailable");

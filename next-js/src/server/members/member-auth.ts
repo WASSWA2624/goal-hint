@@ -8,6 +8,7 @@ import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { hashPassword, isPasswordHash, verifyPassword } from "../analytics/analytics-password.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
 import type { AccessCode, MemberAccount, Prisma } from "../generated/prisma/client.ts";
+import { timedRequestPhase } from "../http/request-timing.ts";
 import { accessCodeTransaction, lockMemberAccount, startRegistrationTrial } from "./access-codes.ts";
 import { hasMemberAdmission } from "./member-admission.ts";
 import { issueMemberSession, memberTokenHash, validMemberToken, type MemberIdentity } from "./member-sessions.ts";
@@ -21,7 +22,8 @@ import { awardReferralRegistration, ensureReferralCode, recordReferralRegistrati
 
 export const memberAuthRules = Object.freeze({ passwordMin: 8, passwordMax: memberPasswordMaximum });
 export type AuthBinding = Readonly<{ member: MemberIdentity | null }>;
-export type AuthFailure = Readonly<{ status: "invalid" | "unauthorized" | "busy" | "conflict" | "unavailable"; message: string }>;
+export type AuthFailure = Readonly<{ status: "invalid" | "unauthorized" | "conflict" | "unavailable"; message: string }>
+  | Readonly<{ status: "busy"; message: string; retryAfterSeconds?: number }>;
 export type RegistrationTrial = Readonly<{ days: number; startsAt: string; endsAt: string; active: boolean }>;
 
 type AuthSuccess = Readonly<{ status: "authenticated"; token: string; accountId: string; phone: string; administrator?: boolean; requiresPasswordChange?: boolean; requiresVerification?: boolean; otherDeviceSignedOut?: boolean; trial?: RegistrationTrial }>;
@@ -30,7 +32,8 @@ const refused = (): AuthFailure => ({ status: "unauthorized", message: "We could
 const invalidCredentials = (): AuthFailure => ({ status: "unauthorized", message: authCopy.loginInvalidCredentials });
 const reserved = (): AuthFailure => ({ status: "unauthorized", message: "This number is reserved." });
 const wrongPassword = (): AuthFailure => ({ status: "unauthorized", message: "Your current password is incorrect." });
-const busy = (): AuthFailure => ({ status: "busy", message: "Too many attempts. Please wait before trying again." });
+const busy = (retryAfterSeconds?: number): AuthFailure => ({ status: "busy", message: "Too many attempts. Please wait before trying again.",
+  ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }) });
 const conflict = (): AuthFailure => ({ status: "conflict", message: authCopy.accountExists });
 const passwordLimit = (): AuthFailure => ({ status: "busy", message: memberPasswordCooldownMessage });
 const phoneChangeLimit = (): AuthFailure => ({ status: "busy",
@@ -39,6 +42,7 @@ export const validMemberPassword = (value: unknown): value is string => typeof v
   && value.length >= memberAuthRules.passwordMin && value.length <= memberAuthRules.passwordMax;
 let dummyPasswordHash: Promise<string> | undefined;
 const dummyHash = () => dummyPasswordHash ??= hashPassword(randomBytes(32).toString("base64url"));
+const loginAttemptWindowMs = 15 * 60_000;
 
 /**
  * Admission and actual phone ownership are separate. Legacy pending accounts can use an existing code or recover the
@@ -98,17 +102,26 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
     async login(phoneInput: unknown, password: unknown, address: string, previous?: string): Promise<AuthSuccess | AuthFailure> {
       const phone = normalizePhone(phoneInput);
       if (!phone || typeof password !== "string" || !password || password.length > memberAuthRules.passwordMax) return invalidCredentials();
-      if (!await limit({ purpose: "password-login-address", value: safeAddress(address), maximum: 30, windowMs: 15 * 60_000 })
-        || !await limit({ purpose: "password-login-phone", value: phone, maximum: 10, windowMs: 15 * 60_000 })) return busy();
+      const retryAfter = await timedRequestPhase("login-rate-limit", async () => {
+        for (const rule of [
+          { purpose: "password-login-address", value: safeAddress(address), maximum: 30 },
+          { purpose: "password-login-phone", value: phone, maximum: 10 },
+        ]) {
+          const wait = await limit.retryAfter({ ...rule, windowMs: loginAttemptWindowMs });
+          if (wait !== null) return wait;
+        }
+        return null;
+      });
+      if (retryAfter !== null) return busy(retryAfter);
       const administrator = adminPhone(phone), credential = administrator ? adminPasswordHash() : null;
-      const account = await database.query((tx) => tx.memberAccount.findUnique({ where: { phone } }));
+      const account = await timedRequestPhase("login-account", () => database.query((tx) => tx.memberAccount.findUnique({ where: { phone } })));
       const stored = administrator ? credential : account?.passwordHash;
       // Retired credentials and missing accounts still perform the normal password work.
-      const matches = administrator && stored ? verifyMemberAdminCredential(password, stored)
-        : await verifyPassword(password, stored && isPasswordHash(stored) ? stored : await dummyHash());
+      const matches = await timedRequestPhase("login-credential", async () => administrator && stored ? verifyMemberAdminCredential(password, stored)
+        : verifyPassword(password, stored && isPasswordHash(stored) ? stored : await dummyHash()));
       if (!matches || !stored || !administrator && !isPasswordHash(stored) || account?.erasedAt || account?.blockedAt) return invalidCredentials();
       if (!administrator && !account) return invalidCredentials();
-      return decide<AuthSuccess | AuthFailure>(database, async (tx) => {
+      return timedRequestPhase("login-session-transaction", () => decide<AuthSuccess | AuthFailure>(database, async (tx) => {
         const at = new Date(now());
         // Administrator accounts are provisioned by the configured credential, never through public registration.
         if (administrator && !account) await tx.memberAccount.upsert({ where: { phone }, create: { id: randomUUID(), phone, createdAt: at, lastSignInAt: at }, update: {} });
@@ -123,7 +136,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         await tx.memberAccount.update({ where: { id: current.id }, data: { lastSignInAt: at } });
         return { status: "authenticated", token, accountId: current.id, phone, ...(administrator ? { administrator: true } : {}),
           ...(admitted ? { otherDeviceSignedOut } : { requiresVerification: true }) };
-      });
+      }));
     },
 
     /** Public registration never replaces an existing identity or provisions an administrator. */

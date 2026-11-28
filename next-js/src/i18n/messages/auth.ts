@@ -17,6 +17,7 @@ export const authCopy = {
   accountExists: `An account already exists, so please ${authVerbs.signIn}.`,
   accountUpdate: "Goal Hint: Your account has been updated. Log in to view the details or contact admin for help.",
   loginUnavailable: "Account login is unavailable.",
+  loginServiceUnavailable: "Account access is unavailable. Try again later.",
   loginInvalidCredentials: "The phone number or password is incorrect.",
   passwordMismatch: "The passwords do not match.",
   administratorRequired: "Log in with an administrator account.",

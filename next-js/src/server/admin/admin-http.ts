@@ -41,7 +41,9 @@ export function adminRoute(handler: (context: AdminContext) => Promise<Response>
     if (!resolved.database) {
       return json({ error: "unavailable", message: authCopy.loginUnavailable }, 503);
     }
-    const owner = await requireOwner(resolved, request);
+    let owner;
+    try { owner = await requireOwner(resolved, request); }
+    catch { return json({ error: "unavailable", message: authCopy.loginUnavailable }, 503); }
     if (!owner) return json({ error: "unauthorized", message: authCopy.administratorRequired }, 401);
     return handler({ request, owner, services: resolved });
   };

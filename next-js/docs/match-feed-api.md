@@ -24,6 +24,15 @@ suppress one. The visible page hydrates and validates display markets in the
 same snapshot. Requests that audit settlement outcomes still use full replay
 validation during membership selection.
 
+The canonical rolling Matches page can stream the app shell to top-level
+browser navigations, including Chromium audits, while its stored list and
+metadata resolve. A failed browser
+read renders the retry state in that shell. Crawler and headerless requests keep
+the existing pre-stream status checks. The HTML list starts before its separate
+performance audit. It skips that audit for a failed list or a verified zero
+cohort with no outcome filter. After a transient summary failure, a visible,
+connected page allows one quiet, delayed retry and honors `Retry-After`.
+
 ## Parameters and pagination
 
 The established `src/domain/feed-query.ts` contract is reused. Unknown or

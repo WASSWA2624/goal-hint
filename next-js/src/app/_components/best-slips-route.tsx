@@ -14,6 +14,7 @@ import { BestSlipsQueryError, parseBestSlipsQuery, type BestSlipsQuery } from "@
 import { bestSlipsHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { resolveViewerAccessFresh } from "@/server/members/viewer-access";
+import { timedRequestPhase, withDocumentTiming } from "@/server/http/request-timing";
 import { readBestSlipsBrowseSnapshot } from "@/server/slips/best-slips-browse";
 import { gateBestSlips } from "@/server/slips/slip-preview";
 import { bestSlipsMetadata } from "@/server/seo/metadata";
@@ -25,11 +26,12 @@ type Props = Readonly<{ params: Promise<{ locale: string }>; searchParams: Promi
 export function createBestSlipsRoute({ read = readBestSlipsBrowseSnapshot, access = resolveViewerAccessFresh, policy = getDiscoveryPolicy } = {}) {
   async function Content({ locale, query }: { locale: string; query: BestSlipsQuery }) {
     const m = createMessages(locale);
-    const published = await read(query, locale);
-    // The stored cohort is viewer-independent. A fresh access check after the
-    // read covers an entitlement change before any selections enter the HTML.
-    const viewer = await access();
-    const result = gateBestSlips(published, viewer);
+    const { result, viewer } = await withDocumentTiming("best-slips-document", async () => {
+      const published = await read(query, locale);
+      // Confirm access after the viewer-independent read before any selections enter the HTML.
+      const viewer = await timedRequestPhase("access", access);
+      return { result: gateBestSlips(published, viewer), viewer };
+    }, ({ result }) => result.state === "data-unavailable");
     const browse = homeBrowseLinks(result, locale);
     return <>
       <Stack $gap="sm">

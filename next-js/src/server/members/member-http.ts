@@ -40,19 +40,35 @@ export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: Setti
   offer?: (() => Promise<SubscriptionOffer | null>) | null }>;
 export type MemberServicesSource = () => Promise<MemberServices>;
 
+type MemberAuthServices = Pick<MemberServices, "config" | "sessions" | "auth">;
+export type MemberAuthServicesSource = () => Promise<MemberAuthServices>;
+
+function memberKeyAvailable(config: AnalyticsConfig) {
+  try { config.key("member-readiness", "ready"); return true; } catch { return false; }
+}
+
+function memberAuthServices(config: AnalyticsConfig, database: DatabaseRuntime | null): MemberAuthServices {
+  return { config, sessions: database ? createMemberSessions({ database, config }) : null,
+    auth: database ? createMemberAuth({ database, config }) : null };
+}
+
+/** Authentication uses the account database without waiting for subscription or checkout services. */
+export async function getMemberAuthServices(source = getAnalyticsServices): Promise<MemberAuthServices> {
+  const { database, config } = await source();
+  return memberAuthServices(config, memberKeyAvailable(config) ? database : null);
+}
+
 export async function getMemberServices({ freshSettings = false }: { freshSettings?: boolean } = {}): Promise<MemberServices> {
   const { database, config } = await getAnalyticsServices();
-  let keyed = true;
-  try { config.key("member-readiness", "ready"); } catch { keyed = false; }
+  const keyed = memberKeyAvailable(config);
   const { mode, checkoutReady, checkoutOrigin, secretKey } = getRuntimePolicy().flutterwave;
   const flutterwave: Parameters<typeof createCheckout>[0]["flutterwave"] = mode && secretKey
     ? { mode, checkoutReady, hostedOrigin: checkoutOrigin, client: createFlutterwaveClient(secretKey.read(), mode) } : undefined;
   const settings = database ? settingsServiceFor(database) : null;
-  return { config, settings: await (freshSettings ? settings?.currentFresh() : settings?.current()) ?? { settings: null, source: "unavailable" },
-    sessions: database && keyed ? createMemberSessions({ database, config }) : null,
+  return { ...memberAuthServices(config, keyed ? database : null),
+    settings: await (freshSettings ? settings?.currentFresh() : settings?.current()) ?? { settings: null, source: "unavailable" },
     payments: database && keyed ? createPayments({ database, config }) : null,
     codes: database && keyed ? createAccessCodes({ database, config }) : null,
-    auth: database && keyed ? createMemberAuth({ database, config }) : null,
     preferences: database && keyed ? createMemberPreferences({ database }) : null,
     configurations: database && keyed ? createSlipConfigurations({ database }) : null,
     dashboard: database && keyed ? createAccountDashboard({ database }) : null,
@@ -96,7 +112,7 @@ export function memberRoute(handler: (context: MemberContext) => Promise<Respons
   };
 }
 
-export function createMemberSignInHandler(services: MemberServicesSource = getMemberServices) {
+export function createMemberSignInHandler(services: MemberAuthServicesSource = getMemberAuthServices) {
   // Keep the legacy endpoint as an alias, without retaining number-only or subscription-code authentication.
   return async (request: Request) => (await import("./member-auth-http.ts")).createMemberAuthHandler("login", services)(request);
 }

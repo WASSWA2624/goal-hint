@@ -16,6 +16,7 @@ import { readWithSlipAccess } from "./slip-access.ts";
 import { slipNumberFingerprint } from "../../domain/readable-code.ts";
 import { ensureSlipNumber } from "./slip-numbers.ts";
 import { supportContactsOf } from "../../domain/support-contacts.ts";
+import { timedRequestPhase } from "../http/request-timing.ts";
 
 /** The browser submits only a server selection identity and its bounded source, never a claimed snapshot. */
 export function createShareSlipHandler({ members = getMemberServices, services = getAnalyticsServices,
@@ -24,7 +25,6 @@ export function createShareSlipHandler({ members = getMemberServices, services =
   return async (request: Request): Promise<Response> => {
     if (!isSameOrigin(request)) return json({ error: "forbidden" }, 403);
     try {
-      const viewer = await access(request);
       let input;
       try {
         if (!/^application\/json(?:;|$)/iu.test(request.headers.get("content-type") ?? "")) return json({ error: "invalid-request" }, 400);
@@ -32,20 +32,22 @@ export function createShareSlipHandler({ members = getMemberServices, services =
         if (!bytes) return json({ error: "invalid-request" }, 400);
         input = shareSlipSourceSchema.parse(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)));
       } catch { return json({ error: "invalid-request" }, 400); }
-      const { database, config } = await services();
-      if (!database) return json({ error: "unavailable" }, 503);
       let day;
       try { day = parseReportingDate(input.day); } catch { return json({ error: "invalid-request" }, 400); }
+      const viewer = await timedRequestPhase("access", () => access(request));
+      const { database, config } = await services();
+      if (!database) return json({ error: "unavailable" }, 503);
       if (viewer.tier === "free" && !viewer.signedIn && !await createMemberRateLimit(database, config)({ purpose: "slip-share-address",
         value: clientAddress(request.headers), maximum: 120, windowMs: memberRateRules.hourMs })) return json({ error: "limited" }, 429);
-      const result = await published(database).day(day, viewer.tier === "free", undefined, input.slipId);
+      const result = await timedRequestPhase("publication", () => published(database).day(day, viewer.tier === "free", undefined, input.slipId));
       const view = result?.slips.find(candidate => candidate.slip?.id === input.slipId);
       if (!view?.slip || !view.id || !view.publishedAt) return viewer.tier === "full"
         ? json({ error: "changed" }, 409) : json({ error: "subscription-required" }, 403);
-      if (!view.completed && (viewer.tier !== "full" || (await access(request)).tier !== "full")) return json({ error: "subscription-required" }, 403);
-      const number = await database.transaction(async tx => ensureSlipNumber(tx, await slipNumberFingerprint(view.slip!)));
+      const checked = () => timedRequestPhase("access", () => access(request));
+      if (!view.completed && (viewer.tier !== "full" || (await checked()).tier !== "full")) return json({ error: "subscription-required" }, 403);
+      const number = await timedRequestPhase("number", () => database.transaction(async tx => ensureSlipNumber(tx, await slipNumberFingerprint(view.slip!))));
       const resolved = await members();
-      if (!view.completed && (await access(request)).tier !== "full") return json({ error: "subscription-required" }, 403);
+      if (!view.completed && (await checked()).tier !== "full") return json({ error: "subscription-required" }, 403);
       const contacts = resolved.settings.settings ? supportContactsOf(resolved.settings.settings).slice(0, 2).map(contact => `${contact.label}: +${contact.phone}`) : [];
       return json({ id: view.id.slice(0, 32), number, contacts, status: view.status,
         selectionScores: Object.fromEntries((view.matchStates ?? []).flatMap(leg => leg.score ? [[leg.fixtureId, leg.score]] : [])),

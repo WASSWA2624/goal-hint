@@ -8,6 +8,7 @@ export const performanceMessages = {
   "performance.summary.figures": "Performance figures",
   "performance.summary.loading": "Loading overall performance…",
   "performance.summary.unavailable": "Overall performance is temporarily unavailable.",
+  "performance.summary.stale": "Performance updates are delayed. Showing the last verified counts.",
   "performance.summary.matches": "Matches",
   "performance.summary.predicted": "Predicted",
   "performance.summary.percentageOfPredicted": "{percentage} of predicted matches",

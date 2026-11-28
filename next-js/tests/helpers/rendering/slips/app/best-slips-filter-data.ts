@@ -5,7 +5,6 @@ import { bestSlipOddsBands, bestSlipOddsBandFor, dailyBestSlipBandLimit, default
 import { slipStatusCategory } from "@/domain/slip-status";
 import type { SlipMatchState } from "@/domain/slip-match-state";
 import type { ViewerAccess } from "@/server/members/viewer-access";
-import { gateBestSlips } from "@/server/slips/best-slips";
 import { criteria, now, syntheticBuild, today } from "./stored";
 
 /** Isolated browser transport data: never read, generated, or persisted by the live service. */
@@ -39,12 +38,7 @@ const publications: readonly BestSlipView[] = Array.from({ length: 41 }, (_, day
   }));
 }).flat();
 
-export async function fixtureBestSlips(access: ViewerAccess): Promise<BestSlipsResult> {
-  return gateBestSlips({ day: today, state: "generated", slips: publications.filter((view) => view.publicationDay === today && bestSlipOddsBandFor(view.totalOdds) === defaultBestSlipOddsBand),
-    searchLimited: false, partialCoverage: false }, access);
-}
-
-export async function fixtureBrowseBestSlips(access: ViewerAccess, query: BestSlipsQuery): Promise<BestSlipsResult> {
+export async function fixtureBestSlipsSnapshot(query: BestSlipsQuery): Promise<BestSlipsResult> {
   const dates = resolveBestSlipsDates(query, today);
   const scoped = publications.filter(view => bestSlipOddsBandFor(view.totalOdds) === (query.oddsBand ?? defaultBestSlipOddsBand)
     && !(view.publicationDay === today && query.oddsBand === "100-200"));
@@ -69,12 +63,12 @@ export async function fixtureBrowseBestSlips(access: ViewerAccess, query: BestSl
   const summary = { asOf: now, ...dates, statistics };
   const dayLimit = dates.from === dates.to && (dates.from === today || bandRows.length && dates.from !== addReportingDays(today, -2))
     ? dailyBestSlipBandLimit : undefined;
-  return gateBestSlips({ day: today, state: dates.from === today && dates.to === today && !bandRows.length ? "awaiting-publication" : "generated",
+  return { day: today, state: dates.from === today && dates.to === today && !bandRows.length ? "awaiting-publication" : "generated",
     slips, searchLimited: false, partialCoverage: false, statistics, summary,
     browse: { query, total: query.period === "all" ? null : matches.length, bandTotal: query.period === "all" ? null : bandRows.length,
       ...(dayLimit === undefined ? {} : { dailyBandLimit: dayLimit }), pageSize: bestSlipsQueryRules.pageSize, hasMore,
       nextCursor: query.period === "all" && hasMore && last ? `${last.publicationDay}:${last.rank}` : null, from, to },
-  }, access);
+  };
 }
 
 export const fixtureBestSlipsNow = () => now;

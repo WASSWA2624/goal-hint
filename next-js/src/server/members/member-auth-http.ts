@@ -5,7 +5,8 @@ import { readReferralAttribution, referralCookieName } from "./referral-attribut
 import { memberAuthPath, memberHomePath, memberLandingPath, memberReturnPath, subscriptionReturnPath } from "../../domain/member-navigation.ts";
 import { noCredit, type SubscriptionSummary } from "../../domain/subscription-summary.ts";
 import { clientAddress, cookie, isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
-import { getMemberServices, type MemberServices, type MemberServicesSource } from "./member-http.ts";
+import { timedRequestPhase } from "../http/request-timing.ts";
+import { getMemberAuthServices, getMemberServices, type MemberAuthServicesSource, type MemberServices, type MemberServicesSource } from "./member-http.ts";
 import type { AuthBinding, AuthFailure } from "./member-auth.ts";
 import { memberCookieName, memberSessionRules } from "./member-sessions.ts";
 import { adminSessionRules } from "../analytics/analytics-auth.ts";
@@ -38,12 +39,13 @@ async function bodyOf(request: Request, allowed: readonly string[]): Promise<Rec
 
 function failure(result: AuthFailure) {
   const status = { invalid: 400, unauthorized: 401, busy: 429, conflict: 409, unavailable: 503 }[result.status];
-  return json({ error: result.status, message: result.message }, status, result.status === "busy" ? { "Retry-After": "60" } : {});
+  return json({ error: result.status, message: result.message }, status,
+    result.status === "busy" ? { "Retry-After": String(result.retryAfterSeconds ?? 60) } : {});
 }
 
 /** Auth remains available when sales are off. A member session authorizes password changes; phone changes check its password.
  * Signed-out recovery grants a bounded reset-only cookie. All writes are same-origin. */
-export function createMemberAuthHandler(action: AuthAction, source: MemberServicesSource = getMemberServices) {
+export function createMemberAuthHandler(action: AuthAction, source: MemberAuthServicesSource = getMemberAuthServices) {
   return async (request: Request): Promise<Response> => {
     if (!isSameOrigin(request)) return json({ error: "forbidden", message: "This request must come from Goal Hint." }, 403);
     try {
@@ -54,10 +56,12 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
         return failure({ status: "invalid", message: authCopy.passwordMismatch });
       if (action === "verify" && body.whatsappNotifications !== undefined && typeof body.whatsappNotifications !== "boolean")
         return json({ error: "invalid-request", message: "Choose a valid WhatsApp update preference." }, 400);
-      const services = await source();
-      if (!services.auth || !services.sessions) return json({ error: "unavailable", message: "Account access is unavailable. Try again later." }, 503);
+      const services = await timedRequestPhase("auth-services", source);
+      if (!services.auth || !services.sessions) return json({ error: "unavailable", message: authCopy.loginServiceUnavailable }, 503);
       const memberName = memberCookieName(services.config.production), currentToken = readCookie(request, memberName);
-      const binding: AuthBinding = { member: await services.sessions.verify(currentToken) }, address = clientAddress(request.headers);
+      const needsBinding = action === "register" || action === "phone" || action === "password" || action === "reset-code";
+      const binding: AuthBinding = { member: needsBinding ? await services.sessions.verify(currentToken) : null };
+      const address = clientAddress(request.headers);
       if (action === "reset-code" && binding.member)
         return json({ error: "signed-in", message: authCopy.passwordWhileLoggedIn }, 409);
       if (action === "verification") return failure(await services.auth.requestVerification());
@@ -91,7 +95,7 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
       if (result.administrator && !result.requiresPasswordChange && !result.requiresVerification)
         response.headers.append("Set-Cookie", cookie(services.config, services.config.cookies.exclude, "1", adminSessionRules.excludeMaxAgeSeconds));
       return response;
-    } catch { return json({ error: "unavailable", message: "Account access is unavailable. Try again later." }, 503); }
+    } catch { return json({ error: "unavailable", message: authCopy.loginServiceUnavailable }, 503); }
   };
 }
 
@@ -131,7 +135,7 @@ export function createPasswordRecoveryHandler(action: RecoveryAction, source: Me
 export function createMemberSessionHandler(source: MemberServicesSource = () => getMemberServices({ freshSettings: true })) {
   return async (request: Request): Promise<Response> => {
     try {
-      const services: MemberServices = await source();
+      const services: MemberServices = await timedRequestPhase("member-session-services", source);
       if (!services.sessions) return json({ phone: null, error: "unavailable" }, 503);
       const member = await services.sessions.verify(readCookie(request, memberCookieName(services.config.production)));
       const administrator = !!member && !member.blocked && member.administrator === true && isMemberAdminPhone(member.phone);
@@ -145,16 +149,18 @@ export function createMemberSessionHandler(source: MemberServicesSource = () => 
         canSubscribe: salesOpen && !member?.blocked && !administrator, ...noCredit };
       // Only a visitor or member without access who can subscribe reads the cheapest plan, for the access bar's offer.
       const withOffer = async (summary: SubscriptionSummary): Promise<SubscriptionSummary> => {
-        const offer = !summary.activeUntil && summary.canSubscribe && services.offer ? await services.offer().catch(() => null) : null;
+        const offer = !summary.activeUntil && summary.canSubscribe && services.offer
+          ? await timedRequestPhase("member-session-offer", services.offer).catch(() => null) : null;
         return offer ? { ...summary, offer } : summary;
       };
       if (!member || member.blocked || administrator) return json({ ...identity, subscription: await withOffer(subscription) });
-      if (!services.codes) return json({ ...identity, subscription: null });
+      const codes = services.codes;
+      if (!codes) return json({ ...identity, subscription: null });
       // A chain that ended (or ends within the lead) renews from credit on this request when auto-renewal is on.
       if (services.settings?.settings?.paywallMode === "on") {
-        try { await services.codes.renewDue(member.accountId); } catch { /* The summary below still answers. */ }
+        try { await timedRequestPhase("member-session-renew", () => codes.renewDue(member.accountId)); } catch { /* The summary below still answers. */ }
       }
-      const status = await services.codes.subscriptionStatus(member).catch(() => undefined);
+      const status = await timedRequestPhase("member-session-access", () => codes.subscriptionStatus(member)).catch(() => undefined);
       // An unavailable summary cannot grant access or override verified sign-in state.
       if (status === undefined) return json({ ...identity, subscription: null });
       // The verified session may have been removed or blocked while its subscription was being read.

@@ -242,13 +242,13 @@ test('void, cancelled and pending progress categories filter before pagination w
   assert.deepEqual(gated.slips.map(view => view.status), current.slips.map(view => view.status));
   assert.ok(gated.slips.every(view => view.completed ? view.slip : view.preview.every(leg => leg.pick === null)));
   let accessChecks = 0;
-  const response = await createBestSlipsHandler({ now: () => now, browse: async (viewer, selected) => f.store.browse(selected, today, false),
-    access: async () => ++accessChecks === 1 ? full : free })(new Request('https://goalhint.test/api/best-slips?period=today'));
+  const response = await createBestSlipsHandler({ now: () => now, snapshot: async selected => f.store.browse(selected, today, false),
+    access: async () => { accessChecks++; return free; } })(new Request('https://goalhint.test/api/best-slips?period=today'));
   const expired = await response.json();
   assert.equal(response.status, 200); assert.equal(expired.entitled, false);
   assert.deepEqual(expired.slips.map(view => view.status), current.slips.map(view => view.status));
   assert.ok(expired.slips.every(view => view.completed ? view.slip : view.preview.every(leg => leg.pick === null)));
-  assert.equal(expired.statistics.total, 28); assert.equal(accessChecks, 3);
+  assert.equal(expired.statistics.total, 28); assert.equal(accessChecks, 1);
 });
 
 test('exact custom ranges resolve forecast results in bounded batches without truncating older publications', async () => {
@@ -268,6 +268,26 @@ test('All dates continues within publication ranks without skipping and never cl
     selected = { ...selected, page: selected.page + 1, ...(result.browse.nextCursor ? { cursor: result.browse.nextCursor } : {}) };
   } while (result.browse.hasMore);
   assert.equal(seen.length, expected); assert.equal(new Set(seen).size, expected);
+});
+
+test('a populated All dates archive proves one next row without adjudicating the remaining window', async t => {
+  const f = fixture(35, 25), elapsed = [];
+  for (let run = 0; run < 12; run++) {
+    f.reads.length = 0;
+    f.resultBatches.length = 0;
+    const start = performance.now();
+    const first = await f.store.browse(query({ period: 'all' }), today);
+    elapsed.push(performance.now() - start);
+    assert.equal(first.slips.length, 20);
+    assert.equal(first.browse.nextCursor, `${today}:20`);
+    assert.equal(first.statistics, null);
+  }
+  const resolved = f.resultBatches.reduce((total, count) => total + count, 0);
+  const snapshotReads = f.reads.filter(read => read.text.includes('FROM PublishedSlip')).length;
+  elapsed.sort((a, b) => a - b);
+  t.diagnostic(`875 sealed slips, 12 in-process samples: p50=${Math.round(elapsed[5])}ms p95=${Math.round(elapsed[11])}ms, snapshot queries=${snapshotReads}, adjudicated legs=${resolved}`);
+  assert.ok(snapshotReads < bestSlipsQueryRules.scanDays);
+  assert.equal(resolved, 21);
 });
 
 test('an empty All dates scan exposes a continuation for matching older publications', async () => {

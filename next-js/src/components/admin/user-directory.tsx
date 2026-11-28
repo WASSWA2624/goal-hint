@@ -105,7 +105,7 @@ export function UserDirectory({ accounts, asOf, selectedId, query, loading = fal
           <li key={item.accountId}><strong>{item.identity}</strong> · {item.message}</li>)}</ul>}
       </BulkOutcome>}
     </DirectoryTools>
-    <RecordListScroll ref={listRef} data-user-results data-review-user-list aria-label="User accounts" aria-busy={loading} tabIndex={0}>
+    <RecordListScroll ref={listRef} data-user-results data-review-user-list aria-label="User accounts" aria-busy={loading || paging?.loading || false} tabIndex={0}>
       {accounts.length ? accounts.map(account => <li key={account.id}><UserAccountRow account={account} asOf={referenceDate} selected={selectedId === account.id}
         href={accountHref(account.id)} onAccountClick={(event, next) => onAccountClick(event, account.id, next)}
         checked={checkedIds.has(account.id)} disabled={disabled} onCheck={checked => checkAccount(account.id, checked)}

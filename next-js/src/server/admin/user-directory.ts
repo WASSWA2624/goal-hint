@@ -5,6 +5,7 @@ import { emptyUserDirectoryQuery, userDirectoryPageSize, userSearchTerms, type U
 import { normalizePhone } from "../../domain/phone.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
+import { timedRequestPhase } from "../http/request-timing.ts";
 import { isMemberAdminPhone } from "../members/member-admin.ts";
 
 const currentAccess = (at: Date) => ({ revokedAt: null, endsAt: { gt: at } }) satisfies Prisma.AccessCodeWhereInput;
@@ -48,23 +49,23 @@ export async function readUserDirectory(database: DatabaseRuntime, query: UserDi
   requestedPage = 1, now: (() => number) | number = Date.now, after?: UserDirectoryCursor):
   Promise<UserDirectoryPage & Readonly<{ adminPhone?: string }>> {
   const at = new Date(typeof now === "function" ? now() : now), where = userDirectoryWhere(query, at);
-  return database.transaction(async client => {
-    const total = await client.memberAccount.count({ where });
+  return timedRequestPhase("users-directory-transaction", () => database.transaction(async client => {
+    const total = await timedRequestPhase("users-directory-count", () => client.memberAccount.count({ where }));
     const pages = Math.max(1, Math.ceil(total / userDirectoryPageSize));
     const page = Math.min(requestedPage, pages);
     const lastSignInAt = after ? new Date(after.lastSignInAt) : undefined;
     const window = after && lastSignInAt ? { AND: [where, { OR: [
       { lastSignInAt: { lt: lastSignInAt } }, { lastSignInAt, id: { gt: after.id } },
     ] }] } : where;
-    const rows = total === 0 ? [] : await client.memberAccount.findMany({ where: window,
+    const rows = total === 0 ? [] : await timedRequestPhase("users-directory-page", () => client.memberAccount.findMany({ where: window,
       orderBy: [{ lastSignInAt: "desc" }, { id: "asc" }], skip: after ? 0 : (page - 1) * userDirectoryPageSize,
       take: userDirectoryPageSize + Number(Boolean(after)),
-      select: { id: true, phone: true, blockedAt: true, erasedAt: true, lastSignInAt: true } });
+      select: { id: true, phone: true, blockedAt: true, erasedAt: true, lastSignInAt: true } }));
     const hasMore = rows.length > userDirectoryPageSize;
     if (hasMore) rows.pop();
     // The earliest current period distinguishes active from queued with one result per account.
-    const periods = rows.length ? await client.accessCode.groupBy({ by: ["accountId"],
-      where: { ...currentAccess(at), accountId: { in: rows.map(row => row.id) } }, _min: { startsAt: true } }) : [];
+    const periods = rows.length ? await timedRequestPhase("users-directory-access", () => client.accessCode.groupBy({ by: ["accountId"],
+      where: { ...currentAccess(at), accountId: { in: rows.map(row => row.id) } }, _min: { startsAt: true } })) : [];
     const firstStart = new Map(periods.map(period => [period.accountId, period._min.startsAt]));
     const accounts = rows.map<UserDirectoryAccount>(row => {
       const startsAt = firstStart.get(row.id);
@@ -74,5 +75,5 @@ export async function readUserDirectory(database: DatabaseRuntime, query: UserDi
     const phone = !accounts.length && query.search ? normalizePhone(query.search) : null;
     return { accounts, page, pages, total, asOf: at.toISOString(), ...(after ? { hasMore } : {}),
       ...(phone && isMemberAdminPhone(phone) ? { adminPhone: phone } : {}) };
-  }, { isolationLevel: "RepeatableRead" });
+  }, { isolationLevel: "RepeatableRead" }));
 }

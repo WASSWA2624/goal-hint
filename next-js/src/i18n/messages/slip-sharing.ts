@@ -35,6 +35,7 @@ export const slipSharingMessages = {
   "slipShare.copyCaption": "Copy caption",
   "slipShare.copyLink": "Copy link",
   "slipShare.linkCopied": "Slip link copied.",
+  "slipShare.copyLinkManually": "Select and copy the slip link above.",
   "slipShare.link": "Slip link",
   "slipShare.shareLink": "Share link",
   "slipShare.shareImage": "Share image",

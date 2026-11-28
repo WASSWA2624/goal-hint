@@ -30,3 +30,5 @@ identity. Unknown/extra fields and unknown slip identities fail. It returns a
 real `sharedSlipSchema`-validated synthetic response for successful scenarios.
 `GET /api/slips/share/<id>` exposes only a known fixture token. There are no live
 member, publication, or stored-football reads.
+
+For the link recovery check, run `python scripts/verify-sharing-rendering.py --serve` and open the isolated `/best` page in Chromium. Fulfill the fixture share response with the canonical publication URL `https://goalhint.com/en/best-slips/2026-10-29/1` and block `/brand/goal-hint-logo-inverse.png`. The drawer should keep the image actions disabled and offer **Copy link** with the exact canonical URL. Unblock the logo and select **Try again** to verify the preview and numbered PNG download. Disable `navigator.share` to check that the copy action stays usable when the image sheet is unsupported. Repeat at mobile and desktop widths in both themes.

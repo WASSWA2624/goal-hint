@@ -16,7 +16,7 @@ import { createAnalyticsReporter, type AnalyticsReporter } from "./analytics-rep
 import { createAnalyticsRetention, isRetentionDays, type AnalyticsRetention } from "./analytics-retention.ts";
 import { memberLoginPath, signedOutPath } from "../../domain/member-navigation.ts";
 import { clientAddress, cookie, empty, isSameOrigin, json, privateHeaders, readCookie, readLimitedBody, redirect } from "../http/private-http.ts";
-import { verifyMemberAdminSession } from "../members/member-admin-access.ts";
+import { readMemberAdminSession } from "../members/member-admin-access.ts";
 import { createMemberSessions, memberCookieName } from "../members/member-sessions.ts";
 import { memberLogoutResponse, revokeLogoutSession } from "../members/member-logout.ts";
 
@@ -58,9 +58,13 @@ export function getAnalyticsServices(): Promise<AnalyticsServices> {
 }
 
 /** Dashboard privileges come only from the current authenticated account, never a legacy owner cookie. */
-export async function verifyAdminSession(services: AnalyticsServices, memberToken: string | undefined): Promise<Admin | null> {
-  const member = await verifyMemberAdminSession(services, memberToken);
+export async function readAdminSession(services: AnalyticsServices, memberToken: string | undefined): Promise<Admin | null> {
+  const member = await readMemberAdminSession(services, memberToken);
   return member ? { username: `member-admin:${member.accountId}`, expiresAt: member.expiresAt, memberAccountId: member.accountId } : null;
+}
+
+export async function verifyAdminSession(services: AnalyticsServices, memberToken: string | undefined): Promise<Admin | null> {
+  try { return await readAdminSession(services, memberToken); } catch { return null; }
 }
 
 export function requireAdmin(services: AnalyticsServices, request: Request): Promise<Admin | null> {

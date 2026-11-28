@@ -6,6 +6,7 @@ import styled from "styled-components";
 import { goHistoryBack, writeContextHistory } from "@/components/navigation/context-history";
 import { UserIcon, UserPlusIcon } from "@/components/ui/icons";
 import { appendUniqueRecords, useAppendRequest } from "@/components/ui/use-append-request";
+import { startRequestDeadline } from "@/domain/request-deadline";
 import { emptyUserDirectoryQuery, parseUserDirectoryPage, parseUserDirectoryQuery, type UserDirectoryAccount,
   type UserDirectoryPage, type UserDirectoryPaging, type UserDirectoryQuery } from "@/domain/user-directory";
 import { parseUserIndividualAction, type UserIndividualAction } from "@/domain/user-actions";
@@ -49,6 +50,7 @@ const directoryApi = "/api/admin/users";
 const queryKey = (query: UserDirectoryQuery) => JSON.stringify(parseUserDirectoryQuery(query) ?? emptyUserDirectoryQuery);
 const locationKey = ({ query, page }: DirectoryLocation) => `${queryKey(query)}:${page}`;
 const requestHeaders = { Accept: "application/json" };
+const directoryReadDeadlineMs = 15_000;
 
 function userDirectoryHref({ query, page }: DirectoryLocation, { accountId, action }: RecordLocation) {
   const params = new URLSearchParams();
@@ -91,21 +93,31 @@ function useUserRead(error = "") {
     active.current = null;
     setStatus({ busy, error: "" });
   }, []);
-  useEffect(() => () => { active.current?.abort(); }, []);
+  useEffect(() => () => {
+    active.current?.abort();
+    active.current = null;
+  }, []);
 
   async function read(load: (signal: AbortSignal) => Promise<void>, failed: string) {
     active.current?.abort();
     const controller = new AbortController();
     active.current = controller;
+    const clearDeadline = startRequestDeadline(controller, directoryReadDeadlineMs);
     setStatus({ busy: true, error: "" });
     try {
       await load(controller.signal);
-      if (!controller.signal.aborted) setStatus({ busy: false, error: "" });
+      if (active.current !== controller) return true;
+      controller.signal.throwIfAborted();
+      setStatus({ busy: false, error: "" });
       return true;
     } catch (error) {
-      if (controller.signal.aborted) return true;
-      setStatus({ busy: false, error: error instanceof UserReadError ? error.message : failed });
+      if (active.current !== controller) return true;
+      setStatus({ busy: false, error: controller.signal.aborted ? "The request took too long. Try again."
+        : error instanceof UserReadError ? error.message : failed });
       return false;
+    } finally {
+      clearDeadline();
+      if (active.current === controller) active.current = null;
     }
   }
   return { ...status, read, cancel };
@@ -133,7 +145,7 @@ export function UsersWorkspace({ accounts, detail: initialDetail, plans: seedPla
   const detailsPane = useRef<HTMLElement>(null), listScroll = useRef<HTMLOListElement>(null);
   const openedFrom = useRef<{ id: string; url: string; scrollTop: number } | null>(null);
   const { query } = location, scope = locationKey(location);
-  const append = useAppendRequest(scope);
+  const append = useAppendRequest(scope, directoryReadDeadlineMs);
   const tail = added?.scope === scope ? added : null;
   const listed = tail ? appendUniqueRecords(directory.accounts, tail.accounts, account => account.id) : directory.accounts;
   const hasMore = tail?.hasMore ?? directory.page < directory.pages;
@@ -186,6 +198,7 @@ export function UsersWorkspace({ accounts, detail: initialDetail, plans: seedPla
         headers: { ...requestHeaders, "Content-Type": "application/json" }, body: JSON.stringify({ ...requested.query, page: requested.page }) });
       checkSession(response, signal);
       if (signal.aborted) return;
+      if ([502, 503, 504].includes(response.status)) throw new UserReadError("Users are temporarily unavailable. Try again.");
       if (!response.ok) throw new Error();
       const body: unknown = await response.json();
       if (signal.aborted) return;

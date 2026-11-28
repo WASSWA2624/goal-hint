@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AppLoading, NavigationProgress } from "@/components/navigation/navigation-progress";
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DownloadIcon, ShareIcon } from "@/components/ui/icons";
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, DownloadIcon, ShareIcon } from "@/components/ui/icons";
 import { BodyText, MutedText, Stack } from "@/components/ui/layout";
 import { type NativeShareImage } from "@/components/members/invitation-share";
 import { prepareNativeSlipImages, shareSlipImages } from "./slip-share-native";
@@ -18,8 +18,9 @@ import { SlipShareLogoError } from "./slip-share-assets";
 
 type Prepared = { shared: SharedSlip; files: File[]; download: File; caption: string; imageUrls: string[]; nativeFiles: readonly NativeShareImage[] | null };
 
-export function SlipShareDrawer({ id, source, initialShared, localSlip, createdAt, presentation, locale, onPrepared, onClose }: {
-  id: string; source?: ShareSlipSource; initialShared?: SharedSlip; localSlip?: BuiltSlip; createdAt?: string; presentation?: SlipSharePresentation; locale: string;
+export function SlipShareDrawer({ id, source, initialShared, localSlip, createdAt, presentation, publicHref, locale, onPrepared, onClose }: {
+  id: string; source?: ShareSlipSource; initialShared?: SharedSlip; localSlip?: BuiltSlip; createdAt?: string; presentation?: SlipSharePresentation;
+  publicHref?: string; locale: string;
   onPrepared: (shared: SharedSlip) => void; onClose: () => void;
 }) {
   const m = createMessages(locale), dialog = useRef<HTMLDialogElement>(null), existing = useRef(initialShared);
@@ -27,7 +28,9 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, createdA
   const snapshot = useRef({ ...presentation, capturedAt: new Date().toISOString() });
   const sourceJson = source ? JSON.stringify(source) : undefined;
   const [attempt, setAttempt] = useState(0), [prepared, setPrepared] = useState<Prepared | null>(null);
+  const [publicUrl, setPublicUrl] = useState(() => initialShared?.url ?? (publicHref ? new URL(publicHref, publicPolicy.origin).href : null));
   const [error, setError] = useState<TextKey | null>(null), [feedback, setFeedback] = useState<TextKey | null>(null);
+  const [linkFallback, setLinkFallback] = useState(false);
   const [page, setPage] = useState(0);
   const [sharing, setSharing] = useState(false);
   const preparing = !prepared && !error;
@@ -64,8 +67,10 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, createdA
             return;
           }
           shared = sharedSlipSchema.parse(await response.json());
+          if (!active || controller.signal.aborted) return;
           existing.current = shared;
         }
+        if (active) setPublicUrl(shared.url);
         if (!shared.number) {
           const response = await fetch("/api/slips/number", { method: "POST", credentials: "same-origin", signal: controller.signal,
             headers: { "Content-Type": "application/json" }, body: JSON.stringify(shared.url?.includes("/s/")
@@ -84,7 +89,9 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, createdA
         const files = await createSlipShareImages(shared, locale, controller.signal);
         const caption = slipShareCaption(shared, locale);
         const download = await createSlipShareDownload(files, shared.number!, caption);
-        const nativeFiles = await prepareNativeSlipImages(files).catch(() => null);
+        const bridge = window.goalHintNativeShare;
+        const nativeFiles = bridge && (bridge.shareFiles || bridge.downloadFiles)
+          ? await prepareNativeSlipImages(files).catch(() => null) : null;
         if (active) {
           imageUrls = files.map((file) => URL.createObjectURL(file));
           setPrepared({ shared, files, download, caption, imageUrls, nativeFiles });
@@ -107,9 +114,9 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, createdA
         const result = await window.goalHintNativeShare.downloadFiles({ title: publicPolicy.name, text: prepared.caption,
           url: prepared.shared.url ?? publicPolicy.origin, files: prepared.nativeFiles });
         if (result === "handed-off") setFeedback("slipShare.downloaded");
-      } else if (window.goalHintNativeShare) setFeedback("slipShare.downloadUnavailable");
+      } else if (window.goalHintNativeShare) { setLinkFallback(true); setFeedback("slipShare.downloadUnavailable"); }
       else { downloadSlipShare(prepared.download); setFeedback(prepared.files.length > 1 ? "slipShare.savedArchive" : "slipShare.saved"); }
-    } catch { setFeedback("slipShare.downloadUnavailable"); }
+    } catch { setLinkFallback(true); setFeedback("slipShare.downloadUnavailable"); }
     finally { setSharing(false); }
   }
 
@@ -121,9 +128,18 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, createdA
       const result = await shareSlipImages(link, prepared.files, prepared.nativeFiles);
       if (result === "handed-off") setFeedback("slipShare.handedOff");
       else if (result !== "cancelled") {
+        setLinkFallback(true);
         setFeedback(result === "unsupported" ? "slipShare.imageFallback" : "slipShare.shareError");
       }
     } finally { setSharing(false); }
+  }
+
+  async function copyLink() {
+    if (!publicUrl) return;
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setFeedback("slipShare.linkCopied");
+    } catch { setFeedback("slipShare.copyLinkManually"); }
   }
 
   return <Drawer id={id} ref={dialog} aria-labelledby={`${id}-title`} data-slip-share-drawer
@@ -155,14 +171,19 @@ export function SlipShareDrawer({ id, source, initialShared, localSlip, createdA
           </figure>
           <p data-share-summary>{m.text("slipShare.summary", { selections: m.plural("slips.selections", prepared.shared.slip.selections.length), odds: prepared.shared.slip.totalOdds })}</p>
           {prepared.files.length > 1 && <p data-share-public-note>{m.text("slipShare.multipleImagesHint")}</p>}
-          <div data-share-caption><p>{m.text("slipShare.captionTitle", { name: publicPolicy.name })}</p>
-            {prepared.shared.url && <a href={prepared.shared.url} target="_blank" rel="noopener noreferrer">{prepared.shared.url.replace(/^https:\/\//u, "")}</a>}
-            <a href={publicPolicy.origin} target="_blank" rel="noopener noreferrer">{new URL(publicPolicy.origin).host}</a></div>
-          {prepared.shared.url && <p data-share-public-note>{m.text("slipShare.publicHint")}</p>}
         </>}
       </div>
+      {(prepared || publicUrl) && <>
+        <div data-share-caption><p>{m.text("slipShare.captionTitle", { name: publicPolicy.name })}</p>
+          {publicUrl && <a href={publicUrl} target="_blank" rel="noopener noreferrer">{publicUrl.replace(/^https:\/\//u, "")}</a>}
+          <a href={publicPolicy.origin} target="_blank" rel="noopener noreferrer">{new URL(publicPolicy.origin).host}</a>
+        </div>
+        {publicUrl && <p data-share-public-note>{m.text("slipShare.publicHint")}</p>}
+      </>}
     </DrawerBody>
     <DrawerFooter>
+      {publicUrl && (!prepared || linkFallback) && <div data-share-secondary><DrawerButton type="button" variant="secondary"
+        onClick={() => { void copyLink(); }}><CopyIcon />{m.text("slipShare.copyLink")}</DrawerButton></div>}
       <div data-share-actions><DrawerButton type="button" variant="secondary" disabled={!prepared || sharing} onClick={() => { void saveImage(); }}><DownloadIcon />{m.text(prepared && prepared.files.length > 1 ? "slipShare.saveImages" : "slipShare.saveImage")}</DrawerButton>
         <DrawerButton type="button" disabled={!prepared || sharing} onClick={() => { void share(); }}><ShareIcon />{m.text("slipShare.share")}</DrawerButton></div>
       {feedback && <p data-share-feedback role="status">{m.text(feedback)}</p>}

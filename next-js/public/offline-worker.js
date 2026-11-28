@@ -219,7 +219,10 @@ async function downloadEntry(cache, entry, document, deadline, previous, signal)
     catch { /* A transient cache read can recover through the same verified network asset. */ }
   }
   const fromNetwork = !response;
-  response ??= await boundedFetch(absolute(entry.url), { credentials: "omit", cache: "no-store", redirect: "manual" }, preparationTime(deadline), signal);
+  // Fingerprinted Next assets may already be in the browser's HTTP cache from this page load.
+  // The manifest digest still governs eligibility for the offline bundle.
+  const cacheMode = entry.url.startsWith("/_next/static/") ? "default" : "no-store";
+  response ??= await boundedFetch(absolute(entry.url), { credentials: "omit", cache: cacheMode, redirect: "manual" }, preparationTime(deadline), signal);
   publicResponse(response, entry.url, document ? "x-goalhint-offline-entry" : undefined);
   const type = response.headers.get("content-type") ?? "";
   if (document ? !type.toLowerCase().includes("text/html") : /\.css$/i.test(entry.url) && !type.toLowerCase().includes("text/css")) fail("unexpected-response");
@@ -330,12 +333,17 @@ async function offlineDocument() {
   } catch { return null; }
 }
 
-async function unavailableDocument(saved) {
+async function recoveryDocument(saved, reason, response) {
   // Only annotate the outgoing copy. The verified static entry remains byte-identical in storage.
   const html = await saved.text();
   const headers = new Headers(saved.headers);
   headers.set("cache-control", "no-store");
-  return new Response(html.replace(/<html(?=[\s>])/i, '<html data-goalhint-offline-reason="server-unavailable"'), { headers });
+  headers.delete("etag");
+  headers.delete("last-modified");
+  const retry = response?.headers.get("retry-after");
+  if (retry) headers.set("retry-after", retry);
+  return new Response(html.replace(/<html(?=[\s>])/i, `<html data-goalhint-offline-reason="${reason}"`),
+    { headers, status: response?.status ?? 200 });
 }
 
 async function navigate(request) {
@@ -347,11 +355,11 @@ async function navigate(request) {
     if (response.status < 500 || request.signal.aborted) return response;
     const saved = await offlineDocument();
     if (!saved) return response;
-    return response.status === 502 || response.status === 503 || response.status === 504 ? await unavailableDocument(saved) : saved;
+    return await recoveryDocument(saved, "server-unavailable", response);
   } catch (error) {
     if (request.signal.aborted) throw error;
     const saved = await offlineDocument();
-    if (saved) return saved;
+    if (saved) return errorCode(error) === "network-timeout" ? recoveryDocument(saved, "navigation-timeout") : saved;
     throw error;
   }
 }

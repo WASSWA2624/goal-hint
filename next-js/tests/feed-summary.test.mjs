@@ -90,6 +90,17 @@ test('summary consumers share one request and a cancelled view cannot cancel ano
   assert.deepEqual(await second.unwrap(), summary()); second.unsubscribe();
 });
 
+test('summary fetch failures retain retry limits and access errors across the request cache', async t => {
+  const original = globalThis.fetch, store = makeStore({ today, query: query(), data: null });
+  t.after(() => { globalThis.fetch = original; store.dispatch(refreshApi.util.resetApiState()); });
+  for (const [status, code, delay] of [[503, 'unavailable', 12_000], [429, 'rate-limited', 45_000],
+    [400, 'invalid-response', undefined], [403, 'subscription-required', undefined]]) {
+    globalThis.fetch = async () => new Response(null, { status, headers: delay === undefined ? {} : { 'Retry-After': String(delay / 1000) } });
+    const read = store.dispatch(refreshApi.endpoints.feedSummary.initiate({ query: query(), today }, { forceRefetch: true }));
+    await assert.rejects(consumeRefresh(read, new AbortController().signal), error => error.code === code && error.retryAfterMs === delay);
+  }
+});
+
 test('an audit rechecks expired access before returning private-filter counts or a viewer projection', async () => {
   const full = await fullAccess(), free = { tier: 'free', signedIn: false, mode: 'off' };
   for (const parameters of ['when=today&picks=only', 'when=today']) {

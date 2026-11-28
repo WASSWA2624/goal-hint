@@ -4,7 +4,17 @@ import { liveRefreshRules } from "../domain/live-refresh.ts";
 import { matchFeedRules } from "../domain/match-feed-rules.ts";
 import { startRequestDeadline } from "../domain/request-deadline.ts";
 
-export type RefreshError = { code: FeedPaginationError["code"] };
+export type RefreshError = { code: FeedPaginationError["code"]; retryAfterMs?: number };
+
+function readFailure(response: Response) {
+  const { status } = response;
+  const code = status === 401 || status === 403 ? "subscription-required" : status === 429 ? "rate-limited"
+    : status >= 500 || status === 408 ? "unavailable" : "invalid-response";
+  const header = response.headers.get("retry-after");
+  const delay = !header ? NaN : /^\d+$/u.test(header) ? Number(header) * 1_000 : Date.parse(header) - Date.now();
+  return new FeedPaginationError(code, Number.isFinite(delay) ? Math.max(0, delay) : undefined);
+}
+
 export async function readJson(href: string, signal: AbortSignal, timeoutMs: number = liveRefreshRules.timeoutMs): Promise<unknown> {
   const controller = new AbortController();
   const canceled = () => controller.abort(signal.reason), clearDeadline = startRequestDeadline(controller, timeoutMs);
@@ -12,7 +22,7 @@ export async function readJson(href: string, signal: AbortSignal, timeoutMs: num
   try {
     const response = await fetch(href, { signal: controller.signal,
       cache: "no-store", credentials: "same-origin" });
-    if (!response.ok) throw new FeedPaginationError(response.status === 403 ? "subscription-required" : response.status === 429 ? "rate-limited" : "unavailable");
+    if (!response.ok) throw readFailure(response);
     const text = await response.text(), max = matchFeedRules.maximumResponseBytes;
     // A UTF-16 code unit encodes to at most 3 UTF-8 bytes, so only a possibly oversized body is encoded.
     if (text.length > max || (text.length * 3 > max && new TextEncoder().encode(text).length > max)) {
@@ -22,7 +32,8 @@ export async function readJson(href: string, signal: AbortSignal, timeoutMs: num
   } finally { clearDeadline(); signal.removeEventListener("abort", canceled); }
 }
 export function failure(cause: unknown): { error: RefreshError } {
-  return { error: { code: cause instanceof FeedPaginationError ? cause.code : "unavailable" } };
+  if (!(cause instanceof FeedPaginationError)) return { error: { code: "unavailable" } };
+  return { error: { code: cause.code, ...(cause.retryAfterMs !== undefined && { retryAfterMs: cause.retryAfterMs }) } };
 }
 
 /** Each route injects its reads into one cache without importing another route's validators. */
@@ -37,6 +48,8 @@ export async function consumeRefresh<T>(request: { unwrap(): Promise<T>; unsubsc
       canceled = () => reject(new DOMException("Refresh canceled.", "AbortError"));
       if (signal.aborted) canceled(); else signal.addEventListener("abort", canceled, { once: true });
     });
-    return await Promise.race([request.unwrap().catch((cause: RefreshError) => { throw new FeedPaginationError(cause.code ?? "unavailable"); }), aborted]);
+    return await Promise.race([request.unwrap().catch((cause: RefreshError) => {
+      throw new FeedPaginationError(cause.code ?? "unavailable", cause.retryAfterMs);
+    }), aborted]);
   } finally { signal.removeEventListener("abort", canceled); request.unsubscribe(); }
 }

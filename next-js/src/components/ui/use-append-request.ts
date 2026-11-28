@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { startRequestDeadline } from "../../domain/request-deadline";
 
 type State = Readonly<{ scope: unknown; phase: "idle" | "loading" | "failed" }>;
 
 /** Keep an append request local and discard results when the list cohort changes. */
-export function useAppendRequest(scope: unknown) {
+export function useAppendRequest(scope: unknown, deadlineMs?: number) {
   const active = useRef<{ scope: unknown; controller: AbortController } | null>(null);
   const [state, setState] = useState<State>({ scope, phase: "idle" });
   const phase = state.scope === scope ? state.phase : "idle";
@@ -28,13 +29,16 @@ export function useAppendRequest(scope: unknown) {
     const controller = new AbortController();
     active.current?.controller.abort();
     active.current = { scope, controller };
+    const clearDeadline = deadlineMs === undefined ? undefined : startRequestDeadline(controller, deadlineMs);
     setState({ scope, phase: "loading" });
     try {
       await read(controller.signal);
-      if (!controller.signal.aborted) setState({ scope, phase: "idle" });
+      controller.signal.throwIfAborted();
+      if (active.current?.controller === controller) setState({ scope, phase: "idle" });
     } catch {
-      if (!controller.signal.aborted) setState({ scope, phase: "failed" });
+      if (active.current?.controller === controller) setState({ scope, phase: "failed" });
     } finally {
+      clearDeadline?.();
       if (active.current?.controller === controller) active.current = null;
     }
   }

@@ -220,9 +220,11 @@ export async function verifyBestSlipsFilters(page, origin, widths = [320, 360, 3
           assert(await page.locator("[data-best-slips-updating]").count() === 0 && !(await bar.innerText()).includes("Updating slips"), "No inline updating message appears while the top loader owns loading feedback");
           releaseResponse(); await settled();
           assert(await bar.innerText() === retained, "A failed update retains the confirmed slips and applied labels");
-          assert(await page.locator("[data-best-slips-update-failed]").count() === 0, "The update-failure message is removed");
-          assert(await page.getByRole("button", { name: "Try again", exact: true }).count() === 0, "No retry button appears above retained slips");
+          assert(await page.locator("[data-best-slips-update-failed]").isVisible(), "A failed change identifies the retained list");
         } finally { releaseResponse(); await page.unroute("**/api/best-slips?**"); }
+        await page.getByRole("button", { name: "Try again", exact: true }).click(); await settled();
+        assert((await bar.innerText()).includes("5.00–10.00") && await page.locator("[data-best-slips-update-failed]").count() === 0,
+          "Retry applies the requested band and replaces the failure message after success");
       } finally { page.off("request", record); }
       results.push({ mode, width, ...geometry });
     }

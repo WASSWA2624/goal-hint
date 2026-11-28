@@ -221,7 +221,8 @@ function FeedSurfaceContent({ query, today, result: initial, access, controls, p
       performance={displayed && performanceData && <PerformanceSection data-feed-performance-section>
         <Suspense fallback={<FeedPerformancePlaceholder query={displayed.query} data={performanceData} />}>
           <ServerThemeUntilHydrated><FeedPerformanceSummary query={displayed.query} today={displayed.today} data={performanceData}
-            enabled={enabled} onApply={applyPerformance} initial={accepted ? undefined : summary} confirmed={confirmed} onConfirmed={setConfirmed} /></ServerThemeUntilHydrated>
+            enabled={enabled} onApply={applyPerformance} initial={accepted ? undefined : summary} confirmed={confirmed} onConfirmed={setConfirmed}
+            onAccessChanged={refresh} /></ServerThemeUntilHydrated>
         </Suspense>
       </PerformanceSection>} /></LoadingTheme>
     {controls}

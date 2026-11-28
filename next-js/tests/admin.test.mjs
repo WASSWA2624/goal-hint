@@ -174,6 +174,30 @@ test("the admin guard refuses cross-site writes before any lookup, then requires
   assert.equal(await requireOwner((await resolve()), request("/", { headers: cookieHeader })).then((owner) => owner.username), "member-admin:00000000-0000-4000-8000-000000000991");
 });
 
+test("the Users read guard distinguishes a session dependency failure from revoked access", async () => {
+  const healthy = fakeServices(), failing = fakeServices({ storageDown: true });
+  let resolved = healthy.resolve;
+  let directoryReads = 0;
+  const route = adminRoute(async () => { directoryReads++; return json({ accounts: [] }); }, { services: () => resolved() });
+  const readDirectory = (cookie = token) => route(request("/api/admin/users", {
+    method: "POST", headers: { ...sameSite, cookie: `goal-hint-member=${cookie}` },
+  }));
+
+  const first = await readDirectory();
+  assert.equal(first.status, 200);
+  resolved = failing.resolve;
+  const outage = await readDirectory();
+  assert.equal(outage.status, 503);
+  assert.equal((await outage.json()).error, "unavailable");
+  expectPrivate(outage, "Unknown session");
+  assert.equal(outage.headers.get("set-cookie"), null);
+  assert.equal(directoryReads, 1, "An unavailable session grants no access to the directory");
+  resolved = healthy.resolve;
+  assert.equal((await readDirectory("r".repeat(43))).status, 401);
+  assert.equal((await readDirectory()).status, 200);
+  assert.equal(directoryReads, 2);
+});
+
 test("the sign-out form of the guard refuses cross-site posts but never needs a verifiable session", async () => {
   for (const scripted of [fakeServices(), fakeServices({ storageDown: true }), fakeServices({ auth: false })]) {
     let resolved = 0;
