@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { registerServerRouteTestLoader, stubRouteComponents as empty } from './helpers/server-route-loader.mjs';
-import { emptySlipBrowsePage } from '../src/domain/slip-browse-window.ts';
 
 const source = new URL('../src/', import.meta.url).href;
 const modules = {
@@ -43,12 +42,10 @@ test('the dedicated Best Slips route streams its valid shell before access or da
   assert.deepEqual(calls, [], 'The shell must not wait for viewer or slip reads.');
 });
 
-test('Best Slips browser Flight starts one archive read and emits the shell before either read settles', async () => {
+test('Best Slips browser Flight commits the exact controls without a server archive read', async () => {
   const calls = [], query = { period: 'custom', from: '2026-11-01', to: '2026-11-02', oddsBand: '5-10', status: 'won', page: '2' };
-  let finish;
-  const snapshot = new Promise(resolve => { finish = resolve; });
   const route = createBestSlipsRoute({ document: () => isDocumentRequest(async () => new Headers({ 'sec-fetch-dest': 'empty' })),
-    read: async () => { calls.push('read'); return snapshot; },
+    read: async () => { calls.push('read'); throw new Error('The browser owns the initial archive read'); },
     access: async () => { calls.push('access'); return { tier: 'free', signedIn: false }; } });
   const shell = await route.Page(props(query));
   const view = shell.props.children[1];
@@ -61,25 +58,9 @@ test('Best Slips browser Flight starts one archive read and emits the shell befo
   assert.equal(view.props.result.statistics, null);
   assert.equal(view.props.result.browse.total, null);
   assert.equal(view.props.emptyNavigation.type.name, 'BrowsePredictions');
-  assert.deepEqual(calls, ['read']);
+  assert.deepEqual(calls, []);
   await assert.rejects(route.Page(props({ page: '0' })), error => error.digest.includes(';replace;/en/best-slips;'));
-  assert.deepEqual(calls, ['read']);
-  finish(emptySlipBrowsePage('2026-11-03', { ...query, page: 2 }, 'odds-unavailable'));
-  const accepted = await view.props.initialResult;
-  assert.deepEqual(accepted.browse.query, { ...query, page: 2 });
-  assert.deepEqual(accepted.access, { tier: 'free', signedIn: false });
-  assert.deepEqual(calls, ['read', 'access']);
-});
-
-test('a failed Flight archive seed is empty and allows the browser to retry the exact query', async () => {
-  const route = createBestSlipsRoute({ document: async () => false,
-    read: async () => { throw new Error('private storage detail'); },
-    access: async () => { throw new Error('must not read access for unavailable data'); } });
-  const shell = await route.Page(props({ period: 'yesterday' }));
-  const view = shell.props.children[1];
-  assert.equal(view.props.initialRead, true);
-  assert.equal(view.props.result.browse.query.period, 'yesterday');
-  assert.equal(await view.props.initialResult, null);
+  assert.deepEqual(calls, []);
 });
 
 test('Best Slips reads the published cohort once and projects it after the latest access check', async () => {

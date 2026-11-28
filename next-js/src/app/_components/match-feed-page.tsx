@@ -18,8 +18,9 @@ export function MatchFeedPage(props: {
   </PublicShell>;
 }
 
-export function MatchFeedLoading({ query, today, asOf }: { query: FeedQuery; today: ReportingDate; asOf: UtcInstant }) {
+export function MatchFeedLoading({ query, today, asOf, summary }: { query: FeedQuery; today: ReportingDate; asOf: UtcInstant;
+  summary?: Promise<FeedPerformanceSeed> | undefined }) {
   return <PublicShell locale={query.locale} today={today} zone={query.zone ?? query.time?.zone ?? null} current="today" showAccount app compact>
-    <FeedSurfaceLoading query={query} today={today} asOf={asOf} />
+    <FeedSurfaceLoading query={query} today={today} asOf={asOf} summary={summary} />
   </PublicShell>;
 }

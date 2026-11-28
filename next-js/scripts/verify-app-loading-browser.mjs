@@ -141,6 +141,37 @@ export async function verifyBrowserMatches(page, origin) {
   }
 }
 
+/** The verified counts can appear while the actual Match rows are still pending. */
+export async function verifyEarlyMatchesCounts(page, origin) {
+  const results = [], cookie = 'synthetic-early-summary';
+  await page.context().addCookies([{ name: cookie, value: '1', url: origin }]);
+  try {
+    for (const [theme, width] of [['light', 390], ['dark', 1440]]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(origin);
+      await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
+      let aggregateRequests = 0;
+      const observe = request => { if (new URL(request.url()).pathname === '/api/matches/summary') aggregateRequests++; };
+      page.on('request', observe);
+      try {
+        const start = performance.now();
+        await page.goto(origin + '/browser-matches', { waitUntil: 'commit' });
+        const early = page.locator('[data-matches-loading] [data-summary-count="won"]');
+        await early.and(page.getByText('10', { exact: true })).waitFor({ state: 'visible' });
+        const countsMs = Math.round(performance.now() - start);
+        if (await page.locator('[data-feed-match-results]').count()) throw new Error('Early cards did not precede the delayed list');
+        await page.locator('[data-feed-match-results]').waitFor();
+        const listMs = Math.round(performance.now() - start);
+        const ready = page.locator('[data-matches-feed] [data-feed-performance-state="ready"] [data-summary-count="won"]');
+        await ready.and(page.getByText('10', { exact: true })).waitFor();
+        if (aggregateRequests !== 0) throw new Error('One accepted server audit must supply both phases');
+        results.push({ theme, width, countsMs, listMs, aggregateRequests });
+      } finally { page.off('request', observe); }
+    }
+    return results;
+  } finally { await page.context().clearCookies({ name: cookie }); }
+}
+
 /** Drive real Next navigation while the authorized archive endpoint cannot finish. */
 export async function verifyBestSlipsNavigation(page, origin) {
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
@@ -173,13 +204,11 @@ export async function verifyBestSlipsNavigation(page, origin) {
       await page.evaluate(() => { window.fixtureArchiveHeader = document.querySelector('[data-app-header]'); });
       const requests = [];
       const { promise: held, resolve: release } = Promise.withResolvers();
-      const fallback = Promise.withResolvers();
       let scheduled;
       const intercept = route => {
         requests.push(new URL(route.request().url()).search);
-        if (!fail || requests.length !== 1) return route.continue();
-        fallback.resolve();
-        scheduled = held.then(() => route.fulfill({ status: 503, json: { error: 'unavailable' } }));
+        if (requests.length !== 1) return route.continue();
+        scheduled = held.then(() => fail ? route.fulfill({ status: 503, json: { error: 'unavailable' } }) : route.continue());
         return scheduled;
       };
       await page.route(archive, intercept);
@@ -188,8 +217,7 @@ export async function verifyBestSlipsNavigation(page, origin) {
         const link = navigation.locator('a[data-nav-key="best-slips"]:visible').first();
         if (!await link.isVisible()) await navigation.locator('[data-nav-more] summary:visible').click();
         const started = performance.now();
-        const firstRequest = fail
-          ? page.waitForRequest(request => archive(new URL(request.url()))).catch(() => null) : null;
+        const firstRequest = page.waitForRequest(request => archive(new URL(request.url())));
         await link.click();
         await page.waitForURL(url => url.pathname === '/en/best-slips');
         const pending = screen.and(page.locator('[data-best-slips-initial-loading]'));
@@ -204,11 +232,10 @@ export async function verifyBestSlipsNavigation(page, origin) {
           && await pending.locator('[data-slip-key], [role="alert"], [role="status"]').count() === 0,
           'A pending archive cannot claim results, empty coverage, or an error');
         const query = '?period=today&status=pending&page=1&oddsBand=1.5-5';
+        await firstRequest;
+        assert(requests.length === 1 && requests[0] === query, 'The mounted controls start one exact browser archive request');
+        release();
         if (fail) {
-          assert(await firstRequest, 'The unavailable server seed exhausts its read and starts the API fallback');
-          await fallback.promise;
-          assert(requests.length === 1 && requests[0] === query, 'The unavailable server seed starts one exact fallback request');
-          release();
           const unavailable = screen.getByRole('alert');
           const retry = unavailable.getByRole('button', { name: 'Try again', exact: true });
           await retry.waitFor();
@@ -221,8 +248,8 @@ export async function verifyBestSlipsNavigation(page, origin) {
         assert(await pending.count() === 0 && await screen.getByRole('alert').count() === 0, 'Verified rows clear pending and failure feedback');
         assert(await screen.locator('[data-summary-count="pending"]').textContent() === '65', 'The archive shows its verified count with the row');
         assert(await headerIsStable(), 'The archive updates within the initial Best Slips document and shared header');
-        assert(requests.length === (fail ? 2 : 0) && requests.every(request => request === query),
-          'A verified server seed avoids the duplicate API read, and fallback keeps its exact query on retry');
+        assert(requests.length === (fail ? 2 : 1) && requests.every(request => request === query),
+          'The route starts one archive request and retry preserves the same query');
         const readyMs = Math.round(performance.now() - started), initialRequests = requests.length;
         const load = screen.locator('[data-show-more]'), secondPage = url => archive(url) && url.searchParams.get('through') === '2';
         const next = Promise.withResolvers();

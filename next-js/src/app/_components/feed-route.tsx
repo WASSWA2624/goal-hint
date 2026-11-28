@@ -13,7 +13,7 @@ import { emptyFeedPerformanceReply, feedPerformanceApiHref, performanceFeedQuery
 import { synchronizeFeedStatusDates } from "@/domain/feed-controls";
 import { usesPremiumFeedOracle, withoutPremiumFeedOracle } from "@/domain/paywall";
 import { emptyArchiveIsMissing } from "@/domain/feed-date-navigation";
-import { resolveViewerAccess } from "@/server/members/viewer-access";
+import { resolveViewerContentAccess } from "@/server/members/viewer-access";
 import { contentAccess } from "@/server/members/gated-reads";
 import { withDocumentTiming } from "@/server/http/request-timing";
 import { parseMatchFeedQuery } from "@/server/matches/feed-service";
@@ -33,10 +33,10 @@ type Props = { params: Promise<{ locale: string; date?: string }>;
 
 /** Crawlers share the stored read between metadata and HTML. Browser metadata uses the route identity. */
 export function createFeedRoute({ dated = false, read = readPublicMatchFeedList, instant = getShellInstant, policy = getDiscoveryPolicy,
-  resolveAccess = resolveViewerAccess, readSummary = readGatedFeedSummary, document = isDocumentRequest,
-  browserDocument }: { dated?: boolean; read?: typeof readPublicMatchFeedList; instant?: typeof getShellInstant;
-    policy?: typeof getDiscoveryPolicy; resolveAccess?: typeof resolveViewerAccess; readSummary?: typeof readGatedFeedSummary;
-    document?: typeof isDocumentRequest; browserDocument?: typeof isDocumentRequest } = {}) {
+  resolveAccess = resolveViewerContentAccess, readSummary = readGatedFeedSummary, document = isDocumentRequest,
+  browserDocument, earlyBrowserSummary = false }: { dated?: boolean; read?: typeof readPublicMatchFeedList; instant?: typeof getShellInstant;
+    policy?: typeof getDiscoveryPolicy; resolveAccess?: typeof resolveViewerContentAccess; readSummary?: typeof readGatedFeedSummary;
+    document?: typeof isDocumentRequest; browserDocument?: typeof isDocumentRequest; earlyBrowserSummary?: boolean } = {}) {
   const browser = cache(async () => browserDocument
     ? await browserDocument() || !await document()
     : false);
@@ -66,6 +66,21 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
     return withDocumentTiming("matches-document", () => loadMatchFeedPage(query, today, { now: () => at }, read, resolveAccess),
       result => result.error === "unavailable");
   });
+  async function loadSummary(query: Parameters<typeof performanceFeedQuery>[0], today: ReturnType<typeof getFeedToday>,
+    at: UtcInstant, early = false): Promise<FeedPerformanceSeed> {
+    const scope = performanceFeedQuery(query), href = feedPerformanceApiHref(scope, today);
+    try {
+      const reply = await readSummary(serializeFeedQuery(scope, today), { now: () => at });
+      return { href, reply, ...(early && { early: true }) };
+    } catch (error) {
+      const code = error instanceof MatchFeedError ? error.code : "unavailable";
+      return { href, reply: null, failure: {
+        code: code === "subscription-required" || code === "rate-limited" || code === "unavailable" ? code : "invalid-response",
+        ...(error instanceof MatchFeedError && error.retryAfterSeconds
+          ? { retryAt: Date.now() + error.retryAfterSeconds * 1_000 } : {}),
+      } };
+    }
+  }
   async function resolve({ params, searchParams }: Props, includeSummary = false, streaming = false) {
     const route = await params, at = await requestInstant(), access = await contentAccess(resolveAccess);
     const providerOdds = publicOddsEnabled();
@@ -95,19 +110,11 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
       result = await load(serializeFeedQuery(query, today).toString(), route.locale, at, providerOdds);
       if (result.error === "subscription-required") redirect(feedQueryHref(withoutPremiumFeedOracle(query), today));
       if (includeSummary && result.data) {
-        const scope = performanceFeedQuery(query), href = feedPerformanceApiHref(scope, today);
+        const href = feedPerformanceApiHref(query, today);
         const reply = emptyFeedPerformanceReply(query, result.data);
         // The list owns the initial read budget. Stream the independent audit after
         // the accepted list, and avoid starting work for a failed or verified zero cohort.
-        summary = reply ? Promise.resolve({ href, reply }) : readSummary(serializeFeedQuery(scope, today), { now: () => at })
-          .then(result => ({ href, reply: result }), (error: unknown) => {
-            const code = error instanceof MatchFeedError ? error.code : "unavailable";
-            return { href, reply: null, failure: {
-              code: code === "subscription-required" || code === "rate-limited" || code === "unavailable" ? code : "invalid-response",
-              ...(error instanceof MatchFeedError && error.retryAfterSeconds
-                ? { retryAt: Date.now() + error.retryAfterSeconds * 1_000 } : {}),
-            } };
-          });
+        summary = reply ? Promise.resolve({ href, reply }) : loadSummary(query, today, at);
       }
     } catch (error) { if (error instanceof MatchFeedError && error.code === "invalid-query") notFound(); throw error; }
     const discovery = feedDiscovery(query, today);
@@ -117,14 +124,16 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
     if (result.error === "unavailable" && !streaming && policy().index && discovery.eligible && await document()) throw new PublicReadUnavailableError();
     return { query, today, result, discovery, access, summary, providerOdds };
   }
-  async function Content({ props, streaming, preloaded = false }: { props: Props; streaming: boolean; preloaded?: boolean }) {
+  async function Content({ props, streaming, preloaded = false, early }: {
+    props: Props; streaming: boolean; preloaded?: boolean; early?: Promise<FeedPerformanceSeed> | undefined;
+  }) {
     // Keep an optional audit out of browser HTML and route transitions. The
     // accepted list supplies the snapshot against which the browser checks it.
     const includeSummary = !await browser() && await document();
     const { query, today, result, access, discovery, summary, providerOdds } = await resolve(props, includeSummary, streaming);
     // Start the exact browser audit while the accepted list hydrates. The client
     // consumes this request through its normal cohort and viewer checks.
-    const summaryHref = streaming && !preloaded && !result.error && result.data && result.data.state !== "data-unavailable"
+    const summaryHref = streaming && !early && !preloaded && !result.error && result.data && result.data.state !== "data-unavailable"
       && !emptyFeedPerformanceReply(query, result.data) ? feedPerformanceApiHref(query, today) : null;
     const messages = createMessages(query.locale);
     const { tier, signedIn } = result.data?.access ?? access;
@@ -136,7 +145,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
       {structured && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(structured) }} />}
       <MatchFeedPage query={query} today={today} result={result} access={{ tier, signedIn }} showAccount
         providerOdds={providerOdds} retryInitial={streaming && result.error === "unavailable"}
-        {...(summary ? { summary } : {})} />
+        {...(early || summary ? { summary: early ?? summary! } : {})} />
     </>;
   }
   return {
@@ -151,11 +160,12 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
       if (!view) return Content({ props, streaming: false });
       // Native browser visits can begin the small aggregate while the first
       // page loads. Partial router prefetches must not start an aggregate.
-      const eagerSummary = view.discovery.home && await browserDocument?.() ? feedPerformanceApiHref(view.query, view.today) : null;
+      const early = view.discovery.home && earlyBrowserSummary ? loadSummary(view.query, view.today, view.at, true) : undefined;
+      const eagerSummary = !early && view.discovery.home && await browserDocument?.() ? feedPerformanceApiHref(view.query, view.today) : null;
       return <>
         {eagerSummary && <link rel="preload" as="fetch" href={eagerSummary} crossOrigin="anonymous" />}
-        <Suspense fallback={<MatchFeedLoading query={view.query} today={view.today} asOf={view.at} />}>
-          <Content props={props} streaming preloaded={eagerSummary !== null} />
+        <Suspense fallback={<MatchFeedLoading query={view.query} today={view.today} asOf={view.at} summary={early} />}>
+          <Content props={props} streaming preloaded={eagerSummary !== null} early={early} />
         </Suspense>
       </>;
     },

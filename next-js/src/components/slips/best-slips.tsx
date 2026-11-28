@@ -15,22 +15,22 @@ import { BestSlipCard } from "./best-slip-card";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { BestSlipsFilters } from "./best-slips-filters";
 import { BestSlipsPagination, BestSlipsSummary } from "./best-slips-browse-presentation";
-import { slipViewKey, type SlipBrowsePage } from "@/domain/slip-browse-window";
+import { slipViewKey } from "@/domain/slip-browse-window";
 import { FilterButton } from "./best-slips-filter-styles";
 import { useBestSlipsBrowse } from "./use-best-slips-browse";
 
 const MemoBestSlipCard = memo(BestSlipCard);
 const MemoBestSlipsFilters = memo(BestSlipsFilters);
 
-export function BestSlips({ result, locale, signedIn = false, initialRead = false, initialResult, emptyNavigation }: {
+export function BestSlips({ result, locale, signedIn = false, initialRead = false, emptyNavigation }: {
   result: SlipsBrowseResult; locale: string; signedIn?: boolean; initialRead?: boolean;
-  initialResult?: Promise<SlipBrowsePage | null> | undefined; emptyNavigation?: ReactNode;
+  emptyNavigation?: ReactNode;
 }) {
   const m = createMessages(locale), router = useRouter();
   const desktop = useDesktopLayout();
   const [, startRefresh] = useTransition();
   const recheckAccess = useCallback(() => { startRefresh(() => router.refresh()); }, [router]);
-  const browse = useBestSlipsBrowse(result, recheckAccess, "/api/best-slips", initialRead, initialResult);
+  const browse = useBestSlipsBrowse(result, recheckAccess, "/api/best-slips", initialRead);
   const content = browse.result;
   const oddsRange = bestSlipBand(browse.displayQuery.oddsBand).label, listWindow = content.browse;
   const searchContinues = listWindow?.total === null && browse.hasMore;

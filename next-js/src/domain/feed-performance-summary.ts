@@ -15,6 +15,7 @@ export type FeedPerformanceReply = z.infer<typeof feedPerformanceReplySchema>;
 /** A server-started read is tied to its canonical summary scope, never the visible list page. */
 export type FeedPerformanceSeed = Readonly<{ href: string; reply: FeedPerformanceReply | null;
   observed?: true;
+  early?: true;
   failure?: { code: FeedPaginationError["code"]; retryAt?: number } }>;
 
 export function feedPerformanceApiHref(query: FeedQuery, today: ReportingDate): string {
@@ -31,7 +32,7 @@ export function emptyFeedPerformanceReply(query: FeedQuery, data: MatchFeedRespo
     asOf: data.asOf, access: data.access };
 }
 
-type SummaryObservation = Readonly<{ requestedHref: string; currentHref: string; publicCohort?: boolean }>;
+type SummaryObservation = Readonly<{ requestedHref: string; currentHref: string; publicCohort?: boolean; early?: boolean }>;
 
 /** A late aggregate must still belong to the visible cohort and viewer. */
 export function checkedFeedPerformance(value: unknown, data: MatchFeedResponse, observation?: SummaryObservation): FeedPerformanceReply {
@@ -48,8 +49,11 @@ export function checkedFeedPerformance(value: unknown, data: MatchFeedResponse, 
     // An exact public observation can advance independently of the displayed list.
     // A premium filter still needs the matching list observation.
     const independentlyObservable = reply.access.tier === "free" && !reply.access.signedIn || observation?.publicCohort === true;
+    // A server-started public audit may finish before the list establishes
+    // its snapshot. Keep that recent observation while the browser rechecks.
+    const recentEarlyAudit = observation?.early && observation.publicCohort && data.asOf - reply.asOf <= 20_000;
     if (!observation || !reply.performanceScope || reply.performanceScope !== data.performanceScope
-      || !independentlyObservable || reply.asOf <= data.asOf) {
+      || !independentlyObservable || reply.asOf <= data.asOf && !recentEarlyAudit) {
       throw new FeedPaginationError("changed");
     }
   }

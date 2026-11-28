@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, memo, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { Fragment, memo, Suspense, use, useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { FeedAppliedSummary, FeedNote } from "@/components/match/feed-controls";
@@ -74,9 +74,20 @@ const ignoreLoadingAction = () => {};
 type FeedObservation = { initial: MatchFeedResponse; data: MatchFeedResponse };
 
 /** Render the actual control layout before a streamed list delivers its first observation. */
-export function FeedSurfaceLoading({ query, today, asOf }: { query: FeedQuery; today: ReportingDate; asOf: UtcInstant }) {
+type LoadingSurface = { query: FeedQuery; today: ReportingDate; asOf: UtcInstant; summary?: Promise<FeedPerformanceSeed> | undefined };
+
+function EarlyPerformance({ query, labels, summary }: {
+  query: FeedQuery; labels: { range: { from: ReportingDate; to: ReportingDate }; asOf: UtcInstant }; summary: Promise<FeedPerformanceSeed>;
+}) {
+  const seed = use(summary);
+  return <FeedPerformancePlaceholder query={query} data={labels} counts={seed.reply?.performance} />;
+}
+
+export function FeedSurfaceLoading({ query, today, asOf, summary }: LoadingSurface) {
   const { startDate: from, endDate: to } = resolveFeedDates(query, today);
   const messages = createMessages(query.locale);
+  const labels = { range: { from, to }, asOf };
+  const placeholder = <FeedPerformancePlaceholder query={query} data={labels} />;
   return <FeedStateProvider initial={{ query, today, data: null }}>
     <LoadingTheme><FeedStack $gap="sm" data-matches-loading aria-busy="true">
       <StableFeedHeader query={query} today={today} showAccount />
@@ -84,7 +95,9 @@ export function FeedSurfaceLoading({ query, today, asOf }: { query: FeedQuery; t
         <FeedFilters scope={feedQueryHref(query, today)} query={query} today={today} dateQuery={query} dateToday={today}
           leagues={noLeagues} onApply={ignoreLoadingAction} searchText={query.search}
           onSearchChange={ignoreLoadingAction} onSearchSubmit={ignoreLoadingAction} pending
-          performance={<PerformanceSection><FeedPerformancePlaceholder query={query} data={{ range: { from, to }, asOf }} /></PerformanceSection>} />
+          performance={<PerformanceSection>{summary ? <Suspense fallback={placeholder}>
+            <ServerThemeUntilHydrated><EarlyPerformance query={query} labels={labels} summary={summary} /></ServerThemeUntilHydrated>
+          </Suspense> : placeholder}</PerformanceSection>} />
       </div>
       <VisuallyHidden role="status">{messages.text("feed.filters.loading")}</VisuallyHidden>
       <MatchResults><ResultsToolbar query={query} today={today} total={null} first={0} last={0} /></MatchResults>

@@ -90,3 +90,17 @@ test('SSR seeds and legacy replies still require exact generation evidence', () 
     assert.deepEqual(checkedFeedPerformance(exact, current, observation), exact);
   }
 });
+
+test('an early public audit can remain visible during a short recheck of the exact newer list', () => {
+  const older = summary(100, 'a');
+  const next = { ...list, asOf: 20_099, performanceVersion: 'b'.repeat(64) };
+  const early = { ...observation, early: true, publicCohort: true };
+  assert.deepEqual(checkedFeedPerformance(older, next, early), older);
+  for (const [data, options] of [
+    [{ ...next, asOf: 20_101 }, early],
+    [{ ...next, performanceScope: '0'.repeat(64) }, early],
+    [{ ...next, access: { tier: 'full', signedIn: true } }, early],
+    [next, { ...early, currentHref: href + '&status=live' }],
+    [next, { ...early, publicCohort: false }],
+  ]) assert.throws(() => checkedFeedPerformance(older, data, options), changed);
+});

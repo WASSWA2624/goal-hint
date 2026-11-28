@@ -14,7 +14,8 @@ import { readPublicMatchDetail } from "../matches/public-detail.ts";
 import { readPublicMatchFeed, readPublicMatchFeedContinuation, readPublicMatchFeedWindow } from "../matches/public-feed.ts";
 import { readPublicMatchInsights } from "../matches/public-insights.ts";
 import { readPublicSlipBuild } from "../slips/public-slips.ts";
-import { resolveViewerAccess, resolveViewerAccessFresh, ViewerAccessUnavailable, type ViewerAccess } from "./viewer-access.ts";
+import { resolveViewerAccess, resolveViewerAccessFresh, resolveViewerContentAccess, resolveViewerContentAccessFresh,
+  ViewerAccessUnavailable, type ViewerAccess } from "./viewer-access.ts";
 import { readPublicMatchStatus } from "../matches/public-insights.ts";
 
 export type AccessResolver = () => Promise<ViewerAccess>;
@@ -36,7 +37,8 @@ export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed
   readInsights?: typeof readPublicMatchInsights; readSlips?: typeof readPublicSlipBuild;
   readStatus?: (id: string) => Promise<SettlementStatus>;
 } = {}) {
-  const recheckAccess = resolveAccess === resolveViewerAccess ? resolveViewerAccessFresh : resolveAccess;
+  const recheckAccess = resolveAccess === resolveViewerAccess ? resolveViewerAccessFresh
+    : resolveAccess === resolveViewerContentAccess ? resolveViewerContentAccessFresh : resolveAccess;
   async function forViewer<T>(parameters: FeedParameters, context: MatchFeedReadContext, clock: Clock | undefined,
     read: (context: MatchFeedReadContext, clock: Clock) => Promise<T>) {
     const initial = await contentAccess(resolveAccess);

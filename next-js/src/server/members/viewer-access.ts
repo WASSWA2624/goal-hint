@@ -100,9 +100,21 @@ export const resolveViewerAccessFresh = async (): Promise<ViewerAccess> => {
 export const resolveViewerAccess = cache(resolveViewerAccessFresh);
 export const viewerAccessFromRequest = (request: Request) => resolveRequest((name) => readCookie(request, name));
 
+const guestContentAccess = { tier: "free", signedIn: false, mode: "free" } as const;
+function hasContentCredentials(read: (name: string) => string | undefined) {
+  return developmentMemberToken(undefined) !== undefined || [true, false].some(secure =>
+    Boolean(read(analyticsSessionCookieName(secure))) || validMemberToken(read(memberCookieName(secure))));
+}
+
 /** Public content projections only use tier and sign-in. Preference cookies cannot grant either. */
 export function viewerContentAccessFromRequest(request: Request): Promise<ViewerAccess> {
-  const hasCredentials = developmentMemberToken(undefined) !== undefined || [true, false].some(secure =>
-    Boolean(readCookie(request, analyticsSessionCookieName(secure))) || validMemberToken(readCookie(request, memberCookieName(secure))));
-  return hasCredentials ? viewerAccessFromRequest(request) : Promise.resolve({ tier: "free", signedIn: false, mode: "free" });
+  return hasContentCredentials(name => readCookie(request, name)) ? viewerAccessFromRequest(request) : Promise.resolve(guestContentAccess);
 }
+
+export async function resolveViewerContentAccessFresh(): Promise<ViewerAccess> {
+  const jar = await cookies();
+  const read = (name: string) => jar.get(name)?.value;
+  return hasContentCredentials(read) ? resolve(read) : guestContentAccess;
+}
+
+export const resolveViewerContentAccess = cache(resolveViewerContentAccessFresh);

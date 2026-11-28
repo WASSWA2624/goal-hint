@@ -5,7 +5,7 @@ import type { FeedParameters } from "../../domain/feed-query.ts";
 import { feedPerformanceReplySchema } from "../../domain/feed-performance-summary.ts";
 import { usesPremiumFeedOracle } from "../../domain/paywall.ts";
 import { contentAccess, type AccessResolver } from "../members/gated-reads.ts";
-import { resolveViewerAccessFresh } from "../members/viewer-access.ts";
+import { resolveViewerContentAccessFresh } from "../members/viewer-access.ts";
 import { timedRequestPhase } from "../http/request-timing.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { parseMatchFeedQuery } from "./feed-service.ts";
@@ -16,7 +16,7 @@ export type FeedSummarySource = (...args: Parameters<typeof readPublicMatchFeedS
 
 /** Pages and APIs share the same access checks, including after a long aggregate read. */
 export function createGatedFeedSummary(source: FeedSummarySource = readPublicMatchFeedSummary,
-  resolveAccess: AccessResolver = resolveViewerAccessFresh) {
+  resolveAccess: AccessResolver = resolveViewerContentAccessFresh) {
   return async (parameters: FeedParameters, clock: Clock = { now: () => utcInstantFromEpochMilliseconds(Date.now()) }) => {
     const at = clock.now(), today = getReportingDate(at);
     const query = parseMatchFeedQuery(parameters, today, { asOf: at, providerOdds: true });

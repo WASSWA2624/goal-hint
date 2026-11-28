@@ -14,9 +14,8 @@ import { BestSlipsQueryError, parseBestSlipsQuery, type BestSlipsQuery } from "@
 import type { ReportingDate } from "@/domain/calendar";
 import { bestSlipsHref } from "@/domain/navigation";
 import { emptySlipBrowsePage } from "@/domain/slip-browse-window";
-import { singleSlipPage } from "@/domain/slip-pagination";
 import { createMessages } from "@/i18n/messages";
-import { resolveViewerAccessFresh } from "@/server/members/viewer-access";
+import { resolveViewerContentAccessFresh } from "@/server/members/viewer-access";
 import { timedRequestPhase, withDocumentTiming } from "@/server/http/request-timing";
 import { readBestSlipsBrowseSnapshot } from "@/server/slips/best-slips-browse";
 import { gateBestSlips } from "@/server/slips/slip-preview";
@@ -35,7 +34,7 @@ function BrowsePredictions({ day, locale }: { day: ReportingDate; locale: string
   </Stack></CriteriaPanel>;
 }
 
-export function createBestSlipsRoute({ read = readBestSlipsBrowseSnapshot, access = resolveViewerAccessFresh,
+export function createBestSlipsRoute({ read = readBestSlipsBrowseSnapshot, access = resolveViewerContentAccessFresh,
   policy = getDiscoveryPolicy, document = isDocumentRequest } = {}) {
   function readVerified(locale: string, query: BestSlipsQuery, today: ReportingDate) {
     return withDocumentTiming("best-slips-document", async () => {
@@ -65,14 +64,13 @@ export function createBestSlipsRoute({ read = readBestSlipsBrowseSnapshot, acces
         throw error;
       }
       const direct = await document();
-      // The segment's loading boundary owns partial prefetch. When the page
-      // actually renders, start the archive before the controls hydrate.
+      // Flight navigation can commit the controls without carrying the archive
+      // stream. The mounted screen reads the same gated archive endpoint once.
       return <PublicShell locale={locale} today={today} current="best-slips" app compact>
         <VisuallyHidden as="h1">{createMessages(locale).text("bestSlips.title")}</VisuallyHidden>
         {direct ? <Suspense fallback={<BestSlipsLoading locale={locale} today={today} query={query} heading={false} />}>
           <ServerThemeUntilHydrated><Content locale={locale} query={query} today={today} /></ServerThemeUntilHydrated>
         </Suspense> : <BestSlips result={emptySlipBrowsePage(today, query, "data-unavailable")} locale={locale} initialRead
-          initialResult={readVerified(locale, query, today).then(result => result.state === "data-unavailable" ? null : singleSlipPage(result))}
           emptyNavigation={<BrowsePredictions day={today} locale={locale} />} />}
       </PublicShell>;
     },

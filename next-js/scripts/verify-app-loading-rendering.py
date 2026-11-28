@@ -41,6 +41,12 @@ def verify_matches_document(origin):
     assert 'data-feed-performance-state="loading"' in healthy[-1][1]
     assert 'data-feed-performance-deferred="true"' in healthy[-1][1]
     assert 'data-feed-performance-state="ready"' not in healthy[-1][1]
+    status, parallel = stream(origin, "/browser-matches", {**browser, "Cookie": "synthetic-early-summary=1"})
+    assert status == 200
+    counts_at = next(at for at, html in parallel if 'data-summary-count="won">10<' in html)
+    parallel_list_at = next(at for at, html in parallel if "data-feed-match-results" in html)
+    assert parallel_list_at - counts_at > 1, (counts_at, parallel_list_at)
+    assert '/api/matches/summary?' not in parallel[-1][1].split("<script", 1)[0]
     status, filtered = stream(origin, "/browser-matches?country=England", browser)
     assert status == 200 and "data-feed-match-results" in filtered[-1][1]
     assert any("data-matches-loading" in html and "data-feed-match-results" not in html for _, html in filtered)
@@ -65,6 +71,7 @@ def verify_matches_document(origin):
     status, robot = stream(origin, "/browser-matches", {**crawler, **failure})
     assert status >= 500 and robot[0][0] >= 1.7, status
     return {"browser_shell_ms": round(shell_at * 1000), "browser_list_ms": round(list_at * 1000),
+        "parallel_counts_ms": round(counts_at * 1000), "parallel_list_ms": round(parallel_list_at * 1000),
         "browser_document_complete_ms": round(healthy[-1][0] * 1000),
         "worker_browser_shell_ms": round(worker_shell_at * 1000), "worker_browser_list_ms": round(worker_list_at * 1000),
         "crawler_document_complete_ms": round(crawler_healthy[-1][0] * 1000),

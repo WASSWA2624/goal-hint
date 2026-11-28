@@ -11,8 +11,7 @@ import { singleSlipPage } from "@/domain/slip-pagination";
 import { shareUnchanged } from "@/domain/structural-sharing";
 
 type Mode = "append" | "replace" | "refresh" | "background";
-type Intent = { query: BestSlipsQuery; mode: Mode; revision: number; depth: number; pushHistory: boolean; scrollY?: number | undefined;
-  initialResult?: Promise<SlipBrowsePage | null> | undefined };
+type Intent = { query: BestSlipsQuery; mode: Mode; revision: number; depth: number; pushHistory: boolean; scrollY?: number | undefined };
 type Failure = { mode: Mode; issue: "changed" | "access" | "limited" | "unavailable"; retryable: boolean };
 const historyKey = "goalHintBestSlips";
 
@@ -35,25 +34,10 @@ function savePosition(depth: number) {
   if (depth > 1) window.history.replaceState({ ...window.history.state,
     [historyKey]: { href: window.location.pathname + window.location.search, depth, scrollY: window.scrollY } }, "");
 }
-async function waitForInitialResult(initial: Promise<SlipBrowsePage | null>, signal: AbortSignal) {
-  signal.throwIfAborted();
-  let cancel!: () => void;
-  const aborted = new Promise<never>((_, reject) => {
-    cancel = () => reject(signal.reason);
-    signal.addEventListener("abort", cancel, { once: true });
-  });
-  try {
-    return await Promise.race([Promise.resolve(initial).catch(() => null), aborted]);
-  } finally {
-    signal.removeEventListener("abort", cancel);
-  }
-}
-
 /** Both slip collections share paging, pinned dates, cancellation and access-safe refreshes. */
 export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: () => void, endpoint = "/api/best-slips",
-  initialRead = false, initialResult?: Promise<SlipBrowsePage | null>) {
+  startsInitialRead = false) {
   const initial = useMemo(() => singleSlipPage(input), [input]);
-  const startsInitialRead = initialRead || initialResult !== undefined;
   const [seed, setSeed] = useState(initial);
   const [pages, setPages] = useState<readonly SlipBrowsePage[]>(() => [initial]);
   const [intent, setIntent] = useState<Intent>(() => ({ query: initial.browse.query, mode: "refresh", revision: 0, depth: 1, pushHistory: false }));
@@ -159,8 +143,7 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
         && latest.current[0]!.browse.version && /^[a-f0-9]{64}$/u.test(latest.current[0]!.browse.version!)) {
         next = await readWindow(intent.query, intent.query.page + intent.depth - 1);
       } else {
-        const first = intent.initialResult ? await waitForInitialResult(intent.initialResult, controller.signal) : null;
-        next = [first && first.state !== "data-unavailable" ? verify(first, intent.query) : await read(intent.query)];
+        next = [await read(intent.query)];
         let query: BestSlipsQuery | null;
         while (next.length < intent.depth && (query = nextSlipPageQuery(next.at(-1)!))) {
           next = appendSlipPage(next, await read(query));
@@ -191,13 +174,13 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
     };
   }, [endpoint, initial, intent, onAccessChanged]);
   const request = useCallback((query: BestSlipsQuery, mode: Mode,
-    { depth, pushHistory, scrollY, initialResult }: Pick<Intent, "depth" | "pushHistory" | "scrollY" | "initialResult">) => {
+    { depth, pushHistory, scrollY }: Pick<Intent, "depth" | "pushHistory" | "scrollY">) => {
     const now = Date.now();
     if (lock.current || now < retryAfter.current || mode === "background" && now - lastPassiveRead.current < 5_000) return;
     if (mode === "background") lastPassiveRead.current = now;
     lock.current = mode; setBusy(mode !== "background");
     if (mode !== "background") setFailed(null);
-    setIntent((current) => ({ query, mode, depth, pushHistory, scrollY, initialResult, revision: current.revision + 1 }));
+    setIntent((current) => ({ query, mode, depth, pushHistory, scrollY, revision: current.revision + 1 }));
   }, []);
   const cancel = useCallback(() => {
     pending.current?.abort(); pending.current = null; lock.current = null; restoreScroll.current = undefined;
@@ -253,21 +236,20 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
   }, [cancel, request]);
   useEffect(() => {
     const pathname = window.location.pathname;
-    function restore(state: Record<string, unknown> | null, seed?: Promise<SlipBrowsePage | null>) {
+    function restore(state: Record<string, unknown> | null) {
       let query: BestSlipsQuery;
       try { query = parseBestSlipsQuery(new URLSearchParams(window.location.search), initial.day); }
       catch { onAccessChanged(); return; }
       const position = historyPosition(state);
-      const initialResult = seed && initialRequest && sameSlipBrowseQuery(query, initialRequest.browse.query) ? seed : undefined;
-      cancel(); backgroundPage.current = null; request(query, "replace", { depth: 1, pushHistory: false, ...position, initialResult });
+      cancel(); backgroundPage.current = null; request(query, "replace", { depth: 1, pushHistory: false, ...position });
     }
     function onPopState(event: PopStateEvent) { if (window.location.pathname === pathname) restore(event.state); }
     const restoresWindow = historyPosition(window.history.state) && latest.current.length === 1;
-    if (restoresWindow) restore(window.history.state, initialResult);
+    if (restoresWindow) restore(window.history.state);
     if (initialRequest && !restoresWindow) {
       const current = latest.current[0]!;
       if (isUnverifiedSlipBrowseSeed(current) && sameSlipBrowseQuery(current.browse.query, initialRequest.browse.query)) {
-        request(initialRequest.browse.query, "refresh", { depth: 1, pushHistory: false, initialResult });
+        request(initialRequest.browse.query, "refresh", { depth: 1, pushHistory: false });
       }
     }
     const leaving = (event: MouseEvent) => {
@@ -281,7 +263,7 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
       document.removeEventListener("click", leaving, true);
       window.removeEventListener("popstate", onPopState);
     };
-  }, [cancel, initial.day, initialRequest, initialResult, onAccessChanged, request]);
+  }, [cancel, initial.day, initialRequest, onAccessChanged, request]);
   const showMore = () => {
     const query = nextSlipPageQuery(latest.current.at(-1)!);
     if (!query) return;

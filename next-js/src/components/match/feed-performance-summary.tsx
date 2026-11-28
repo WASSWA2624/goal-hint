@@ -33,9 +33,12 @@ function summaryLabels({ query, data }: SummaryLabels) {
 const ignoreResult = () => {};
 
 /** Render the actual heading and all outcome labels in the first HTML, with unknown values. */
-export function FeedPerformancePlaceholder(props: SummaryLabels) {
-  return <LoadingTheme><PerformanceSummary counts={null} locale={props.query.locale} kind="matches" {...summaryLabels(props)}
-    showCoverage={false} compactHeader activeResult={props.query.result} onResult={ignoreResult} onOthers={ignoreResult} disabled loading="background" /></LoadingTheme>;
+export function FeedPerformancePlaceholder(props: SummaryLabels & { counts?: FeedPerformanceReply["performance"] | undefined }) {
+  const { counts } = props;
+  return <LoadingTheme><div data-feed-performance-state={counts ? "ready" : "loading"} data-feed-performance-deferred={!counts || undefined}>
+    <PerformanceSummary counts={counts ? { ...counts, cancelled: counts.cancelled ?? 0 } : null} locale={props.query.locale} kind="matches" {...summaryLabels(props)}
+      showCoverage={false} compactHeader activeResult={props.query.result} onResult={ignoreResult} onOthers={ignoreResult} disabled loading={!counts && "background"} />
+  </div></LoadingTheme>;
 }
 
 type Reply = { key: string; scope: string; attempt: number; refreshAfter: number;
@@ -69,7 +72,8 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
   const href = feedPerformanceApiHref(query, today);
   const publicCohort = !usesPremiumFeedOracle(performanceFeedQuery(query));
   const empty = useMemo(() => emptyFeedPerformanceReply(query, data), [data, query]);
-  const seed = empty ? { href, reply: empty } : retainedFeedPerformance(confirmed, href, data, publicCohort) ?? (initial ? use(initial) : null);
+  const seed: FeedPerformanceSeed | null = empty ? { href, reply: empty }
+    : retainedFeedPerformance(confirmed, href, data, publicCohort) ?? (initial ? use(initial) : null);
   const dispatch = useAppDispatch(), messages = createMessages(query.locale);
   const [attempt, retry] = useState({ number: 0, foreground: false });
   const [releasedRetry, setReleasedRetry] = useState(0);
@@ -87,9 +91,12 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
         error: seed.failure?.code ?? "unavailable", retryAt, withinRetryBudget: retryAt - data.asOf <= refreshIntervalMs };
     }
     try {
-      const checked = checkedFeedPerformance(seed.reply, data, seed.observed ? { requestedHref: seed.href, currentHref: href, publicCohort } : undefined);
+      const early = seed.early && publicCohort;
+      const checked = checkedFeedPerformance(seed.reply, data, early || seed.observed
+        ? { requestedHref: seed.href, currentHref: href, publicCohort, early: early === true } : undefined);
       return { key, scope, attempt: attempt.number, summary: checked, observed: seed.observed,
-        refreshAfter: checked.asOf + refreshIntervalMs, error: null, retryAt: 0, withinRetryBudget: false };
+        refreshAfter: early && checked.paginationVersion !== data.performanceVersion ? data.asOf : checked.asOf + refreshIntervalMs,
+        error: null, retryAt: 0, withinRetryBudget: false };
     } catch {
       return null;
     }

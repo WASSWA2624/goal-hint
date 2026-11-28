@@ -9,7 +9,8 @@ import { feedFixture, summaryFixture } from "../feed-fixture";
 
 const instant = async () => utcInstantFromEpochMilliseconds(Date.now());
 const summaryGenerationCookie = "synthetic-summary-generation";
-const route = createFeedRoute({
+const earlySummaryCookie = "synthetic-early-summary";
+const options = {
   instant, browserDocument: isBrowserDocumentRequest,
   policy: () => ({ deployment: "production", index: true }),
   resolveAccess: async () => ({ tier: (await cookies()).has(summaryGenerationCookie) ? "free" : "full", signedIn: false, mode: "off" }),
@@ -27,17 +28,22 @@ const route = createFeedRoute({
       ? { ...feed, performanceVersion: generation.repeat(64), performanceScope: "1".repeat(64) } : feed;
   },
   readSummary: async (parameters) => {
-    await new Promise(resolve => setTimeout(resolve, 6_000));
+    const early = (await cookies()).has(earlySummaryCookie);
+    await new Promise(resolve => setTimeout(resolve, early ? 120 : 6_000));
     return summaryFixture(parseFeedQuery(parameters, { today: getReportingDate(await instant()) }));
   },
-});
+} satisfies NonNullable<Parameters<typeof createFeedRoute>[0]>;
+const route = createFeedRoute(options);
+const parallelRoute = createFeedRoute({ ...options, earlyBrowserSummary: true });
+const selectedRoute = async () => (await cookies()).has(earlySummaryCookie) ? parallelRoute : route;
 
 const params = Promise.resolve({ locale: "en" });
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 export async function generateMetadata({ searchParams }: Props) {
-  return route.generateMetadata({ params, searchParams });
+  return (await selectedRoute()).generateMetadata({ params, searchParams });
 }
 
 export default async function Page({ searchParams }: Props) {
-  return <PersistentAppShell locale="en" asOf={await instant()}>{await route.Page({ params, searchParams })}</PersistentAppShell>;
+  const current = await selectedRoute();
+  return <PersistentAppShell locale="en" asOf={await instant()}>{await current.Page({ params, searchParams })}</PersistentAppShell>;
 }

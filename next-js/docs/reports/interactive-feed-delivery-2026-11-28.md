@@ -112,3 +112,9 @@ Production then activated the identical artifact and passed the provisional desk
 | Best Slips append, 20 to 30 | 5.33 s | |
 
 Both production profiles finished the available checks. The updated path completes bounded order changes in one request. First loads and individual appends still vary with live data and request timings.
+
+### Initial Matches cards and Best Slips navigation
+
+A later control run on `fdf14c3b` showed cold Matches cards at 12.93 seconds and in-app Best Slips rows at 5.62 seconds. The previous run on that same build showed 17.09 and 20.16 seconds respectively. The application traces also showed that the Matches list could spend several seconds recovering historical odds after the independent count request completed.
+
+Matches now uses a separate streamed boundary in the homepage loading shell for the verified period audit. The settled view can reuse that response after checking the date, filters, viewer, scope and generation. A briefly older exact public audit stays visible while it revalidates. The production-mode fixture delivered counts at 175 ms and held the list until 1.90 seconds. The Chrome fixture separately verified both themes with no second aggregate request. Best Slips now commits its controls using the navigation response and requests the viewer-gated archive separately, once. Native document visits still stream the archive and retain the recovery path.
