@@ -506,7 +506,9 @@ export async function verifyBestSlipsContinuation(page, origin) {
       "A live settlement rebases in one request with unique rows and fresh counts");
       const settledMs = Math.round(performance.now() - settledAt);
       await page.context().clearCookies({ name: cookie });
-      await page.reload();
+      // Use a new history entry so this case begins with one displayed page.
+      await page.goto(origin);
+      await page.goto(origin + "/en/best-slips");
       await load.waitFor();
       await epoch("shrink");
       const shrunk = await readWindow(2);
