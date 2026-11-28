@@ -210,6 +210,25 @@ test('checked continuation above the window budget requests the stable page with
     error => error.code === 'changed');
 });
 
+test('an older server can reject the rebase option and still receive one legacy checked continuation under the same deadline', async t => {
+  const applied = query('pageSize=2'), prefix = { firstPage: 1, hash: 'a'.repeat(64) }, attempts = [];
+  const fetch = t.mock.method(globalThis, 'fetch', async (href, options) => {
+    const search = new URL(href, 'https://unit.test').searchParams;
+    attempts.push({ search, signal: options.signal });
+    if (search.has('rebase')) return Response.json({ error: { code: 'invalid-query' } }, { status: 400 });
+    return Response.json({ prefix: prefix.hash, page: page(2, ['c', 'd']) });
+  });
+  assert.equal((await readRefreshFeedContinuation(applied, today, 2, prefix, new AbortController().signal)).page.page, 2);
+  assert.equal(attempts.length, 2);
+  assert.equal(attempts[0].search.get('rebase'), '1');
+  attempts[0].search.delete('rebase');
+  assert.deepEqual([...attempts[0].search], [...attempts[1].search]);
+  assert.equal(attempts[0].signal, attempts[1].signal);
+  fetch.mock.mockImplementation(async () => new Response(null, { status: 409 }));
+  await assert.rejects(readRefreshFeedContinuation(applied, today, 2, prefix, new AbortController().signal), error => error.code === 'changed');
+  assert.equal(fetch.mock.callCount(), 3);
+});
+
 test('an atomic continuation accepts a complete pinned generation or verified real end only', () => {
   const applied = query('pageSize=2');
   const first = page(2, ['a', 'b'], otherVersion), second = page(3, ['c', 'd'], otherVersion);

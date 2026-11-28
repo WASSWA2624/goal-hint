@@ -16,13 +16,14 @@ function readFailure(response: Response) {
 }
 
 export async function readJson(href: string, signal: AbortSignal, timeoutMs: number = liveRefreshRules.timeoutMs,
-  maximumBytes: number = matchFeedRules.maximumResponseBytes): Promise<unknown> {
+  maximumBytes: number = matchFeedRules.maximumResponseBytes, badRequestFallbackHref?: string): Promise<unknown> {
   const controller = new AbortController();
   const canceled = () => controller.abort(signal.reason), clearDeadline = startRequestDeadline(controller, timeoutMs);
   if (signal.aborted) canceled(); else signal.addEventListener("abort", canceled, { once: true });
   try {
-    const response = await fetch(href, { signal: controller.signal,
-      cache: "no-store", credentials: "same-origin" });
+    const options: RequestInit = { signal: controller.signal, cache: "no-store", credentials: "same-origin" };
+    const initial = await fetch(href, options);
+    const response = initial.status === 400 && badRequestFallbackHref ? await fetch(badRequestFallbackHref, options) : initial;
     if (!response.ok) throw readFailure(response);
     const text = await response.text();
     // A UTF-16 code unit encodes to at most 3 UTF-8 bytes, so only a possibly oversized body is encoded.

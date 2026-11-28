@@ -9,9 +9,9 @@ import { failure, publicRefreshApi, readJson } from "./refresh-base.ts";
 
 export { consumeRefresh } from "./refresh-base.ts";
 
-async function readFeedJson(href: string, signal: AbortSignal, timeoutMs?: number, maximumBytes?: number) {
+async function readFeedJson(href: string, signal: AbortSignal, timeoutMs?: number, maximumBytes?: number, badRequestFallbackHref?: string) {
   try {
-    return await readJson(href, signal, timeoutMs, maximumBytes);
+    return await readJson(href, signal, timeoutMs, maximumBytes, badRequestFallbackHref);
   } catch (error) {
     signal.throwIfAborted();
     if (error instanceof FeedPaginationError) throw error;
@@ -34,8 +34,10 @@ export async function readRefreshFeedWindow(query: FeedQuery, today: ReportingDa
 export async function readRefreshFeedContinuation(query: FeedQuery, today: ReportingDate, page: number, prefix: FeedContinuationPrefix,
   signal: AbortSignal, timeoutMs?: number): Promise<FeedContinuationResult<MatchFeedResponse>> {
   const rebase = supportsFeedWindow(prefix.firstPage, page, query.pageSize);
+  // A client can still have the new script after the server rolls back.
+  const fallback = rebase ? feedContinuationApiHref(query, today, page, prefix, false) : undefined;
   const result = await readFeedJson(feedContinuationApiHref(query, today, page, prefix, rebase), signal,
-    timeoutMs, rebase ? maximumFeedWindowBytes : undefined);
+    timeoutMs, rebase ? maximumFeedWindowBytes : undefined, fallback);
   if (!result || typeof result !== "object" || Object.keys(result).length !== 2 || !("prefix" in result)
     || result.prefix !== prefix.hash) throw new FeedPaginationError("invalid-response");
   if ("page" in result) return { page: checkedFeedPage(result.page, query, today, page) };
