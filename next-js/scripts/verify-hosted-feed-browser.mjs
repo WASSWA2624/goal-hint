@@ -6,6 +6,7 @@ const matches = "/en/matches";
 const bestSlips = "/en/best-slips";
 const navigationTimeout = 15_000;
 const phaseTimeout = 30_000;
+const initialListRecoveryTimeout = 45_000;
 const totalTimeout = 115_000;
 
 class ReadinessError extends Error {}
@@ -28,6 +29,8 @@ function feedState({ pathname, phase, staging, diagnose = false }) {
   if (isMatches) {
     if (shown(shell, "[data-feed-list-recovery]")) return { failure: "matches-list-recovery" };
     if (shown(shell, "[data-feed-navigation-retry]")) return { failure: "matches-list-navigation-retry" };
+    if (shown(shell, '[data-feed-initial-retry="true"][aria-busy="true"]'))
+      return diagnose ? { pending: "matches-list-recovery-deadline" } : false;
     const failedSummary = phase === "summary"
       && shown(shell, '[data-feed-performance-state="unavailable"], [data-feed-performance-state="stale"]');
     if (failedSummary) return diagnose ? { failure: "matches-summary-unavailable" } : false;
@@ -46,7 +49,8 @@ function feedState({ pathname, phase, staging, diagnose = false }) {
     const description = headingNodes.find(heading => heading.textContent.trim() === title)?.nextElementSibling;
     return visible(description) ? description.textContent.trim() : "";
   };
-  const incompleteCoverage = isMatches && headings.includes("Fixture data unavailable");
+  const incompleteCoverage = isMatches && (region.getAttribute("data-feed-list-state") === "data-unavailable"
+    || headings.includes("Fixture data unavailable"));
   if (incompleteCoverage && (!staging || rows !== 0
     || describe("Fixture data unavailable") !== "Fixture coverage is incomplete or unavailable. Try again later."))
     return { failure: "matches-fixture-coverage-unavailable" };
@@ -77,15 +81,15 @@ function feedState({ pathname, phase, staging, diagnose = false }) {
   return { summary: "ready", counts };
 }
 
-function remaining(start) {
-  return Math.max(1, phaseTimeout - Math.round(performance.now() - start));
+function remaining(start, budget = phaseTimeout) {
+  return Math.max(1, budget - Math.round(performance.now() - start));
 }
 
-async function phaseState(page, pathname, phase, start, staging) {
+async function phaseState(page, pathname, phase, start, staging, budget = phaseTimeout) {
   const parameters = { pathname, phase, staging };
   let state;
   try {
-    state = await page.waitForFunction(feedState, parameters, { timeout: remaining(start) });
+    state = await page.waitForFunction(feedState, parameters, { timeout: remaining(start, budget) });
     const result = await state.jsonValue();
     requireReady(!result.failure, result.failure);
     return result;
@@ -93,6 +97,10 @@ async function phaseState(page, pathname, phase, start, staging) {
     if (cause?.name === "TimeoutError") {
       const result = await page.evaluate(feedState, { ...parameters, diagnose: true });
       requireReady(!result?.failure, result?.failure);
+      if (result?.list || result?.summary) return result;
+      if (result?.pending && phase === "list" && budget === phaseTimeout)
+        return phaseState(page, pathname, phase, start, staging, initialListRecoveryTimeout);
+      requireReady(!result?.pending, result?.pending);
     }
     throw cause;
   } finally { await state?.dispose(); }
@@ -139,7 +147,7 @@ async function qualify(page, origin, observations, state, name, pathname, open) 
   const list = await phaseState(page, pathname, "list", start, staging);
   const listMs = Math.round(performance.now() - start);
   state.phase = `${name}-summary`;
-  const summary = await phaseState(page, pathname, "summary", start, staging);
+  const summary = await phaseState(page, pathname, "summary", performance.now(), staging);
   const summaryMs = Math.round(performance.now() - start);
   if (list.list === "staging-zero-coverage" && !state.stagingCoverageChecked) {
     state.phase = `${name}-staging-coverage`;

@@ -129,7 +129,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
       {discovery.home && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(homeStructuredData()) }} />}
       {structured && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(structured) }} />}
       <MatchFeedPage query={query} today={today} result={result} access={{ tier, signedIn }} showAccount
-        providerOdds={providerOdds}
+        providerOdds={providerOdds} retryInitial={streaming && result.error === "unavailable"}
         {...(summary ? { summary } : {})} />
     </>;
   }

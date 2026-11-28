@@ -60,6 +60,10 @@ class HostedDeployTest(unittest.TestCase):
             self.assertIsNone(request(target, "/en/matches", "build-fixture", None, legacy_rollback=True))
             run.return_value.stdout = headers + matches + ready + b'<div data-feed-list-recovery="">' + marker + b"1.25"
             self.assertEqual(request(target, "/en/matches", "build-fixture", None), "Matches list unavailable")
+            run.return_value.stdout = headers + matches.replace(b"data-feed-match-results", b'data-feed-list-state="data-unavailable" data-feed-match-results') + ready + marker + b"1.25"
+            self.assertIsNone(request(target, "/en/matches", "build-fixture", None))
+            production = SimpleNamespace(host=target.host, environment="production")
+            self.assertEqual(request(production, "/en/matches", "build-fixture", None), "Matches fixture coverage unavailable")
             run.return_value.stdout = headers + matches + b"build-fixture" + marker + b"1.25"
             self.assertEqual(request(target, "/en/matches", "build-fixture", None), "Matches summary shell unavailable")
             run.return_value.stdout = b"HTTP/2 200\r\n\r\n" + matches + ready + marker + b"1.25"

@@ -28,20 +28,23 @@ type FeedScope = { scope: string; initial: FeedPageResult };
 type RecoveryWork = FeedScope & { controller: AbortController; automatic: boolean };
 
 /** Recover the failed applied query without blanking the shell or the last accepted list. */
-export function useFeedRecovery({ initial, query, today, access, suspended, recheckAccess }: {
+export function useFeedRecovery({ initial, query, today, access, suspended, retryInitial, recheckAccess }: {
   initial: FeedPageResult; query: FeedQuery; today: ReportingDate; access: MatchFeedResponse["access"];
-  suspended: boolean; recheckAccess: () => void;
+  suspended: boolean; retryInitial?: boolean; recheckAccess: () => void;
 }) {
   const href = feedQueryHref(query, today);
-  const scope = `${href}:${today}`;
+  const { signedIn, tier } = access;
+  const scope = `${href}:${today}:${tier}:${signedIn}`;
   const [accepted, setAccepted] = useState<(FeedScope & { result: FeedPageResult }) | null>(null);
   const [pending, setPending] = useState<RecoveryWork | null>(null);
+  const [automaticallyRetried, setAutomaticallyRetried] = useState<string | null>(null);
   const work = useRef<RecoveryWork | null>(null);
-  const autoRetried = useRef<string | null>(null);
   const result = accepted?.scope === scope && accepted.initial === initial ? accepted.result : initial;
   const offline = useSyncExternalStore(result.error ? subscribeConnection : staticConnection, result.error ? isOffline : initiallyOnline, initiallyOnline);
   const active = pending?.scope === scope && pending.initial === initial ? pending : null;
-  const { signedIn, tier } = access;
+  const triedAutomatically = automaticallyRetried === scope;
+  const initialRetryPending = retryInitial === true && result === initial && result.error === "unavailable" &&
+    !offline && !suspended && (!triedAutomatically || active?.automatic === true);
 
   const cancel = useCallback(() => {
     if (!work.current) return;
@@ -63,14 +66,12 @@ export function useFeedRecovery({ initial, query, today, access, suspended, rech
 
   const retry = useCallback(async (automatic = false) => {
     if (!result.error || suspended || work.current) return;
-    if (automatic) {
-      if (result.error !== "unavailable" || autoRetried.current === scope || isOffline() || document.visibilityState !== "visible") return;
-      autoRetried.current = scope;
-    }
+    if (automatic && (result.error !== "unavailable" || triedAutomatically || isOffline() || document.visibilityState !== "visible")) return;
     const controller = new AbortController();
     const operation = { scope, initial, controller, automatic };
     const currentUrl = browserHref();
     work.current = operation;
+    if (automatic) setAutomaticallyRetried(scope);
     setPending(operation);
     const canCommit = () => work.current === operation && currentUrl === browserHref();
     try {
@@ -87,19 +88,27 @@ export function useFeedRecovery({ initial, query, today, access, suspended, rech
     } finally {
       if (work.current === operation) { work.current = null; setPending(null); }
     }
-  }, [initial, query, recheckAccess, result.error, scope, signedIn, suspended, tier, today]);
+  }, [initial, query, recheckAccess, result.error, scope, signedIn, suspended, tier, today, triedAutomatically]);
 
   useEffect(() => {
-    if (suspended || result.error !== "unavailable") return;
+    if (suspended || triedAutomatically || result.error !== "unavailable") return;
     const once = () => { void retry(true); };
     const reconnect = (event: Event) => { if (event.isTrusted && navigator.onLine === true) once(); };
-    const timer = isOffline() ? undefined : window.setTimeout(once, transientRetryDelayMs);
+    const due = Date.now() + transientRetryDelayMs;
+    let timer: number;
+    const schedule = () => {
+      window.clearTimeout(timer);
+      if (!isOffline() && document.visibilityState === "visible") timer = window.setTimeout(once, Math.max(0, due - Date.now()));
+    };
+    schedule();
     window.addEventListener("online", reconnect);
+    document.addEventListener("visibilitychange", schedule);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("online", reconnect);
+      document.removeEventListener("visibilitychange", schedule);
     };
-  }, [result.error, retry, suspended]);
+  }, [result.error, retry, suspended, triedAutomatically]);
 
-  return { result, offline, retry, cancel, pending: active !== null, foreground: active?.automatic === false };
+  return { result, offline, retry, cancel, initialRetryPending, pending: active !== null, foreground: active?.automatic === false };
 }

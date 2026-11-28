@@ -305,8 +305,10 @@ binary through the native release process when the shell itself changes.
    application files and dependencies and creates a short-lived candidate for
    safe activation. The Playwright module is the operator's local JavaScript
    entry point. With that option the receiver checks both feeds in Chrome
-   before it records the release and removes the previous installation. A
-   rejection or missed deadline restores the previous release. The VPS needs
+   before it records the release and removes the previous installation. The
+   browser can wait for the Matches page's bounded initial retry when it is
+   visibly pending. Production still requires populated feeds with verified
+   counts. A rejection or missed deadline restores the previous release. The VPS needs
    no ordinary application build, npm install, browser or historical release copy.
 3. If the migration ledger reports pending migrations, review the SQL,
    required grants and compatibility with the current app. Handle required

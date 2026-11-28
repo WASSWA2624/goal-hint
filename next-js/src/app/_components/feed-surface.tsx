@@ -109,7 +109,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   const similarFrom = data.search && data.search.similar > 0 ? data.search.exact + 1 : null;
   return <FeedStack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={foreground} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
-    <MatchResults data-feed-match-results aria-busy={searchPending || foreground}>
+    <MatchResults data-feed-match-results data-feed-list-state={data.state} aria-busy={searchPending || foreground}>
       <ResultsToolbar query={query} today={today} total={data.total} first={first}
         last={first + records.length - 1} publishedAt={latestPredictionPublication(records)} />
       {data.state !== "ready" && data.state !== "insufficient-data" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
@@ -145,14 +145,14 @@ function searchAnnouncement(data: MatchFeedResponse, query: FeedQuery): string {
 }
 
 /** Successful server projections remain visible if a later navigation fails. */
-function FeedSurfaceContent({ query, today, result: initial, access, controls, pagination, showAccount = false, summary,
+function FeedSurfaceContent({ query, today, result: initial, access, controls, pagination, showAccount = false, summary, retryInitial = false,
   providerOdds = publicPolicy.features.providerOdds }: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; access: MatchFeedResponse["access"]; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean;
-  summary?: Promise<FeedPerformanceSeed>; providerOdds?: boolean;
+  summary?: Promise<FeedPerformanceSeed>; providerOdds?: boolean; retryInitial?: boolean;
 }) {
   const router = useRouter(), [transitionPending, startTransition] = useTransition();
   const refresh = useCallback(() => { router.refresh(); }, [router]);
-  const recovery = useFeedRecovery({ initial, query, today, access, suspended: transitionPending, recheckAccess: refresh });
+  const recovery = useFeedRecovery({ initial, query, today, access, suspended: transitionPending, retryInitial, recheckAccess: refresh });
   const { result, cancel: cancelRecovery } = recovery;
   const premiumOnly = access.tier === "free";
   const [navigation, setNavigation] = useState<{ href: string; overdue?: true } | null>(null);
@@ -219,7 +219,7 @@ function FeedSurfaceContent({ query, today, result: initial, access, controls, p
   const rateLimited = result.error === "rate-limited";
   const unavailableTitle = rateLimited ? "feed.rateLimitedTitle" : recovery.offline ? "feed.offlineTitle" : "feed.unavailableTitle";
   const unavailableDescription = rateLimited ? "feed.rateLimited" : recovery.offline ? "feed.offlineHint" : "feed.recoveryHint";
-  const announcement = pending || searchPending ? messages.text("feed.filters.loading") : recovery.foreground ? messages.text("feed.retrying")
+  const announcement = pending || searchPending || recovery.initialRetryPending ? messages.text("feed.filters.loading") : recovery.foreground ? messages.text("feed.retrying")
     : navigationFailure ?? searchFailure ?? (result.error
     ? messages.text(unavailableDescription)
     : paginationStatus?.href === displayedHref ? paginationStatus.message
@@ -238,12 +238,15 @@ function FeedSurfaceContent({ query, today, result: initial, access, controls, p
       </PerformanceSection>} /></LoadingTheme>
     {controls}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
-    <Results $gap="md" aria-busy={pending} data-feed-results>
+    <Results $gap="md" aria-busy={pending || recovery.initialRetryPending} data-feed-results
+      data-feed-initial-retry={recovery.initialRetryPending ? true : undefined}
+      data-navigation-passive={!pending && recovery.initialRetryPending ? true : undefined}>
       {retryHref && <FeedNote data-feed-navigation-retry>{navigationFailure}{" "}
         <TextLink href={retryHref} prefetch={false} onClick={event => plainClick(event, () => window.location.assign(retryHref))}>
           {messages.text("feed.retry")}</TextLink></FeedNote>}
       {!visible && <MatchResults><ResultsToolbar query={query} today={today} total={null} first={0} last={0} /></MatchResults>}
-      {result.error && <EmptyState data-feed-list-recovery title={messages.text(unavailableTitle)}
+      {recovery.initialRetryPending && <noscript><DocumentButtonLink href={href} variant="secondary">{messages.text("feed.retry")}</DocumentButtonLink></noscript>}
+      {result.error && !recovery.initialRetryPending && <EmptyState data-feed-list-recovery title={messages.text(unavailableTitle)}
         description={messages.text(unavailableDescription)} aria-busy={recovery.pending}
         data-navigation-passive={recovery.pending && !recovery.foreground ? true : undefined}
         action={<DocumentButtonLink href={href} variant="secondary" aria-disabled={recovery.pending || transitionPending}

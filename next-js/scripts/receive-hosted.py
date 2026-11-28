@@ -50,6 +50,7 @@ BROWSER_AGENT = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
 MATCHES_SHELL = rb'<[a-z][^>]*\sdata-app-navigation="matches"'
 MATCHES_LIST = rb'<[a-z][^>]*\sdata-feed-match-results(?=[=\s>])'
 MATCHES_RECOVERY = rb'<[a-z][^>]*\sdata-feed-list-recovery(?=[=\s>])'
+MATCHES_INCOMPLETE = rb'<[a-z][^>]*\sdata-feed-list-state="data-unavailable"'
 MATCHES_PERFORMANCE = rb'<[a-z][^>]*\sdata-feed-performance-state="(ready|loading)"[^>]*>'
 
 
@@ -369,6 +370,8 @@ def smoke_request(target, path, build, probe, *, legacy_rollback=False):
             return "Matches shell unavailable"
         if re.search(MATCHES_RECOVERY, body) or not re.search(MATCHES_LIST, body):
             return "Matches list unavailable"
+        if target.environment == "production" and re.search(MATCHES_INCOMPLETE, body):
+            return "Matches fixture coverage unavailable"
         performance = re.search(MATCHES_PERFORMANCE, body)
         if not performance or (performance[1] == b"loading" and
                 (legacy_rollback or b'data-feed-performance-deferred="true"' not in performance[0])):
