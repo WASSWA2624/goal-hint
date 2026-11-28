@@ -1,0 +1,11 @@
+[Unit]
+Description=Sample Goal Hint VPS observations every five minutes (%i)
+
+[Timer]
+OnCalendar=*-*-* *:00/5:00
+AccuracySec=1s
+RandomizedDelaySec=30s
+FixedRandomDelay=yes
+
+[Install]
+WantedBy=timers.target

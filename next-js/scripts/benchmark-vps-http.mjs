@@ -151,6 +151,7 @@ export async function runBenchmark({ origin, staging, workload }) {
     const results = Object.fromEntries(workloadRoutes.map(({ name }) => [name, []]));
     const total = perRoute * workloadRoutes.length;
     const active = new Set();
+    let peakInFlight = 0;
     for (let index = 0; index < total && !stopped; index++) {
       if (active.size >= concurrency) await Promise.race(active);
       const waitMs = Math.ceil(nextStart - performance.now());
@@ -174,11 +175,13 @@ export async function runBenchmark({ origin, staging, workload }) {
         }
       }).finally(() => active.delete(request));
       active.add(request);
+      peakInFlight = Math.max(peakInFlight, active.size);
     }
     await Promise.all(active);
     const durationMs = performance.now() - started;
     return {
       plannedRequests: total,
+      peakInFlight,
       durationMs: round(durationMs),
       total: summarize(Object.values(results).flat(), durationMs),
       routes: Object.fromEntries(Object.entries(results).map(([name, samples]) => [name, summarize(samples, durationMs)])),

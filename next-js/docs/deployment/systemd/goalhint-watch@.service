@@ -1,0 +1,27 @@
+[Unit]
+Description=Goal Hint private VPS observations (%i)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ghprod
+WorkingDirectory=/usr/local/lib/goalhint-watch/%i
+StateDirectory=goalhint-watch-%i
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/bin/python3 -E -s -B /usr/local/lib/goalhint-watch/%i/vps-watch.py --environment %i --state /var/lib/goalhint-watch-%i/observations.json --db-options /etc/goalhint-watch/%i.cnf
+TimeoutStartSec=60s
+TimeoutStopSec=5s
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectControlGroups=yes
+ProtectKernelTunables=yes
+PrivateTmp=yes
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=goalhint-watch-%i
+SyslogLevelPrefix=yes

@@ -42,6 +42,12 @@ monitoring interface is enabled. Synthetic test settings approve nothing live.
 
 ## VPS performance measurements
 
+The staging `goalhint-watch` timer records private HTTPS, database and queue
+samples in the existing system journal every five minutes. The HTTPS checks
+are synthetic. Host resource history continues through Munin and sysstat.
+New availability, latency and job incidents use local journal warnings.
+[Continuous monitor and access](deployment/vps-watch.md)
+
 Capture host and Apache status measurements privately using the operator SSH
 workflow. From an OpenSSH shell with the verified VPS key, send the collector
 through stdin so the application does not need a separate installation:
@@ -70,7 +76,8 @@ node scripts/benchmark-vps-http.mjs --origin https://test.goalhint.com --staging
   --route account-session --runs 12 --warmup 2 --concurrency 1 --interval-ms 750
 ```
 
-The JSON includes a workload fingerprint, TTFB, complete p50/p95/p99, errors
+The JSON includes a workload fingerprint, maximum observed in-flight requests,
+TTFB, complete p50/p95/p99, errors
 and achieved throughput. Small per-route sample sizes make upper percentiles
 equivalent to the maximum. Increase samples on an isolated target when
 qualifying the tail. Use HTTPS and Chrome smoke checks for response semantics.
