@@ -5,7 +5,7 @@ import type { SlipsBrowseResult } from "@/domain/best-slips";
 import { bestSlipsPageSearch, bestSlipsQueryRules, parseBestSlipsQuery, serializeBestSlipsQuery, type BestSlipsQuery } from "@/domain/best-slips-query";
 import { nextLoadedPage } from "@/domain/browse-period";
 import { startRequestDeadline } from "@/domain/request-deadline";
-import { appendSlipPage, canRetainSlipBrowseSeed, isSlipBrowseUnavailable, nextSlipPageQuery, observeSlipPage, sameSlipBrowseAccess,
+import { acceptsSlipBrowseAccess, appendSlipPage, canRetainSlipBrowseSeed, isSlipBrowseUnavailable, nextSlipPageQuery, observeSlipPage,
   sameSlipBrowseQuery, slipBrowseWindow, type SlipBrowsePage } from "@/domain/slip-browse-window";
 import { singleSlipPage } from "@/domain/slip-pagination";
 import { shareUnchanged } from "@/domain/structural-sharing";
@@ -94,7 +94,7 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
         || !sameSlipBrowseQuery(result.browse.query, query)) throw new Error("changed");
       if (result.day !== initial.day) { onAccessChanged(); throw new Error("changed"); }
       const current = latest.current[0]!;
-      if (!sameSlipBrowseAccess(current, result)) {
+      if (!acceptsSlipBrowseAccess(current, result)) {
         if (current.entitled && !result.entitled || current.access?.signedIn && !result.access?.signedIn) clearAccess(result.access?.signedIn ?? false);
         else onAccessChanged();
         throw new Error("access");

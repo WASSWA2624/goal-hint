@@ -118,6 +118,16 @@ The PageSpeed browser interface still returned “Unable to resolve” for the r
 
 The signed Android APK `1.0.0+8` matched the release digest. The API 36 emulator’s Flutter WebView showed the original production build in light and dark and rendered 50 of 1,079 pending fixtures. Counts settled at Won 21, Pending 1,079, Lost 3 and Others 28. Account navigation and Android Back preserved the list position and counts with 5 Mbps down, 1 Mbps up and 120 ms configured. The AVD lacked Android Chrome, automatic review also blocked its launch, and the three-button system bar overlapped the app dock. Candidate WebView, emulator offline recovery and physical-device behavior remain unverified.
 
+## Follow-up for delayed data
+
+Read-only receipt checks confirmed `b0b70301` on staging and `64aba48b` in production before the follow-up. The production bounded Today list and summary returned HTTP 200 in 2.80 and 5.03 seconds respectively. The earlier deployment check required ready summary counts in raw HTML. A populated Matches list can require a separate snapshot from the summary, and the browser can accept it only after the generation and viewer agree.
+
+Eligible browser Matches pages now compute route metadata before reading the stored feed. The shell streams, the accepted list can complete, and the browser fetches the separately validated summary in its existing space. A mismatch can trigger one quiet observation of an unappended list. Crawler responses, canonical redirects and access-dependent status paths retain their existing verification. Best Slips keeps the requested date, band and outcome while loading, then shows the archive or an in-place retry for that query. An unverified viewer receives no archived picks.
+
+The hosted gate checks the build, shell and accepted list, then requires ready summary markup or an explicit browser handoff. It validates the bounded Today list and summary JSON separately. With the Chrome option selected, the receiver keeps the previous installation until a browser verifies Matches, Best Slips and history against the candidate. The staging check allows only its confirmed limited-coverage state and configured absence of approved display odds. A failed or timed-out candidate browser check triggers rollback. [Hosted receiver](../../scripts/receive-hosted.py), [Chrome verifier](../../scripts/verify-hosted-feed-browser.mjs).
+
+In a production-mode fixture with a 1.8-second list delay and a separate 6-second server audit control, the browser document streamed its shell at 80 ms, accepted its list at 2.08 seconds and completed at 2.09 seconds. The same headerless crawler fixture completed its audit at 7.91 seconds and returned HTTP 500 on an injected list failure. Chrome 158 held the summary API until 37 Pending rows were visible. In light and dark at 390 and 1440 px, the header and first row stayed mounted and the summary height and list start moved by at most one pixel. Each run accepted the expected Won count of 10. An injected newer summary generation triggered one quiet list observation and reused the verified audit.
+
 ## Reproduction
 
 - Run the pinned runtime in `next-js/`. Run the focused tests for worker, account, administrator, Matches, Best Slips, sharing and request timing. Use the disposable MySQL test fixture for database runs.

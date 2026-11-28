@@ -3,7 +3,7 @@ import test from 'node:test';
 import { bestSlipsRangeKey, findBestSlipsSnapshot, projectBestSlipsSnapshot, rememberBestSlipsSnapshot } from '../src/domain/best-slips-client.ts';
 import { slipStatusCategory } from '../src/domain/slip-status.ts';
 import { slipPageSize } from '../src/domain/slip-pagination.ts';
-import { appendSlipPage, canRetainSlipBrowseSeed, nextSlipPageQuery, observeSlipPage, slipBrowseWindow } from '../src/domain/slip-browse-window.ts';
+import { acceptsSlipBrowseAccess, appendSlipPage, canRetainSlipBrowseSeed, emptySlipBrowsePage, nextSlipPageQuery, observeSlipPage, slipBrowseWindow } from '../src/domain/slip-browse-window.ts';
 
 const day = '2026-10-30';
 const query = (overrides = {}) => ({ period: 'today', status: 'all', page: 1, ...overrides });
@@ -86,6 +86,22 @@ test('a failed or late Best Slips seed keeps confirmed counts only for the same 
   const verified = { ...healthyZero, summary: { from: day, to: day, asOf: 101, statistics: healthyZero.statistics } };
   assert.deepEqual(slipBrowseWindow(observeSlipPage([failed], verified)).statistics,
     { total: 0, won: 0, lost: 0, pending: 0, void: 0, cancelled: 0 });
+});
+
+test('an empty unverified outage can recover on the first confirmed public or entitled HTTP projection', () => {
+  const failed = emptySlipBrowsePage(day, query(), 'data-unavailable');
+  const inaccessible = [failed];
+  const entitled = { ...page(daily(['won'])), access: { tier: 'full', signedIn: true } };
+  const publicPage = { ...page(daily([], false)), access: { tier: 'free', signedIn: false } };
+  assert.equal(failed.browse.total, null);
+  for (const confirmed of [entitled, publicPage]) {
+    assert.equal(acceptsSlipBrowseAccess(failed, confirmed), true);
+    assert.deepEqual(slipBrowseWindow(observeSlipPage(inaccessible, confirmed)), confirmed);
+  }
+  assert.equal(observeSlipPage(inaccessible, { ...entitled, access: undefined }), inaccessible);
+  assert.equal(observeSlipPage(inaccessible, { ...entitled, access: undefined, entitled: undefined }), inaccessible);
+  assert.equal(observeSlipPage(inaccessible, { ...entitled, access: { tier: 'free', signedIn: false } }), inaccessible);
+  assert.equal(acceptsSlipBrowseAccess(entitled, publicPage), false, 'an accepted private page still requires its access transition');
 });
 
 test('a complete daily cohort projects every status instantly while pending groups all unsettled progress', () => {

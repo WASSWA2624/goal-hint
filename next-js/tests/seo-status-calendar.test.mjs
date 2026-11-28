@@ -197,15 +197,56 @@ test('the default Today collection uses its indexable document recovery', async 
   await assert.rejects(feed().generateMetadata(props({})), failed);
 });
 
-test('browser streaming keeps the canonical failure in-page while a crawler gets the existing error', async () => {
+test('browser metadata uses only the canonical route, while a crawler reads the actual list for its status', async () => {
+  let listReads = 0, accessReads = 0;
   const browser = createFeedRoute({ browserDocument: async () => true, instant: async () => at,
-    read: unavailable, document: fullDocument, policy: indexing, resolveAccess: fullAccess });
+    read: async () => { listReads++; return unavailable(); }, document: fullDocument, policy: indexing,
+    resolveAccess: async () => { accessReads++; return fullAccess(); } });
+  const metadata = await browser.generateMetadata(props({}));
+  assert.equal(metadata.alternates.canonical, 'https://goalhint.com/en/matches');
+  assert.equal(metadata.robots.index, true);
+  assert.equal(listReads, 0);
+  assert.equal(accessReads, 0);
   const rendered = await browser.Page(props({}));
   assert.equal(rendered.type, Symbol.for('react.suspense'));
   const content = await rendered.props.children.type(rendered.props.children.props);
   assert.equal(view(content, 'MatchFeedPage').result.error, 'unavailable');
-  assert.equal((await browser.generateMetadata(props({}))).robots.index, false);
   await assert.rejects(feed().generateMetadata(props({})), failed);
+});
+
+test('browser HTML and client navigation reuse the verified list without awaiting a server audit', async () => {
+  for (const browsing of [{ browserDocument: async () => true, document: fullDocument }, { document: rscRequest }]) {
+    let summaryReads = 0;
+    const page = createFeedRoute({ ...browsing, instant: async () => at, policy: indexing,
+      resolveAccess: fullAccess, read: stored(12),
+      readSummary: async () => { summaryReads++; throw new Error('The browser owns this read.'); } });
+    const result = await page.Page(props({}));
+    const content = result.type === Symbol.for('react.suspense')
+      ? await result.props.children.type(result.props.children.props)
+      : result;
+    const rendered = view(content, 'MatchFeedPage');
+    assert.equal(rendered.result.error, null);
+    assert.equal(rendered.result.data.coverage.knownFixtures, 12);
+    assert.equal(rendered.summary, undefined);
+    assert.equal(summaryReads, 0);
+  }
+});
+
+test('validated public filters can stream while redirects and data-dependent status paths stay synchronous', async () => {
+  let listReads = 0;
+  const page = createFeedRoute({ browserDocument: async () => true, document: fullDocument, instant: async () => at, policy: indexing,
+    resolveAccess: fullAccess, read: async () => { listReads++; return stored(0)(); } });
+  const filtered = props({}, { country: 'England', when: 'last-7-days' });
+  assert.equal((await page.generateMetadata(filtered)).robots.index, false);
+  assert.equal((await page.Page(filtered)).type, Symbol.for('react.suspense'));
+  assert.equal(listReads, 0, 'The validated browser variant can render its shell without reading stored fixtures');
+  const malformed = props({}, { page: '0' });
+  const distant = props({}, { date: '2099-01-01', country: 'England' });
+  await assert.rejects(page.Page(malformed), missing);
+  await assert.rejects(page.Page(distant), missing);
+  await assert.rejects(page.Page(props({}, { status: 'live', when: 'yesterday' })), error => error.digest?.startsWith('NEXT_REDIRECT;'));
+  assert.notEqual((await page.Page(props({}, { picks: 'only' }))).type, Symbol.for('react.suspense'));
+  assert.notEqual((await page.Page(props({}, { page: '2' }))).type, Symbol.for('react.suspense'));
 });
 
 test('Matches and dated archives publish stable, distinct canonicals for each access tier', async () => {

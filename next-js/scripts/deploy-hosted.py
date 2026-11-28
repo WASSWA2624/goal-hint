@@ -11,12 +11,13 @@ import tempfile
 
 from lib.deployment import web_archive
 from lib.release_bundle import ReleaseBundle, ReleaseBundleError
-from lib.runtime import CommandError, ROOT, main_guard
+from lib.runtime import CommandError, ROOT, main_guard, node_binary
 
 
 VPS = "ghprod@104.207.86.22"
 PORT = 21098
 RECEIVER = ROOT / "scripts/receive-hosted.py"
+BROWSER_VERIFIER = ROOT / "scripts/verify-hosted-feed-browser.mjs"
 LOADER = 'import sys; s = sys.stdin.buffer; exec(compile(s.read(int(s.readline())), "receive-hosted.py", "exec"))'
 
 
@@ -57,6 +58,18 @@ def read_record(process):
     return response
 
 
+def verify_browser(options, build):
+    origin = "https://test.goalhint.com" if options.target == "staging" else "https://goalhint.com"
+    print(f"{options.target}: checking list and performance counts in Chrome.", flush=True)
+    try:
+        result = subprocess.run([node_binary(), str(BROWSER_VERIFIER), origin, build, str(options.playwright_module)],
+                                timeout=125, cwd=ROOT)
+        return result.returncode == 0
+    except (CommandError, OSError, subprocess.TimeoutExpired):
+        print("Chrome verification did not complete.", flush=True)
+        return False
+
+
 def deploy(options, bundle):
     receiver = RECEIVER.read_bytes()
     arguments = ["ssh", "-F", "none", "-T", "-p", str(options.port), "-o", "BatchMode=yes",
@@ -68,7 +81,8 @@ def deploy(options, bundle):
     remote = shlex.join(["python3", "-u", "-c", LOADER])
     request = {"target": options.target, "manifest": bundle.manifest, "preview": not options.apply,
                "migrationOptions": options.migration_options, "node": options.node,
-               "applyMigrations": options.apply_migrations, "prune": options.prune_release}
+               "applyMigrations": options.apply_migrations, "prune": options.prune_release,
+               "verifyBrowser": options.playwright_module is not None}
     with subprocess.Popen([*arguments, "--", options.ssh_host, remote], stdin=subprocess.PIPE,
                           stdout=subprocess.PIPE) as process:
         try:
@@ -90,6 +104,10 @@ def deploy(options, bundle):
                     process.stdin.flush()
                     print(f"Transferred {size:,} bytes for {len(plan['writes']):,} files.", flush=True)
                 result = read_record(process)
+                if result.get("verifyBrowser"):
+                    verified = options.playwright_module is not None and verify_browser(options, bundle.manifest["buildId"])
+                    record(process.stdin, {"browserVerified": verified})
+                    result = read_record(process)
                 print(f"Verified {result['commit']} (Next build {result['buildId']}). "
                       f"Remaining release directories: {', '.join(result['remaining']) or 'none'}.", flush=True)
             process.stdin.close()
@@ -116,6 +134,7 @@ def main():
     parser.add_argument("--known-hosts", type=Path, default=Path.home() / ".ssh/goalhint_hypernova_known_hosts")
     parser.add_argument("--node", default="/opt/node-v24.18.1-linux-x64/bin/node", help="absolute hosted Node path")
     parser.add_argument("--migration-options", help="absolute private MariaDB options path on the VPS")
+    parser.add_argument("--playwright-module", type=Path, help="verify the live candidate in Chrome before committing the cutover")
     parser.add_argument("--apply-migrations", action="store_true", help="confirm migration review and any required writer pause")
     parser.add_argument("--restore", action="store_true", help="restore an earlier commit reachable from the environment branches")
     parser.add_argument("--prune-release", action="append", default=[], help="specific audited obsolete release directory name")
@@ -124,6 +143,10 @@ def main():
         parser.error("--apply-migrations and --prune-release require --apply")
     if options.restore and options.apply_migrations:
         parser.error("--restore cannot apply migrations")
+    if options.playwright_module is not None:
+        options.playwright_module = options.playwright_module.resolve()
+        if not options.apply or not options.playwright_module.is_file() or not BROWSER_VERIFIER.is_file():
+            parser.error("--playwright-module requires --apply, a local Playwright module and the browser verifier")
     approved_commit(options.target, options.commit, options.restore)
     try:
         with ReleaseBundle(options.archive, commit=options.commit) as bundle:

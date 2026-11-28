@@ -296,16 +296,18 @@ binary through the native release process when the shell itself changes.
 
    ```sh
    python scripts/deploy-hosted.py staging --commit <full-sha>
-   python scripts/deploy-hosted.py staging --commit <full-sha> --apply
+   python scripts/deploy-hosted.py staging --commit <full-sha> --apply --playwright-module <absolute-module-path>
    ```
 
    Use `--archive <local-zip>` when using a nondefault local path. The tool
    serializes deployments with the environment's private release lock, verifies
    artifact contents and sends the required changes. It reuses unchanged
    application files and dependencies and creates a short-lived candidate for
-   safe activation. After switching and verifying Passenger, the tool removes
-   the replaced release. The VPS needs no ordinary application build, npm
-   install, stored release ZIP or historical release copy.
+   safe activation. The Playwright module is the operator's local JavaScript
+   entry point. With that option the receiver checks both feeds in Chrome
+   before it records the release and removes the previous installation. A
+   rejection or missed deadline restores the previous release. The VPS needs
+   no ordinary application build, npm install, browser or historical release copy.
 3. If the migration ledger reports pending migrations, review the SQL,
    required grants and compatibility with the current app. Handle required
    writer pauses, then add `--apply-migrations` to the intended apply command.
@@ -321,7 +323,7 @@ binary through the native release process when the shell itself changes.
 
    ```sh
    python scripts/deploy-hosted.py production --commit <full-sha>
-   python scripts/deploy-hosted.py production --commit <full-sha> --apply
+   python scripts/deploy-hosted.py production --commit <full-sha> --apply --playwright-module <absolute-module-path>
    ```
 
    Production requires the staging verification for that artifact and repeats

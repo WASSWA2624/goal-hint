@@ -17,15 +17,18 @@ const route = createFeedRoute({
     if (failure) throw new Error("Synthetic stored read failure");
     return feedFixture(parseFeedQuery(parameters, { today: getReportingDate(await instant()) }));
   },
-  readSummary: async (parameters) => summaryFixture(parseFeedQuery(parameters, { today: getReportingDate(await instant()) })),
+  readSummary: async (parameters) => {
+    await new Promise(resolve => setTimeout(resolve, 6_000));
+    return summaryFixture(parseFeedQuery(parameters, { today: getReportingDate(await instant()) }));
+  },
 });
 
 const params = Promise.resolve({ locale: "en" });
-const searchParams = Promise.resolve({});
-export async function generateMetadata() {
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+export async function generateMetadata({ searchParams }: Props) {
   return route.generateMetadata({ params, searchParams });
 }
 
-export default async function Page() {
+export default async function Page({ searchParams }: Props) {
   return <PersistentAppShell locale="en" asOf={await instant()}>{await route.Page({ params, searchParams })}</PersistentAppShell>;
 }

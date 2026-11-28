@@ -12,7 +12,7 @@ const modules = {
   '@/components/ui/visually-hidden': empty(['VisuallyHidden']),
   '@/components/ui/layout': empty(['Inline', 'Stack']),
   '@/server/slips/best-slips-browse': 'export const readBestSlipsBrowseSnapshot = async () => null;',
-  '@/server/slips/slip-preview': 'export const gateBestSlips = (value, viewer) => ({ ...value, entitled: viewer.tier === "full" });',
+  '@/server/slips/slip-preview': 'export const gateBestSlips = (value, viewer) => ({ ...value, entitled: viewer.tier === "full", access: { tier: viewer.tier, signedIn: viewer.signedIn } });',
   '@/components/admin/admin-shell': empty(['AdminShell']),
   '@/components/navigation/navigation-progress': empty(['AppLoading']),
   '@/styles/provider': empty(['FallbackStyleProvider', 'ServerThemeUntilHydrated']),
@@ -32,10 +32,11 @@ test('the dedicated Best Slips route streams its valid shell before access or da
   const route = createBestSlipsRoute({ access: async () => { calls.push('access'); return { tier: 'free', signedIn: false }; },
     read: async () => { calls.push('read'); return null; } });
   // Root and locale-home redirects are exercised by home-routes.test.mjs.
-  const shell = await route.Page(props());
+  const shell = await route.Page(props({ period: 'yesterday', oddsBand: '5-10', status: 'won' }));
   const boundary = shell.props.children[1];
   assert.equal(boundary.type, Symbol.for('react.suspense'));
   assert.equal(boundary.props.fallback.type.name, 'BestSlipsLoading');
+  assert.deepEqual(boundary.props.fallback.props.query, { period: 'yesterday', oddsBand: '5-10', status: 'won', page: 1 });
   assert.deepEqual(calls, [], 'The shell must not wait for viewer or slip reads.');
 });
 
@@ -52,6 +53,32 @@ test('Best Slips reads the published cohort once and projects it after the lates
   const slips = rendered.props.children.props.children[0];
   assert.equal(slips.props.result.entitled, false);
   assert.equal(slips.props.signedIn, true);
+});
+
+test('Best Slips keeps the original controls and an unknown total when the archive or access read fails', async () => {
+  const query = { period: 'yesterday', oddsBand: '5-10', status: 'won' };
+  const base = { day: '2026-11-03', searchLimited: false, partialCoverage: false };
+  for (const failure of ['stored-unavailable', 'read-rejected', 'access-rejected']) {
+    let accessChecks = 0;
+    const route = createBestSlipsRoute({ read: async () => {
+      if (failure === 'read-rejected') throw new Error('private storage detail');
+      if (failure === 'stored-unavailable') return { ...base, state: 'data-unavailable', slips: [] };
+      return { ...base, state: 'generated', slips: [{ id: 'private-pick' }] };
+    }, access: async () => { accessChecks++; throw new Error('private viewer detail'); } });
+    const shell = await route.Page(props(query));
+    const content = shell.props.children[1].props.children.props.children;
+    const rendered = await content.type(content.props);
+    const slips = rendered.props.children.props.children[0].props.result;
+    assert.equal(accessChecks, failure === 'access-rejected' ? 1 : 0);
+    assert.equal(slips.state, 'data-unavailable');
+    assert.equal(slips.statistics, null);
+    assert.equal(slips.browse.total, null);
+    assert.equal(slips.browse.hasMore, false);
+    assert.deepEqual(slips.browse.query, { ...query, page: 1 });
+    assert.deepEqual(slips.slips, []);
+    assert.equal(slips.entitled, undefined);
+    assert.equal(slips.access, undefined);
+  }
 });
 
 test('performance shell returns with both reports pending and each read settles independently', async () => {

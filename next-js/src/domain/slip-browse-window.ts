@@ -1,8 +1,15 @@
 import type { SlipsBrowseResult } from "./best-slips.ts";
-import { bestSlipsQueryRules, serializeBestSlipsQuery, type BestSlipsQuery } from "./best-slips-query.ts";
+import { bestSlipsQueryRules, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "./best-slips-query.ts";
+import type { ReportingDate } from "./calendar.ts";
 import { shareUnchanged } from "./structural-sharing.ts";
 
 export type SlipBrowsePage = SlipsBrowseResult & { browse: NonNullable<SlipsBrowseResult["browse"]> };
+
+export function emptySlipBrowsePage(day: ReportingDate, query: BestSlipsQuery, state: "data-unavailable" | "odds-unavailable"): SlipBrowsePage {
+  return { day, state, slips: [], searchLimited: false, partialCoverage: false, statistics: null,
+    browse: { query, total: state === "data-unavailable" || query.period === "all" ? null : 0, pageSize: bestSlipsQueryRules.pageSize,
+      hasMore: false, nextCursor: null, ...resolveBestSlipsDates(query, day) } };
+}
 
 export const slipViewKey = (view: SlipsBrowseResult["slips"][number]) => view.id ?? view.slip?.id ?? `${view.publicationDay}:${view.rank}`;
 
@@ -19,6 +26,16 @@ export function sameSlipBrowseAccess(left: SlipsBrowseResult, right: SlipsBrowse
 
 export function isSlipBrowseUnavailable({ state }: SlipsBrowseResult) {
   return state === "data-unavailable" || state === "rate-limited";
+}
+
+export function acceptsSlipBrowseAccess(current: SlipBrowsePage, incoming: SlipsBrowseResult) {
+  // An unavailable server seed without a viewer has no accepted private content to carry over.
+  if (!isSlipBrowseUnavailable(current) || current.access || current.entitled !== undefined || current.slips.length !== 0) {
+    return sameSlipBrowseAccess(current, incoming);
+  }
+  const access = incoming.access;
+  return (access?.tier === "full" || access?.tier === "free") && typeof access.signedIn === "boolean"
+    && incoming.entitled === (access.tier === "full");
 }
 
 export function sameSlipBrowseQuery(left: BestSlipsQuery, right: BestSlipsQuery) {
@@ -65,7 +82,7 @@ export function slipBrowseWindow(pages: readonly SlipBrowsePage[]): SlipBrowsePa
 export function observeSlipPage(pages: readonly SlipBrowsePage[], page: SlipBrowsePage): readonly SlipBrowsePage[] {
   const last = pages.at(-1)!;
   if (isSlipBrowseUnavailable(page) || !pages.some(previous => sameSlipBrowseQuery(previous.browse.query, page.browse.query))
-    || !sameSlipBrowseAccess(last, page) || page.day !== last.day
+    || !acceptsSlipBrowseAccess(last, page) || page.day !== last.day
     || !isSlipBrowseUnavailable(last) && (page.summary?.asOf ?? -Infinity) < (last.summary?.asOf ?? -Infinity)) return pages;
   if (pages.length === 1) return shareUnchanged(pages, [page]);
   const observed = new Map(page.slips.map((slip) => [slipViewKey(slip), slip]));

@@ -1,3 +1,85 @@
+/** Verify the clean browser route separately from the server-rendered crawler fixture. */
+export async function verifyBrowserMatches(page, origin) {
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  const summaryUrl = /\/api\/matches\/summary(?:\?|$)/u;
+  const listUrl = /\/api\/matches\?/u;
+  const results = [], errors = [];
+  const recordError = error => errors.push(error.message);
+  page.on('pageerror', recordError);
+  try {
+    await page.goto(origin);
+    for (const theme of ['light', 'dark']) for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
+      const updateGeneration = theme === 'dark' && width === 1440;
+      const generation = 'b'.repeat(64);
+      let releaseSummary, releaseList, summaryRequests = 0, listRequests = 0;
+      const summaryGate = new Promise(resolve => { releaseSummary = resolve; });
+      const listGate = new Promise(resolve => { releaseList = resolve; });
+      const delaySummary = async route => {
+        summaryRequests++;
+        await summaryGate;
+        if (!updateGeneration) return route.continue();
+        const response = await route.fetch();
+        const json = await response.json();
+        await route.fulfill({ response, json: { ...json, paginationVersion: generation } });
+      };
+      const refreshList = async route => {
+        listRequests++;
+        await listGate;
+        const response = await route.fetch();
+        const json = await response.json();
+        await route.fulfill({ response, json: { ...json, performanceVersion: generation } });
+      };
+      await page.route(summaryUrl, delaySummary);
+      if (updateGeneration) await page.route(listUrl, refreshList);
+      try {
+        await page.goto(`${origin}/browser-matches`, { waitUntil: 'commit' });
+        const progress = page.getByRole('progressbar', { name: /loading/i });
+        await progress.waitFor({ state: 'visible' });
+        assert(await page.locator('[data-feed-match-results]').count() === 0, 'The browser shell must precede the delayed list');
+        await page.evaluate(() => { window.fixtureHeader = document.querySelector('header'); });
+        const list = page.locator('[data-feed-match-results]'), summary = page.locator('[data-performance-summary="matches"]');
+        const deferred = page.locator('[data-feed-performance-deferred="true"]');
+        await list.waitFor();
+        await deferred.waitFor();
+        await progress.waitFor({ state: 'hidden' });
+        await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, theme);
+        await page.evaluate(() => document.fonts.ready);
+        assert(await list.locator('[data-fixture-id]').count() === 37, 'The accepted Pending rows must precede the audit');
+        assert(await summary.getAttribute('aria-busy') === 'true', 'The cards must indicate the separate read');
+        const before = await list.boundingBox();
+        const height = (await summary.boundingBox()).height;
+        await page.evaluate(() => { window.fixtureRow = document.querySelector('[data-fixture-id]'); });
+        const refreshing = updateGeneration && page.waitForRequest(request => listUrl.test(request.url()));
+        releaseSummary();
+        if (refreshing) {
+          await refreshing;
+          assert(await deferred.isVisible() && await progress.count() === 0, 'An unconfirmed generation must stay hidden during a quiet observation');
+          releaseList();
+        }
+        await page.locator('[data-feed-performance-state="ready"]').waitFor();
+        assert(await summary.locator('[data-summary-result="won"]').getAttribute('aria-label') === 'Won: 10', 'The cards must show the verified period counts');
+        assert(Math.abs((await summary.boundingBox()).height - height) < 1 && Math.abs((await list.boundingBox()).y - before.y) < 1,
+          'The resolved counts must preserve the list position and card height');
+        assert(await page.evaluate(() => window.fixtureHeader === document.querySelector('header')
+          && window.fixtureRow === document.querySelector('[data-fixture-id]')), 'The shell and first accepted row must stay mounted');
+        assert(summaryRequests === 1 && listRequests === Number(updateGeneration), 'The generation check must reuse the one verified audit');
+        results.push({ theme, width, summaryRequests, listRequests, summaryHeight: height });
+      } finally {
+        releaseSummary();
+        releaseList();
+        await page.unroute(summaryUrl, delaySummary);
+        if (updateGeneration) await page.unroute(listUrl, refreshList);
+      }
+    }
+    assert(errors.length === 0, errors.join('\n'));
+    return results;
+  } finally {
+    page.off('pageerror', recordError);
+  }
+}
+
 /** Run against verify-app-loading-rendering.py's isolated server using a Playwright page. */
 export async function verifyAppLoading(page, origin) {
   const failures = [], results = [];

@@ -31,17 +31,30 @@ def verify_matches_document(origin):
     status, healthy = stream(origin, "/browser-matches", browser)
     assert status == 200
     shell_at, shell = next((at, html) for at, html in healthy if "data-app-loading" in html)
-    list_at = next(at for at, html in healthy if "data-matches-feed" in html)
-    assert "data-matches-feed" not in shell
+    list_at = next(at for at, html in healthy if "data-feed-match-results" in html)
+    assert "data-feed-match-results" not in shell
     assert list_at >= 1.7 and list_at - shell_at > 1, (shell_at, list_at)
+    assert healthy[-1][0] < list_at + 2, (list_at, healthy[-1][0])
     assert 'rel="canonical" href="https://goalhint.com/en/matches"' in healthy[-1][1]
+    assert 'data-feed-performance-state="loading"' in healthy[-1][1]
+    assert 'data-feed-performance-deferred="true"' in healthy[-1][1]
+    assert 'data-feed-performance-state="ready"' not in healthy[-1][1]
+    status, filtered = stream(origin, "/browser-matches?country=England", browser)
+    assert status == 200 and "data-feed-match-results" in filtered[-1][1]
+    assert any("data-app-loading" in html and "data-feed-match-results" not in html for _, html in filtered)
+    assert 'content="noindex, follow"' in filtered[-1][1]
     status, outage = stream(origin, "/browser-matches", {**browser, **failure})
     assert status == 200 and "data-feed-list-recovery" in outage[-1][1]
     assert any("data-app-loading" in html and "data-feed-list-recovery" not in html for _, html in outage)
-    assert 'content="noindex, follow"' in outage[-1][1]
+    assert "data-feed-match-results" not in outage[-1][1]
+    status, crawler_healthy = stream(origin, "/browser-matches", crawler)
+    assert status == 200 and 'data-feed-performance-state="ready"' in crawler_healthy[-1][1]
+    assert crawler_healthy[-1][0] > list_at + 4, (list_at, crawler_healthy[-1][0])
     status, robot = stream(origin, "/browser-matches", {**crawler, **failure})
     assert status >= 500 and robot[0][0] >= 1.7, status
     return {"browser_shell_ms": round(shell_at * 1000), "browser_list_ms": round(list_at * 1000),
+        "browser_document_complete_ms": round(healthy[-1][0] * 1000),
+        "crawler_document_complete_ms": round(crawler_healthy[-1][0] * 1000),
         "crawler_outage_ms": round(robot[0][0] * 1000), "crawler_outage_status": status}
 
 

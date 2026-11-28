@@ -8,6 +8,7 @@ import os
 from pathlib import Path, PurePosixPath
 import pwd
 import re
+import select
 import shutil
 import signal
 import stat
@@ -39,17 +40,17 @@ REQUIRED = {"app.js", INFO, BUILD_ID, "standalone/server.js", "scripts/deploy-ma
 CACHE_DIRECTORIES = {"standalone/.next/cache", "standalone/.next/server/route-cache"}
 MATCHES_SMOKE_PATH = "/en/matches"
 TODAY_SMOKE_PATH = "/api/matches?when=today&pageSize=1"
+TODAY_SUMMARY_SMOKE_PATH = "/api/matches/summary?when=today"
 SMOKE_HEADER_SECONDS = 15
 MATCHES_BODY_SECONDS = 40
+BROWSER_VERIFICATION_SECONDS = 140
 FIRST_BYTE_MARKER = b"\n__goalhint_first_byte__="
 BROWSER_AGENT = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
                  "(KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36")
-MATCHES_MARKERS = (
-    rb'<[a-z][^>]*\sdata-app-navigation="matches"',
-    rb'<[a-z][^>]*\sdata-feed-match-results(?=[=\s>])',
-    rb'<[a-z][^>]*\sdata-feed-performance-state="ready"',
-)
+MATCHES_SHELL = rb'<[a-z][^>]*\sdata-app-navigation="matches"'
+MATCHES_LIST = rb'<[a-z][^>]*\sdata-feed-match-results(?=[=\s>])'
 MATCHES_RECOVERY = rb'<[a-z][^>]*\sdata-feed-list-recovery(?=[=\s>])'
+MATCHES_PERFORMANCE = rb'<[a-z][^>]*\sdata-feed-performance-state="(ready|loading)"[^>]*>'
 
 
 class DeploymentError(Exception):
@@ -292,13 +293,16 @@ def probe_name(manifest):
     return f"goalhint-release-{manifest['archiveSha256'][:32]}.txt"
 
 
-def healthy_today_feed(body, environment):
+def smoke_json(body):
     try:
         response = json.loads(body)
-    except (ValueError, UnicodeError):
-        return False
-    if not isinstance(response, dict):
-        return False
+    except ValueError:
+        return {}
+    return response if isinstance(response, dict) else {}
+
+
+def healthy_today_feed(body, environment):
+    response = smoke_json(body)
     state = response.get("state")
     records, dates, access = (response.get(key) for key in ("records", "range", "access"))
     total = response.get("total")
@@ -318,9 +322,22 @@ def healthy_today_feed(body, environment):
             and isinstance(coverage, dict) and coverage.get("knownFixtures") == 0 and coverage.get("partial") is True)
 
 
+def healthy_today_summary(body):
+    response = smoke_json(body)
+    performance = response.get("performance")
+    generation = response.get("paginationVersion")
+    if not (isinstance(performance, dict) and isinstance(generation, str) and HEX.fullmatch(generation)
+            and type(response.get("asOf")) is int and response["asOf"] > 0
+            and response.get("access") == {"tier": "free", "signedIn": False}):
+        return False
+    counts = [performance.get(name) for name in ("total", "won", "pending", "lost", "void", "unavailable")]
+    counts.append(performance.get("cancelled", 0))
+    return all(type(count) is int and count >= 0 for count in counts) and counts[0] == sum(counts[1:])
+
+
 def smoke_request(target, path, build, probe, *, legacy_rollback=False):
     document = path == MATCHES_SMOKE_PATH
-    budget = MATCHES_BODY_SECONDS if document else SMOKE_HEADER_SECONDS
+    budget = MATCHES_BODY_SECONDS if document or path == TODAY_SUMMARY_SMOKE_PATH else SMOKE_HEADER_SECONDS
     args = ["curl", "--silent", "--fail", "--noproxy", "*", "--max-time", str(budget), "--include",
             "--header", "Cache-Control: no-cache"]
     if document:
@@ -348,12 +365,20 @@ def smoke_request(target, path, build, probe, *, legacy_rollback=False):
             return "build identity mismatch"
         if target.environment == "staging" and not re.search(rb"(?im)^x-robots-tag:[^\r\n]*\bnoindex\b", headers):
             return "missing staging noindex"
-        if not all(re.search(marker, body) for marker in MATCHES_MARKERS) or re.search(MATCHES_RECOVERY, body):
-            return "Matches list or summary unavailable"
+        if not re.search(MATCHES_SHELL, body):
+            return "Matches shell unavailable"
+        if re.search(MATCHES_RECOVERY, body) or not re.search(MATCHES_LIST, body):
+            return "Matches list unavailable"
+        performance = re.search(MATCHES_PERFORMANCE, body)
+        if not performance or (performance[1] == b"loading" and
+                (legacy_rollback or b'data-feed-performance-deferred="true"' not in performance[0])):
+            return "Matches summary shell unavailable"
     if path.startswith("/api/") and not re.search(rb"(?im)^content-type:\s*application/json\b", headers):
         return "expected API JSON"
     if path == TODAY_SMOKE_PATH and not healthy_today_feed(body, target.environment):
         return "Today feed unavailable or invalid"
+    if path == TODAY_SUMMARY_SMOKE_PATH and not healthy_today_summary(body):
+        return "Today summary unavailable or invalid"
     return None
 
 
@@ -362,6 +387,8 @@ def smoke(target, release, manifest=None, *, legacy_rollback=False):
     require(re.fullmatch(r"[A-Za-z0-9_-]{6,128}", build), "Invalid Next build identity.")
     endpoints = [MATCHES_SMOKE_PATH, TODAY_SMOKE_PATH, "/api/account/session",
                  f"/_next/static/{build}/_buildManifest.js"]
+    if not legacy_rollback:
+        endpoints.insert(2, TODAY_SUMMARY_SMOKE_PATH)
     probe = f"/{probe_name(manifest)}" if manifest else None
     if probe:
         endpoints.append(probe)
@@ -375,6 +402,17 @@ def smoke(target, release, manifest=None, *, legacy_rollback=False):
         if attempt < 5:
             time.sleep(2)
     raise DeploymentError(f"HTTPS smoke failed on {target.environment} at {path} for Next build {build}: {failure}.")
+
+
+def require_browser_verification(options, stream):
+    if not options.get("verifyBrowser"):
+        return
+    send(ok=True, verifyBrowser=True)
+    ready, _, _ = select.select([stream], [], [], BROWSER_VERIFICATION_SECONDS)
+    require(bool(ready), "Hosted browser readiness verification timed out.")
+    confirmation = read_record(stream, 256)
+    require(set(confirmation) == {"browserVerified"} and confirmation["browserVerified"] is True,
+            "Hosted browser readiness verification failed.")
 
 
 def recover(target):
@@ -426,6 +464,7 @@ def install(target, current, manifest, files, writes, options, stream):
             stage_delta(stream, Path(directory), current, {}, set(), target.uid, target.gid)
         verify_schema(target, current, options, options["node"], manifest)
         smoke(target, current)
+        require_browser_verification(options, stream)
         return
     name = "live-" + manifest["archiveSha256"][:20]
     stage = target.releases / name
@@ -441,6 +480,7 @@ def install(target, current, manifest, files, writes, options, stream):
         verify_schema(target, stage, options, node, manifest)
         target.activate(stage)
         smoke(target, stage, manifest)
+        require_browser_verification(options, stream)
         (stage / "standalone/public" / probe_name(manifest)).unlink()
         write_json(stage / RECEIPT, manifest)
         target.remove(current)

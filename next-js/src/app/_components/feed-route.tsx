@@ -12,7 +12,7 @@ import { applyFeedPageDefaults, getFeedToday, isFeedDatePreset, serializeFeedQue
 import { feedQueryHref } from "@/domain/feed-query";
 import { emptyFeedPerformanceReply, feedPerformanceApiHref, performanceFeedQuery, type FeedPerformanceSeed } from "@/domain/feed-performance-summary";
 import { synchronizeFeedStatusDates } from "@/domain/feed-controls";
-import { withoutPremiumFeedOracle } from "@/domain/paywall";
+import { usesPremiumFeedOracle, withoutPremiumFeedOracle } from "@/domain/paywall";
 import { emptyArchiveIsMissing } from "@/domain/feed-date-navigation";
 import { resolveViewerAccess } from "@/server/members/viewer-access";
 import { contentAccess } from "@/server/members/gated-reads";
@@ -32,14 +32,32 @@ import { getShellInstant } from "./public-shell";
 type Props = { params: Promise<{ locale: string; date?: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-/** Metadata and initial HTML share the same stored read and request-owned clock. */
+/** Crawlers share the stored read between metadata and HTML. Browser metadata uses the route identity. */
 export function createFeedRoute({ dated = false, read = readPublicMatchFeedList, instant = getShellInstant, policy = getDiscoveryPolicy,
   resolveAccess = resolveViewerAccess, readSummary = readGatedFeedSummary, document = isDocumentRequest,
   browserDocument }: { dated?: boolean; read?: typeof readPublicMatchFeedList; instant?: typeof getShellInstant;
     policy?: typeof getDiscoveryPolicy; resolveAccess?: typeof resolveViewerAccess; readSummary?: typeof readGatedFeedSummary;
     document?: typeof isDocumentRequest; browserDocument?: typeof isDocumentRequest } = {}) {
-  const streamDocument = cache(async (searchParams: Props["searchParams"]) =>
-    !dated && !!browserDocument && Object.keys(await searchParams).length === 0 && await browserDocument());
+  const browser = cache(async () => browserDocument?.() ?? false);
+  const requestInstant = cache(instant);
+  const browserView = cache(async (params: Props["params"], searchParams: Props["searchParams"]) => {
+    if (dated || !await browser()) return null;
+    const [{ locale }, parameters, at] = await Promise.all([params, searchParams, requestInstant()]);
+    if (parameters.period !== undefined) return null;
+    const parsing = { locale, asOf: at, providerOdds: publicOddsEnabled() };
+    try {
+      const query = applyFeedPageDefaults(parseMatchFeedQuery(parameters, getReportingDate(at), parsing), parameters);
+      const today = getFeedToday(query, at), discovery = feedDiscovery(query, today);
+      if (usesPremiumFeedOracle(query) || emptyArchiveIsMissing(discovery.range, today, 0) || discovery.eligible && !discovery.home ||
+          feedQueryHref(synchronizeFeedStatusDates(query, today), today) !== feedQueryHref(query, today)) return null;
+      // The stored reader re-parses this exact bounded representation before reading.
+      parseMatchFeedQuery(serializeFeedQuery(query, today), getReportingDate(at), parsing);
+      return { query, today, discovery };
+    } catch (error) {
+      if (error instanceof MatchFeedError && error.code === "invalid-query") return null;
+      throw error;
+    }
+  });
   const load = cache(async (parameters: string, locale: string, at: UtcInstant, providerOdds: boolean) => {
     const query = parseMatchFeedQuery(new URLSearchParams(parameters), getReportingDate(at), { locale, asOf: at,
       providerOdds: providerOdds || (await contentAccess(resolveAccess)).tier === "free" });
@@ -48,7 +66,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
       result => result.error === "unavailable");
   });
   async function resolve({ params, searchParams }: Props, includeSummary = false, streaming = false) {
-    const route = await params, at = await instant(), access = await contentAccess(resolveAccess);
+    const route = await params, at = await requestInstant(), access = await contentAccess(resolveAccess);
     const providerOdds = publicOddsEnabled();
     let query, today, result, summary: Promise<FeedPerformanceSeed> | undefined;
     // The canonical re-parse inside load() also enforces the byte limit, so it must map to 404 too.
@@ -99,7 +117,10 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
     return { query, today, result, discovery, access, summary, providerOdds };
   }
   async function Content({ props, streaming }: { props: Props; streaming: boolean }) {
-    const { query, today, result, access, discovery, summary, providerOdds } = await resolve(props, true, streaming);
+    // Keep an optional audit out of browser HTML and route transitions. The
+    // accepted list supplies the snapshot against which the browser checks it.
+    const includeSummary = !await browser() && await document();
+    const { query, today, result, access, discovery, summary, providerOdds } = await resolve(props, includeSummary, streaming);
     const messages = createMessages(query.locale);
     const { tier, signedIn } = result.data?.access ?? access;
     const structured = !discovery.eligible || discovery.home ? null : breadcrumbStructuredData([{ name: publicPolicy.name, path: homeHref(query.locale) },
@@ -114,11 +135,13 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
   }
   return {
     async generateMetadata(props: Props) {
-      const { query, today, result, discovery } = await resolve(props, false, await streamDocument(props.searchParams));
+      const view = await browserView(props.params, props.searchParams);
+      if (view) return feedMetadata(view.query, view.today, null, policy(), view.discovery);
+      const { query, today, result, discovery } = await resolve(props);
       return feedMetadata(query, today, result, policy(), discovery);
     },
     async Page(props: Props) {
-      if (!await streamDocument(props.searchParams)) return Content({ props, streaming: false });
+      if (!await browserView(props.params, props.searchParams)) return Content({ props, streaming: false });
       return <Suspense fallback={<AppLoading />}><Content props={props} streaming /></Suspense>;
     },
   };

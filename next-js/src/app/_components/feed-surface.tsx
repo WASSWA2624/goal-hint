@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, memo, Suspense, useCallback, useEffect, useLayoutEffect, useState, useTransition, type ReactNode } from "react";
+import { Fragment, memo, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { FeedAppliedSummary, FeedNote } from "@/components/match/feed-controls";
@@ -74,11 +74,12 @@ type FeedObservation = { initial: MatchFeedResponse; data: MatchFeedResponse };
 
 /** Memoized with stable callbacks, so header and filter state changes skip the list. */
 const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, searchPending,
-  onStatus, onRollover, onObservation }: {
+  onStatus, onRollover, onObservation, bindSummaryRefresh }: {
   data: MatchFeedResponse; query: FeedQuery; today: ReportingDate; enabled: boolean;
   searchPending: boolean; onRollover: () => void;
   onObservation: (observation: FeedObservation) => void;
   onStatus: (href: string, message: string) => void;
+  bindSummaryRefresh: (refresh: () => Promise<void>) => () => void;
 }) {
   const messages = createMessages(query.locale, undefined, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone);
   const router = useRouter();
@@ -86,6 +87,10 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   const { view, phase, error, root, retry, refresh, refreshInPlace, showMore, appendError } = useFeedPagination({ data: initial, query, today, enabled: canRefresh, onStatus });
   const foreground = phase === "refresh" || phase === "restore";
   const { data, records } = view;
+  useEffect(() => {
+    // A single response cannot replace membership in an appended list.
+    if (canRefresh && view.pages === 1) return bindSummaryRefresh(refresh);
+  }, [bindSummaryRefresh, canRefresh, refresh, view.pages]);
   // Refresh the summary from the same list observation without remounting its controls.
   useLayoutEffect(() => {
     if (data !== initial) onObservation({ initial, data });
@@ -165,6 +170,12 @@ function FeedSurfaceContent({ query, today, result: initial, access, controls, p
   const [previous, setPrevious] = useState(result.data ? { query, today, data: result.data } : null);
   const [confirmed, setConfirmed] = useState<FeedPerformanceSeed | null>(null);
   const [observation, setObservation] = useState<FeedObservation | null>(null);
+  const summaryRefresh = useRef<(() => Promise<void>) | null>(null);
+  const bindSummaryRefresh = useCallback((refresh: () => Promise<void>) => {
+    summaryRefresh.current = refresh;
+    return () => { if (summaryRefresh.current === refresh) summaryRefresh.current = null; };
+  }, []);
+  const refreshSummaryGeneration = useCallback(() => summaryRefresh.current?.(), []);
   if (result.data && previous?.data !== result.data) setPrevious({ query, today, data: result.data });
   const visible = result.data ? { query, today, data: result.data } : result.error === "subscription-required" ? null : previous;
   const markets = usePublishedFeedMarkets(premiumOnly || visible?.data.access.tier !== "full");
@@ -222,7 +233,7 @@ function FeedSurfaceContent({ query, today, result: initial, access, controls, p
         <Suspense fallback={<FeedPerformancePlaceholder query={displayed.query} data={performanceData} />}>
           <ServerThemeUntilHydrated><FeedPerformanceSummary query={displayed.query} today={displayed.today} data={performanceData}
             enabled={enabled} onApply={applyPerformance} initial={accepted ? undefined : summary} confirmed={confirmed} onConfirmed={setConfirmed}
-            onAccessChanged={refresh} /></ServerThemeUntilHydrated>
+            onAccessChanged={refresh} onGenerationChanged={refreshSummaryGeneration} /></ServerThemeUntilHydrated>
         </Suspense>
       </PerformanceSection>} /></LoadingTheme>
     {controls}
@@ -245,7 +256,7 @@ function FeedSurfaceContent({ query, today, result: initial, access, controls, p
       {searchFailure && <FeedNote>{searchFailure}{" "}<TextButton onClick={() => onSearchSubmit(text)}>{messages.text("feed.retry")}</TextButton></FeedNote>}
       {displayed && visible && <FeedResults key={feedQueryHref(visible.query, visible.today) + ":" + resolveFeedDates(visible.query, visible.today).startDate + ":" + visible.data.access.tier + ":" + visible.data.access.signedIn}
         data={displayed.data} query={displayed.query} today={displayed.today} enabled={enabled} onStatus={onPaginationStatus}
-        searchPending={searchPending} onRollover={cancel} onObservation={setObservation} />}
+        searchPending={searchPending} onRollover={cancel} onObservation={setObservation} bindSummaryRefresh={bindSummaryRefresh} />}
       {!result.error && pagination}
     </Results>
   </FeedStack>;

@@ -25,16 +25,18 @@ export function pageMetadata({ title, description, path, index = false }: {
     twitter: { card: "summary_large_image", title, description, images: [{ url: image.url, alt: image.alt }] } };
 }
 
-export function feedMetadata(query: FeedQuery, today: ReportingDate, result: FeedPageResult, policy: DiscoveryPolicy = getDiscoveryPolicy(),
+export function feedMetadata(query: FeedQuery, today: ReportingDate, result: FeedPageResult | null, policy: DiscoveryPolicy = getDiscoveryPolicy(),
   discovery = feedDiscovery(query, today)): Metadata {
   const messages = createMessages(query.locale);
   const values = { date: messages.reportingDate(discovery.range.startDate), page: messages.number(query.page) };
   const rolling = discovery.matchesToday || query.dates.kind === defaultFeedDatePreset;
   const title = rolling ? messages.text("metadata.homeTitle") : messages.text("metadata.archiveTitle", values);
   const pageTitle = query.page === 1 ? title : messages.text("metadata.paginationTitle", { title: title.replace(/^Goal Hint \| | \| Goal Hint$/gu, ""), page: values.page });
-  // Keep the default feed landing page indexable on quiet days. Dated archives
-  // and later collection pages still need stored matches; failed reads stay noindex.
-  const populated = result.data !== null && (discovery.home || result.data.records.length > 0 && result.data.state !== "page-out-of-range");
+  // The clean browser document can supply stable home metadata before its list.
+  // Crawlers still supply the stored result. Dated and paginated collections
+  // need actual records to qualify, and failed crawler reads stay noindex.
+  const populated = result === null ? discovery.home : result.data !== null &&
+    (discovery.home || result.data.records.length > 0 && result.data.state !== "page-out-of-range");
   return pageMetadata({ title: pageTitle, description: rolling ? messages.text("metadata.description")
     : messages.text("metadata.archiveDescription", values), path: discovery.path, index: policy.index && discovery.eligible && populated });
 }

@@ -4,6 +4,7 @@ import type { BestSlipsResult } from "../../domain/best-slips.ts";
 import { bestSlipsQueryRules, parseBestSlipsQuery, resolveBestSlipsDates, serializeBestSlipsQuery, type BestSlipsQuery } from "../../domain/best-slips-query.ts";
 import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "../../domain/calendar.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
+import { emptySlipBrowsePage } from "../../domain/slip-browse-window.ts";
 import { getDatabase } from "../database/client.ts";
 import { timedRequestPhase } from "../http/request-timing.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
@@ -32,10 +33,7 @@ function createBestSlipsSnapshotReader({ read = readPublishedBestSlips, provider
   return async (input: BestSlipsQuery, locale = "en"): Promise<BestSlipsResult> => {
     const asOf = now(), day = getReportingDate(utcInstantFromEpochMilliseconds(asOf));
     const query = parseBestSlipsQuery(serializeBestSlipsQuery(input), day), dates = resolveBestSlipsDates(query, day);
-    const empty = { day, slips: [], searchLimited: false, partialCoverage: false, statistics: null,
-      browse: { query, total: query.period === "all" ? null : 0, pageSize: bestSlipsQueryRules.pageSize,
-        hasMore: false, nextCursor: null, ...dates } } as const;
-    if (!(providerOdds ?? publicOddsEnabled())) return { ...empty, state: "odds-unavailable" };
+    if (!(providerOdds ?? publicOddsEnabled())) return emptySlipBrowsePage(day, query, "odds-unavailable");
     try {
       // The browse reader aggregates the entire selected period before outcome
       // filtering and pagination. Reuse that snapshot for both list and summary.
@@ -45,7 +43,7 @@ function createBestSlipsSnapshotReader({ read = readPublishedBestSlips, provider
         ? "awaiting-publication" : result.state;
       return { ...result, state, summary: { asOf: result.summary?.asOf ?? asOf, ...dates, statistics: result.statistics ?? null } };
     }
-    catch { return { ...empty, state: "data-unavailable" }; }
+    catch { return emptySlipBrowsePage(day, query, "data-unavailable"); }
   };
 }
 

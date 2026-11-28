@@ -21,6 +21,7 @@ RELEASE_ONLY_PATHS = {
     "scripts/deploy-hosted.py", "scripts/deploy-mariadb.py", "scripts/deploy-worker-cpanel.py",
     "scripts/lib/deployment.py", "scripts/lib/release_bundle.py", "scripts/package-cpanel.py",
     "scripts/prune-hosted-workers.py", "scripts/receive-hosted.py", "scripts/sync-hosted-env.mjs",
+    "scripts/verify-hosted-feed-browser.mjs",
 }
 # The prior approved packager blob and its identical standalone recipe, for
 # releases built before BUILD_INFO recorded the recipe fingerprint.

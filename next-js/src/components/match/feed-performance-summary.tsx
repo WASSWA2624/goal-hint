@@ -4,7 +4,7 @@ import { use, useEffect, useMemo, useRef, useState } from "react";
 import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { TextButton } from "@/components/ui/controls";
 import { Stack } from "@/components/ui/layout";
-import { checkedFeedPerformance, emptyFeedPerformanceReply, feedPerformanceApiHref, performanceFeedQuery, retainedFeedPerformance, selectFeedSummaryResult, type FeedPerformanceSeed } from "@/domain/feed-performance-summary";
+import { checkedFeedPerformance, emptyFeedPerformanceReply, feedPerformanceApiHref, performanceFeedQuery, retainedFeedPerformance, selectFeedSummaryResult, type FeedPerformanceReply, type FeedPerformanceSeed } from "@/domain/feed-performance-summary";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { FeedPaginationError } from "@/domain/feed-pagination-error";
 import { getFeedToday, type FeedQuery } from "@/domain/feed-query";
@@ -41,11 +41,12 @@ type Reply = { key: string; scope: string; attempt: number; asOf: number; refres
 const refreshIntervalMs = 60_000;
 const automaticRetryDelayMs = 5_000;
 
-/** The initial audit streams from the server; later list polls retain the last confirmed figures. */
-export function FeedPerformanceSummary({ query, today, data, enabled, onApply, initial, confirmed, onConfirmed, onAccessChanged }: Presentation & {
+/** Browser audits load independently of the list and preserve confirmed figures during polling. */
+export function FeedPerformanceSummary({ query, today, data, enabled, onApply, initial, confirmed, onConfirmed, onAccessChanged, onGenerationChanged }: Presentation & {
   today: ReportingDate; enabled: boolean; onApply: (query: FeedQuery) => void; initial?: Promise<FeedPerformanceSeed> | undefined;
   confirmed?: FeedPerformanceSeed | null | undefined; onConfirmed?: ((seed: FeedPerformanceSeed | null) => void) | undefined;
   onAccessChanged?: (() => void) | undefined;
+  onGenerationChanged?: (() => Promise<void> | undefined) | undefined;
 }) {
   const href = feedPerformanceApiHref(query, today);
   const empty = useMemo(() => emptyFeedPerformanceReply(query, data), [data, query]);
@@ -54,6 +55,7 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
   const [attempt, retry] = useState({ number: 0, foreground: false });
   const [releasedRetry, setReleasedRetry] = useState(0);
   const retried = useRef<string | null>(null);
+  const pendingGeneration = useRef<{ scope: string; reply: FeedPerformanceReply } | null>(null);
   const scope = `${href}:${data.access.tier}:${data.access.signedIn}`;
   const key = `${scope}:${data.performanceVersion}`;
   const readSeed = (): Reply | null => {
@@ -129,13 +131,28 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
     const controller = new AbortController();
     const { query: currentQuery, today } = latest.current;
     const query = performanceFeedQuery(currentQuery);
-    const request = dispatch(refreshApi.endpoints.feedSummary.initiate({ query, today }, { forceRefetch: true }));
-    void consumeRefresh(request, controller.signal).then((value) => {
+    const queued = pendingGeneration.current;
+    if (queued?.scope !== scope) pendingGeneration.current = null;
+    const read = queued?.scope === scope && queued.reply.paginationVersion === latest.current.data.performanceVersion
+      ? Promise.resolve(queued.reply)
+      : consumeRefresh(dispatch(refreshApi.endpoints.feedSummary.initiate({ query, today }, { forceRefetch: true })), controller.signal);
+    void read.then(async (value) => {
       if (controller.signal.aborted) return;
       const { data } = latest.current;
       if (value.access.tier !== data.access.tier || value.access.signedIn !== data.access.signedIn)
         throw new FeedPaginationError("subscription-required");
+      // A newer audit can trigger one quiet list observation. It stays hidden
+      // until that observation confirms the same generation and viewer.
+      if (value.paginationVersion && value.paginationVersion !== data.performanceVersion && value.asOf >= data.asOf &&
+          !pendingGeneration.current && navigator.onLine && document.visibilityState === "visible") {
+        pendingGeneration.current = { scope, reply: value };
+        await onGenerationChanged?.();
+        if (controller.signal.aborted) return;
+        // The effect for the new list generation owns acceptance of this reply.
+        throw new FeedPaginationError("changed");
+      }
       const checked = checkedFeedPerformance(value, data);
+      pendingGeneration.current = null;
       retried.current = null;
       setReply(previous => {
         if (previous?.key === key && previous.counts && previous.asOf > checked.asOf) return { ...previous,
@@ -153,15 +170,16 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
         return { key, scope, attempt: attempt.number, asOf: retained?.asOf ?? latest.current.data.asOf,
           refreshAfter: Infinity, counts: retained?.counts ?? null, error: error.code, retryAt };
       });
-      if (accessChanged) { onConfirmed?.(null); onAccessChanged?.(); }
+      if (accessChanged) { pendingGeneration.current = null; onConfirmed?.(null); onAccessChanged?.(); }
     });
     return () => controller.abort();
-  }, [attempt, dispatch, key, needsRead, onAccessChanged, onConfirmed, scope]);
+  }, [attempt, dispatch, key, needsRead, onAccessChanged, onConfirmed, onGenerationChanged, scope]);
   const counts = empty?.performance ?? matchingScope?.counts ?? null;
   const failed = !empty && !loading && !counts && current?.error;
   const stale = !empty && Boolean(matchingScope?.counts && (matchingScope.error || matchingScope.key !== key));
   const summaryCounts = useMemo(() => counts ? { ...counts, cancelled: counts.cancelled ?? 0 } : null, [counts]);
-  return <Stack $gap="sm" data-feed-performance-state={loading ? "loading" : failed ? "unavailable" : stale ? "stale" : counts ? "ready" : "unknown"}>
+  return <Stack $gap="sm" data-feed-performance-state={loading ? "loading" : failed ? "unavailable" : stale ? "stale" : counts ? "ready" : "unknown"}
+    data-feed-performance-deferred={!initial && loading ? true : undefined}>
     <PerformanceSummary counts={summaryCounts} locale={query.locale} kind="matches"
       {...summaryLabels({ query, data })} activeResult={query.result} disabled={!enabled} loading={loading && (retrying || "background")}
       onResult={(result) => onApply(selectFeedSummaryResult(query, result))}
