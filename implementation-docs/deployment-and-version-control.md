@@ -26,6 +26,8 @@ The web reliability change ships the generated offline manifest with the matchin
 
 The browser gate also exercises an available **Show More** control on each feed. It checks for new unique rows in the same page within the existing phase and overall deadlines. A thin staging cohort can legitimately have no following page, so populated fixtures independently qualify both continuation paths. [Browser gate](../next-js/scripts/verify-hosted-feed-browser.mjs), [interactive delivery report](../next-js/docs/reports/interactive-feed-delivery-2026-11-28.md)
 
+On 28 November 2026, staging and production verified the same interactive feed commit `0588238e`, Next build `tPzLJ1CF6-qMgsifX6IwN` and all 95 required MariaDB migrations. Staging passed Chrome and its injected Best Slips failure test before promotion. Production passed the provisional Chrome gate, including populated feeds, counts, history and unique continuation results. The receiver committed the promotion, and the active receipts matched the release checksum on both targets. [Staging and production timings](../next-js/docs/reports/interactive-feed-delivery-2026-11-28.md#hosted-staging).
+
 [Local launcher](../next-js/scripts/development.py), [database target guards](../next-js/scripts/database.py), [VPS staging and production runbook](../next-js/docs/deployment/how-to-deploy.md#vps-staging-and-release-promotion), [Best Slips worker operations](../next-js/docs/daily-slip-publications.md).
 
 ## Git, checks and packaging
