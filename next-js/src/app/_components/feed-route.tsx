@@ -121,11 +121,16 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
     // accepted list supplies the snapshot against which the browser checks it.
     const includeSummary = !await browser() && await document();
     const { query, today, result, access, discovery, summary, providerOdds } = await resolve(props, includeSummary, streaming);
+    // Start the exact browser audit while the accepted list hydrates. The client
+    // consumes this request through its normal cohort and viewer checks.
+    const summaryHref = streaming && !result.error && result.data && result.data.state !== "data-unavailable"
+      && !emptyFeedPerformanceReply(query, result.data) ? feedPerformanceApiHref(query, today) : null;
     const messages = createMessages(query.locale);
     const { tier, signedIn } = result.data?.access ?? access;
     const structured = !discovery.eligible || discovery.home ? null : breadcrumbStructuredData([{ name: publicPolicy.name, path: homeHref(query.locale) },
       { name: dated ? messages.text("metadata.breadcrumbArchive", { date: messages.reportingDate(discovery.range.startDate) }) : messages.text("navigation.matches") }]);
     return <>
+      {summaryHref && <link rel="preload" as="fetch" href={summaryHref} crossOrigin="anonymous" />}
       {discovery.home && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(homeStructuredData()) }} />}
       {structured && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(structured) }} />}
       <MatchFeedPage query={query} today={today} result={result} access={{ tier, signedIn }} showAccount

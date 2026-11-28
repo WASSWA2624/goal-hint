@@ -43,6 +43,15 @@ def verify_matches_document(origin):
     assert status == 200 and "data-feed-match-results" in filtered[-1][1]
     assert any("data-app-loading" in html and "data-feed-match-results" not in html for _, html in filtered)
     assert 'content="noindex, follow"' in filtered[-1][1]
+    worker_browser = {
+        **browser, "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "same-origin", "Sec-Fetch-Site": "same-origin",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    status, worker = stream(origin, "/browser-matches?result=won&when=today&sort=live-first&picks=all", worker_browser)
+    assert status == 200
+    worker_shell_at = next(at for at, html in worker if "data-app-loading" in html)
+    worker_list_at = next(at for at, html in worker if "data-feed-match-results" in html)
+    assert worker_list_at >= 1.7 and worker_list_at - worker_shell_at > 1, (worker_shell_at, worker_list_at)
     status, outage = stream(origin, "/browser-matches", {**browser, **failure})
     assert status == 200 and 'data-feed-initial-retry="true"' in outage[-1][1]
     assert "data-feed-list-recovery" not in outage[-1][1]
@@ -55,6 +64,7 @@ def verify_matches_document(origin):
     assert status >= 500 and robot[0][0] >= 1.7, status
     return {"browser_shell_ms": round(shell_at * 1000), "browser_list_ms": round(list_at * 1000),
         "browser_document_complete_ms": round(healthy[-1][0] * 1000),
+        "worker_browser_shell_ms": round(worker_shell_at * 1000), "worker_browser_list_ms": round(worker_list_at * 1000),
         "crawler_document_complete_ms": round(crawler_healthy[-1][0] * 1000),
         "crawler_outage_ms": round(robot[0][0] * 1000), "crawler_outage_status": status}
 

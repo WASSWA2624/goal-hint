@@ -6,20 +6,32 @@ import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate }
 import { nextLoadedPage } from "@/domain/browse-period";
 import { restoredLiveFeedSearch } from "@/domain/feed-live-search";
 import type { FeedCheckpoint } from "@/domain/feed-navigation";
-import { appendFeedPage, applyServerFeedPage, FeedPaginationError, initialLoadedFeed, observeFeedPage, replaceFeedPages, type LoadedFeed } from "@/domain/feed-pagination";
+import { applyServerFeedPage, continueFeedPages, FeedPaginationError, initialLoadedFeed, observeFeedPage, replaceFeedPages, type LoadedFeed } from "@/domain/feed-pagination";
 import { feedQueryHref, feedQueryKey, type FeedQuery } from "@/domain/feed-query";
 import { feedRowNumber } from "@/domain/feed-presentation";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
-import { consumeRefresh, refreshApi } from "@/state/refresh-api";
+import { consumeRefresh, readRefreshFeedPage, refreshApi } from "@/state/refresh-api";
 import { useAppDispatch } from "@/state/hooks";
-import { acceptRun, feedRefreshInterval } from "@/domain/live-refresh";
+import { acceptRun, feedRefreshInterval, liveRefreshRules } from "@/domain/live-refresh";
+import { startRequestDeadline } from "@/domain/request-deadline";
 import { ensureFeedEntry, restoreFeedCheckpoint, saveFeedCheckpoint } from "./feed-restoration";
 
 type Mode = "append" | "refresh" | "restore" | "background";
 type FeedWork = { controller: AbortController; mode: Mode; completion?: Promise<void> };
 type Failure = { code: FeedPaginationError["code"]; mode: Exclude<Mode, "background"> };
 type FocusTarget = { fixtureId: string | null; checkpoint?: FeedCheckpoint; retry?: boolean };
+const continuationDeadlineMs = 40_000;
+
+function waitForContinuation(delayMs: number, signal: AbortSignal, deadlineAt: number) {
+  if (signal.aborted || Date.now() + delayMs >= deadlineAt) return Promise.resolve(false);
+  return new Promise<boolean>(resolve => {
+    const cancel = () => { window.clearTimeout(timer); resolve(false); };
+    const timer = window.setTimeout(() => { signal.removeEventListener("abort", cancel); resolve(true); }, delayMs);
+    signal.addEventListener("abort", cancel, { once: true });
+  });
+}
+
 export function useFeedPagination({ query, today, data, enabled, onStatus }: {
   query: FeedQuery; today: ReportingDate; data: MatchFeedResponse; enabled: boolean;
   onStatus: (href: string, message: string) => void;
@@ -88,12 +100,16 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     if (mode === "append" && base.data.nextPage === null) return;
     const controller = new AbortController(), work: FeedWork = { controller, mode };
     request.current = work;
-    const deadline = window.setTimeout(() => controller.abort(new DOMException("Refresh timed out.", "TimeoutError")), 30_000);
+    const budget = mode === "append" ? continuationDeadlineMs : liveRefreshRules.timeoutMs;
+    const deadlineAt = Date.now() + budget, clearDeadline = startRequestDeadline(controller, budget);
     if (mode !== "background") foreground(mode);
     const applied = queryRef.current;
     const fetchPage = async (page: number) => {
-      const observed = await consumeRefresh(dispatch(refreshApi.endpoints.feed.initiate({ query: applied, today, page },
-        { forceRefetch: true })), controller.signal);
+      controller.signal.throwIfAborted();
+      const observed = mode === "append"
+        ? await readRefreshFeedPage(applied, today, page, controller.signal, budget)
+        : await consumeRefresh(dispatch(refreshApi.endpoints.feed.initiate({ query: applied, today, page },
+          { forceRefetch: true })), controller.signal);
       if (observed.access.tier !== base.data.access.tier || observed.access.signedIn !== base.data.access.signedIn) {
         throw new FeedPaginationError("subscription-required");
       }
@@ -103,11 +119,8 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
       try {
         const current = viewRef.current;
         let next: LoadedFeed;
-        const nextPage = base.data.nextPage;
-        if (mode === "append" && !rebaseAppend && nextPage !== null) {
-          const page = await fetchPage(nextPage);
-          if (controller.signal.aborted || !mounted.current || !enabledRef.current) return;
-          next = appendFeedPage(viewRef.current, page);
+        if (mode === "append") {
+          next = await continueFeedPages(base, fetchPage, delay => waitForContinuation(delay, controller.signal, deadlineAt), rebaseAppend);
         } else if (mode === "background" && base.pages > 1) {
           backgroundPage.current = nextLoadedPage(backgroundPage.current, base.firstPage, base.lastPage);
           const page = await fetchPage(backgroundPage.current);
@@ -115,7 +128,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
           next = observeFeedPage(viewRef.current, page);
         } else {
           const firstPage = checkpoint?.firstPage ?? base.firstPage;
-          const lastPage = checkpoint?.lastPage ?? (rebaseAppend ? nextPage : null) ?? base.lastPage;
+          const lastPage = checkpoint?.lastPage ?? base.lastPage;
           const pages = [await fetchPage(firstPage)];
           for (let page = firstPage + 1; page <= lastPage && pages.at(-1)?.nextPage === page; page++) {
             pages.push(await fetchPage(page));
@@ -123,6 +136,8 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
           if (controller.signal.aborted || !mounted.current || !enabledRef.current) return;
           next = replaceFeedPages({ ...viewRef.current, firstPage }, pages);
         }
+        if (request.current !== work || controller.signal.aborted || !mounted.current || !enabledRef.current) return;
+        if (mode === "append" && viewRef.current !== base) throw new FeedPaginationError("changed");
         acceptRun(current.data.run, next.data.run, getReportingDate(utcInstantFromEpochMilliseconds(next.data.asOf)));
         restored.current = true; retryCheckpoint.current = null;
         if (checkpoint) focusTarget.current = { fixtureId: checkpoint.focusFixtureId, checkpoint };
@@ -135,7 +150,8 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
         } else if (checkpoint) announce(checkpoint.paginationVersion === next.data.paginationVersion ? "restored" : "refreshed", next);
         else if (work.mode === "refresh") announce("refreshed", next);
       } catch (cause) {
-        if (!mounted.current || !enabledRef.current || controller.signal.aborted && controller.signal.reason?.name !== "TimeoutError") return;
+        if (request.current !== work || !mounted.current || !enabledRef.current ||
+          controller.signal.aborted && controller.signal.reason?.name !== "TimeoutError") return;
         const code = cause instanceof FeedPaginationError ? cause.code : "unavailable";
         if (code === "subscription-required") { router.refresh(); return; }
         if (work.mode === "background") return;
@@ -143,7 +159,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
         if (checkpoint) focusTarget.current = { fixtureId: null, retry: true };
         announce(code === "changed" || code === "stale-data" ? "changed" : code === "rate-limited" ? "busy" : "failed");
       } finally {
-        clearTimeout(deadline);
+        clearDeadline();
         if (request.current === work) { request.current = null; if (mounted.current && work.mode !== "background") setPhase(null); }
       }
     })();

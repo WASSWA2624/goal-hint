@@ -182,6 +182,35 @@ test("an initial account failure leaves the directory and its retry target avail
   assert.equal(initial.initialAccountId, initial.accounts[0].id);
 });
 
+test("a stalled initial region preserves verified panes and their request targets", async () => {
+  const stalled = new Promise(() => {});
+  const detailId = id(105);
+  const directoryDelayed = {
+    transaction: () => stalled,
+    query: async operation => operation(detailClients()),
+  };
+  const explicit = await readUserWorkspace(directoryDelayed, emptyUserDirectoryQuery, 2, detailId, { deadlineMs: 20 });
+  assert.equal(explicit.initialRequestedPage, 2);
+  assert.match(explicit.initialDirectoryError, /could not be loaded/);
+  assert.equal(explicit.detail.id, detailId);
+  assert.equal(explicit.initialDetailError, undefined);
+  assert.equal(explicit.initialPlansError, undefined);
+
+  const detailDelayed = {
+    ...fixture().database,
+    query: async operation => operation({
+      ...detailClients(),
+      memberAccount: { findUnique: () => stalled },
+    }),
+  };
+  const initial = await readUserWorkspace(detailDelayed, emptyUserDirectoryQuery, 1, null, { deadlineMs: 20 });
+  assert.equal(initial.accounts.length, 100);
+  assert.equal(initial.initialAccountId, initial.accounts[0].id);
+  assert.equal(initial.initialDirectoryError, undefined);
+  assert.equal(initial.initialPlansError, undefined);
+  assert.match(initial.initialDetailError, /could not be loaded/);
+});
+
 test("the scoped detail read returns private no-store results and distinguishes missing records from storage failures", async () => {
   const { GET } = createUserHandlers();
   const get = (accountId, options) => GET({

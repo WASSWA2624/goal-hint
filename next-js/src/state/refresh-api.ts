@@ -7,6 +7,18 @@ import { failure, publicRefreshApi, readJson } from "./refresh-base.ts";
 
 export { consumeRefresh } from "./refresh-base.ts";
 
+/** Foreground continuations do not inherit the timeout of an in-flight passive poll. */
+export async function readRefreshFeedPage(query: FeedQuery, today: ReportingDate, page: number, signal: AbortSignal, timeoutMs?: number) {
+  // The browser already has filter options from its initial server read.
+  try {
+    return checkedFeedPage(await readJson(`${feedPageApiHref(query, today, page)}&leagues=0`, signal, timeoutMs), query, today, page);
+  } catch (error) {
+    signal.throwIfAborted();
+    if (error instanceof FeedPaginationError) throw error;
+    throw new FeedPaginationError("unavailable");
+  }
+}
+
 /** Feed-only endpoints share the base cache and do not enter the initial match-detail bundle. */
 export const refreshApi = publicRefreshApi.injectEndpoints({
   overrideExisting: process.env.NODE_ENV === "development",
@@ -25,8 +37,7 @@ export const refreshApi = publicRefreshApi.injectEndpoints({
     feed: build.query<MatchFeedResponse, { query: FeedQuery; today: ReportingDate; page: number }>({
       serializeQueryArgs: ({ queryArgs: { query, today, page } }) => feedPageApiHref(query, today, page),
       async queryFn({ query, today, page }, api) {
-        // Polls never read the filter options, so the server omits them (`leagues: []`).
-        try { return { data: checkedFeedPage(await readJson(`${feedPageApiHref(query, today, page)}&leagues=0`, api.signal), query, today, page) }; }
+        try { return { data: await readRefreshFeedPage(query, today, page, api.signal) }; }
         catch (cause) { return failure(cause); }
       },
     }),

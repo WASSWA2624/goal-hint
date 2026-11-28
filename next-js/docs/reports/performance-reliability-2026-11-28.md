@@ -210,6 +210,20 @@ Staging accepted the corrected commit `39b41e8828fa7239ba097b823001bd2a96bee7fc`
 
 Production then accepted the same checksummed archive through the standard promotion with its built-in migration and HTTPS checks. Optional production Chrome tests were skipped at the operator's request. Both databases verified all 95 migrations with zero pending. Production used its existing `ghprod_prod` database. A post-promotion server audit matched both receipts and found one active release per environment and both recovery journals clear.
 
+## Browser timeouts and admin recovery
+
+An installed Chrome service worker forwards Matches HTML navigations using same-origin Fetch Metadata. The previous classifier treated them as read-first documents. In production, a read-first Matches sample took 19.33 seconds to first byte, beyond the worker's 15-second deadline. A recognized browser sample opened in 1.04 seconds and finished streaming in 25.00 seconds. The classifier now accepts the forwarded HTML navigation signature. The production-mode fixture confirmed that the worker-controlled page streams its shell before the held list in light desktop and dark mobile, while a crawler read failure still returns HTTP 500.
+
+The bounded production Matches summary returned verified totals in 10.66 seconds, including 7.55 seconds in the application. Once the streamed page has an accepted nonempty cohort, it starts the exact summary request before client scripts finish. The same viewer and cohort checks govern its result. The summary cache now ignores unrelated worker-progress changes and still invalidates on source-date and catalog changes. A disposable MySQL instance verified that a progress-only update retained the cached response and that catalog, date and cycle changes invalidated it.
+
+The production database had 14 connected sessions, a recent peak of 20 against a maximum of 151, and zero connection-limit errors at the sample. The web configuration allows five connections per process. A bounded password queue read took 39 milliseconds including the client connection. Access logs recorded simultaneous admin read and public feed 503s. The available observations do not establish whether the web pool queued at those times.
+
+Password Requests now separates the verified queue and selected request, with independent retries and error messages. Users keeps completed workspace panes when another initial read stalls, and a Users render exception can recover inside the authorized shell. Isolated browser tests held and failed real fixture responses in light mobile and dark desktop, and verified recovery without replacing the document or revealing protected records after access was rejected. Production access logs did not identify the cause of the reported Users render exception.
+
+For the reported Today Pending **Show More** action, the bounded Apache sample contained 21 successful page-two reads and 15 HTTP 503s. One exact live page pair returned HTTP 200 in 15.35 and 8.28 seconds, but the data generation and total changed between reads. The continuation now has a shared 40-second budget, can retry one transient read and can reload the required pages once when the source changes. It publishes only a complete, coherent result for the same query and viewer.
+
+Best Slips now establishes its read snapshot before sampling archive time, so a newly committed append cannot appear newer than the clock sampled for its own snapshot. The browse path gives connections up to five seconds to become available and keeps a 30-second transaction execution limit. The timing record distinguishes acquisition from the archive snapshot phase. The publication suite reproduced the append timing race. Earlier production archive 503s did not identify a specific failure inside that phase.
+
 ## Reproduction
 
 - Run the pinned runtime in `next-js/`. Run the focused tests for worker, account, administrator, Matches, Best Slips, sharing and request timing. Use the disposable MySQL test fixture for database runs.

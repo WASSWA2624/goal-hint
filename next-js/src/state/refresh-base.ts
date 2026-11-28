@@ -8,7 +8,7 @@ export type RefreshError = { code: FeedPaginationError["code"]; retryAfterMs?: n
 
 function readFailure(response: Response) {
   const { status } = response;
-  const code = status === 401 || status === 403 ? "subscription-required" : status === 429 ? "rate-limited"
+  const code = status === 401 || status === 403 ? "subscription-required" : status === 409 ? "changed" : status === 429 ? "rate-limited"
     : status >= 500 || status === 408 ? "unavailable" : "invalid-response";
   const header = response.headers.get("retry-after");
   const delay = !header ? NaN : /^\d+$/u.test(header) ? Number(header) * 1_000 : Date.parse(header) - Date.now();

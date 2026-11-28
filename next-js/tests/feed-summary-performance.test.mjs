@@ -111,7 +111,8 @@ test('lean summaries retain exact feed counts, query filters, cohort versions an
   assert.equal(summaryResponse.status, 200);
   assert.equal((await listResponse.json()).performanceScope, (await summaryResponse.json()).performanceScope);
   assert.equal(summary.asOf, fullResult.asOf);
-  assert.deepEqual(descriptors[1].tags, descriptors[0].tags);
+  assert.ok(descriptors[0].tags.includes('global:progress'));
+  assert.deepEqual(descriptors[1].tags, descriptors[0].tags.filter((tag) => tag !== 'global:progress'));
   assert.equal(descriptors[1].deadlineAt, descriptors[0].deadlineAt);
   assert.equal(descriptors[1].lifetimeMs, descriptors[0].lifetimeMs);
   assert.notEqual(descriptors[1].key, descriptors[0].key, 'compact cached projections cannot replace full feed responses');
@@ -169,7 +170,7 @@ test('only the unfiltered public summary for the current reporting day receives 
   assert.equal(today.deadlineAt, Date.parse('2026-10-09T21:00:00Z'));
   assert.equal(today.key, date.key);
   assert.equal(today.lifetimeMs, date.lifetimeMs);
-  assert.deepEqual(today.tags, ['date:2026-10-09', 'global:catalog', 'global:progress']);
+  assert.deepEqual(today.tags, ['date:2026-10-09', 'global:catalog']);
   for (const query of ['date=2026-10-08', 'when=tomorrow', 'when=last-7-days', 'when=today&status=finished',
     'when=today&country=England', 'when=today&market=total-goals', 'when=today&prob=20-90',
     'when=today&odds=2.00-3.00', 'when=today&tz=Africa%2FKampala']) {

@@ -3,6 +3,7 @@ export async function verifyBrowserMatches(page, origin) {
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   const summaryUrl = /\/api\/matches\/summary(?:\?|$)/u;
   const listUrl = /\/api\/matches\?/u;
+  const appScript = url => url.origin === origin && url.pathname.startsWith('/_next/static/') && url.pathname.endsWith('.js');
   const results = [], errors = [];
   const recordError = error => errors.push(error.message);
   page.on('pageerror', recordError);
@@ -11,11 +12,14 @@ export async function verifyBrowserMatches(page, origin) {
     for (const theme of ['light', 'dark']) for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
+      const testPreload = theme === 'light' && width === 390;
       const updateGeneration = theme === 'dark' && width === 1440;
       const generation = 'b'.repeat(64);
       let releaseSummary, releaseList, summaryRequests = 0, listRequests = 0;
       const summaryGate = new Promise(resolve => { releaseSummary = resolve; });
       const listGate = new Promise(resolve => { releaseList = resolve; });
+      const scripts = Promise.withResolvers();
+      const holdScript = async route => { await scripts.promise; await route.continue(); };
       const delaySummary = async route => {
         summaryRequests++;
         await summaryGate;
@@ -32,25 +36,36 @@ export async function verifyBrowserMatches(page, origin) {
         await route.fulfill({ response, json: { ...json, performanceVersion: generation } });
       };
       await page.route(summaryUrl, delaySummary);
+      if (testPreload) await page.route(appScript, holdScript);
       if (updateGeneration) await page.route(listUrl, refreshList);
       try {
         await page.goto(`${origin}/browser-matches`, { waitUntil: 'commit' });
         const progress = page.getByRole('progressbar', { name: /loading/i });
         await progress.waitFor({ state: 'visible' });
         assert(await page.locator('[data-feed-match-results]').count() === 0, 'The browser shell must precede the delayed list');
-        await page.evaluate(() => { window.fixtureHeader = document.querySelector('header'); });
         const list = page.locator('[data-feed-match-results]'), summary = page.locator('[data-performance-summary="matches"]');
         const deferred = page.locator('[data-feed-performance-deferred="true"]');
         await list.waitFor();
+        if (testPreload) {
+          await page.waitForFunction(() => document.querySelector('link[rel="preload"][as="fetch"][href^="/api/matches/summary?"]'));
+          if (!summaryRequests) await page.waitForRequest(request => summaryUrl.test(request.url()), { timeout: 6000 });
+          assert(summaryRequests === 1, 'The accepted list must start one summary request before app scripts load');
+          scripts.resolve();
+          await page.waitForLoadState('domcontentloaded');
+        }
         await deferred.waitFor();
         await progress.waitFor({ state: 'hidden' });
         await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, theme);
+        if (width === 1440) await list.locator('[data-desktop-row]').first().waitFor();
         await page.evaluate(() => document.fonts.ready);
         assert(await list.locator('[data-fixture-id]').count() === 37, 'The accepted Pending rows must precede the audit');
         assert(await summary.getAttribute('aria-busy') === 'true', 'The cards must indicate the separate read');
         const before = await list.boundingBox();
         const height = (await summary.boundingBox()).height;
-        await page.evaluate(() => { window.fixtureRow = document.querySelector('[data-fixture-id]'); });
+        await page.evaluate(() => {
+          window.fixtureHeader = document.querySelector('header');
+          window.fixtureRow = document.querySelector('[data-fixture-id]');
+        });
         const refreshing = updateGeneration && page.waitForRequest(request => listUrl.test(request.url()));
         releaseSummary();
         if (refreshing) {
@@ -62,13 +77,16 @@ export async function verifyBrowserMatches(page, origin) {
         assert(await summary.locator('[data-summary-result="won"]').getAttribute('aria-label') === 'Won: 10', 'The cards must show the verified period counts');
         assert(Math.abs((await summary.boundingBox()).height - height) < 1 && Math.abs((await list.boundingBox()).y - before.y) < 1,
           'The resolved counts must preserve the list position and card height');
-        assert(await page.evaluate(() => window.fixtureHeader === document.querySelector('header')
-          && window.fixtureRow === document.querySelector('[data-fixture-id]')), 'The shell and first accepted row must stay mounted');
+        const stable = await page.evaluate(() => ({ header: window.fixtureHeader === document.querySelector('header'),
+          row: window.fixtureRow === document.querySelector('[data-fixture-id]') }));
+        assert(stable.header && stable.row, `The shell and first accepted row must stay mounted at ${width}px ${theme} (${JSON.stringify(stable)}${errors.length ? `, errors: ${errors.join('; ')}` : ''})`);
         assert(summaryRequests === 1 && listRequests === Number(updateGeneration), 'The generation check must reuse the one verified audit');
         results.push({ theme, width, summaryRequests, listRequests, summaryHeight: height });
       } finally {
+        scripts.resolve();
         releaseSummary();
         releaseList();
+        if (testPreload) await page.unroute(appScript, holdScript);
         await page.unroute(summaryUrl, delaySummary);
         if (updateGeneration) await page.unroute(listUrl, refreshList);
       }

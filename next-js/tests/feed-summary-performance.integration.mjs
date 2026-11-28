@@ -25,11 +25,44 @@ test('compact summaries match full stored feed counts and invalidate on genuine 
     for (const id of [3000, 3001]) {
       const state = await p.setup(id);
       assert.equal((await p.publisher.publish(state.input, state.lease)).refresh.outcome, 'published');
-      await p.queue.acknowledge(state.lease); states.push(state);
+      states.push(state);
     }
-    const clock = { now: () => PUBLICATION_NOW }, cache = createMysqlPublicResponseCache(p.a, clock.now);
+    let readAt = PUBLICATION_NOW;
+    const clock = { now: () => readAt }, cache = createMysqlPublicResponseCache(p.a, clock.now);
     const options = { database: p.a, competitionIds: [39], clock, cache };
     const feed = createMatchFeedService(options), summary = createMatchFeedSummaryService(options);
+    await t.test('the public Today summary survives a job progress update inside its original lease', async () => {
+      const input = { when: 'today' }, context = { publishedForecasts: true };
+      const original = await summary.query(input, context);
+      assert.equal(original.asOf, PUBLICATION_NOW);
+      assert.ok(original.performance.pending > 0);
+      const progressGeneration = async () => (await p.a.query((tx) => tx.publicCacheTag.findUniqueOrThrow({
+        where: { tag: 'global:progress' }, select: { generation: true } }))).generation;
+      const before = await progressGeneration();
+      for (const state of states) await p.queue.acknowledge(state.lease);
+      assert.ok(await progressGeneration() > before);
+      readAt += 10_000;
+      assert.deepEqual(await summary.query(input, context), original);
+    });
+    await t.test('catalog updates invalidate unchanged-date filtered counts', async () => {
+      const { competition } = await p.a.query((tx) => tx.footballCompetitionProvider.findUniqueOrThrow({
+        where: { provider_externalId: { provider: 'api-football', externalId: 39n } }, include: { competition: true } }));
+      const { id, country, countrySearch } = competition;
+      assert.ok(country);
+      const input = { date: '2026-10-09', country };
+      const original = await summary.query(input);
+      assert.ok(original.total > 0);
+      const updateCountry = (data) => p.a.transaction((tx) => tx.footballCompetition.update({ where: { id }, data }));
+      await updateCountry({ country: 'Updated Synthetic Country', countrySearch: 'updated synthetic country' });
+      try {
+        const revised = await summary.query(input);
+        assert.equal(revised.total, 0);
+        assert.notEqual(revised.paginationVersion, original.paginationVersion);
+        assert.equal(revised.performanceScope, original.performanceScope);
+      } finally {
+        await updateCountry({ country, countrySearch });
+      }
+    });
     async function compare(input) {
       const { result, ...cohort } = input;
       const full = await feed.query(cohort), compact = await summary.query(input);

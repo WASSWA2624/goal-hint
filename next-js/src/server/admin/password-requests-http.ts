@@ -5,7 +5,6 @@ import { passwordRequestOwnershipMethods, passwordRequestSentChannels, type Pass
 import { passwordResetPagePath } from "../../domain/password-reset-links.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { authCopy } from "../../i18n/messages/auth.ts";
-import type { AnalyticsServices } from "../analytics/analytics-http.ts";
 import { json } from "../http/private-http.ts";
 import { createPasswordRecovery } from "../members/password-recovery.ts";
 import { readJsonBody, type AdminContext } from "./admin-http.ts";
@@ -21,14 +20,6 @@ const fail = (status: number, error: string, message: string) => json({ error, m
 const invalid = () => fail(400, "invalid", "Check the password request and try again.");
 const unavailable = () => fail(503, "unavailable", "Password requests are temporarily unavailable. Try again.");
 
-function recoveryFor(services: AnalyticsServices) {
-  return services.database ? createPasswordRecovery({ database: services.database, config: services.config }) : null;
-}
-
-export async function readAdminPasswordRequests(services: AnalyticsServices) {
-  return await recoveryFor(services)?.listRequests() ?? null;
-}
-
 /** Resolve hosted links using deployment identity, never a request's Host or forwarded headers. */
 export function passwordResetLink(token: string, requestUrl: string, deployment = process.env.GOAL_HINT_DEPLOYMENT_ENVIRONMENT) {
   const request = new URL(requestUrl);
@@ -37,7 +28,7 @@ export function passwordResetLink(token: string, requestUrl: string, deployment 
   return new URL(`${passwordResetPagePath}#${token}`, origin).href;
 }
 
-type Recovery = NonNullable<ReturnType<typeof recoveryFor>>;
+type Recovery = ReturnType<typeof createPasswordRecovery>;
 type RecoveryDetail = NonNullable<Awaited<ReturnType<Recovery["requestDetail"]>>>;
 function details(detail: RecoveryDetail, request: Request): PasswordRequestDetails {
   const { id, phone, requestedAt, status, accountId, accountCreatedAt, phoneVerifiedAt, ownershipVerifiedAt, ownershipMethod,

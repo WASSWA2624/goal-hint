@@ -20,6 +20,7 @@ import { parseSlipCriteria, serializeSlipCriteria, type BuiltSlip, type SlipCrit
 import { DatabaseOperationError, getDatabase, type DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
+import { timedRequestPhase } from "../http/request-timing.ts";
 import { assertHistorySeal, historyJson } from "../predictions/history-read.ts";
 import { provenTrue } from "../shared/authority-proof.ts";
 import { isDevelopmentDemo } from "../../domain/development-demo.ts";
@@ -260,8 +261,8 @@ async function readHourlyPublicationState(tx: Prisma.TransactionClient, day: Rep
 export function createPublishedSlips(database: DatabaseRuntime, {
   bindForecasts = bindSlipForecasts, resolveResults = readSlipForecastResults, verifyOffers = verifyFeaturedSlipOffers,
 }: { bindForecasts?: typeof bindSlipForecasts; resolveResults?: typeof readSlipForecastResults; verifyOffers?: typeof verifyFeaturedSlipOffers } = {}) {
-  const transaction = <T>(run: (tx: Prisma.TransactionClient) => Promise<T>) => database.transaction(run,
-    { isolationLevel: "RepeatableRead", timeout: 30_000 });
+  const transactionOptions = { isolationLevel: "RepeatableRead", timeout: 30_000 } as const;
+  const transaction = <T>(run: (tx: Prisma.TransactionClient) => Promise<T>) => database.transaction(run, transactionOptions);
   return Object.freeze({
     async hourlyState(day: ReportingDate) {
       parseReportingDate(day);
@@ -550,18 +551,22 @@ export function createPublishedSlips(database: DatabaseRuntime, {
       const query = parseBestSlipsQuery(serializeBestSlipsQuery(input), today), dates = resolveBestSlipsDates(query, today);
       const cursor = query.cursor === undefined ? null : parseBestSlipsCursor(query.cursor), allDates = query.period === "all";
       const dailyView = dates.from !== null && dates.from === dates.to;
-      return transaction(async (tx) => {
-        const asOf = await databaseTime(tx);
-        const activeDays = query.period === "today" && !completedOnly ? bestSlipActivePublicationDays(asOf) : [];
-        const overlapDay = activeDays.length === 2 && activeDays[1] === today ? activeDays[0] : undefined;
-        const overlapEnd = overlapDay ? bestSlipFixtureWindow(overlapDay).endExclusive : asOf;
-        const scope = allDates ? cursor ? Prisma.sql`AND eatDate<=${new Date(`${cursor.day}T00:00:00Z`)}` : Prisma.empty
-          : Prisma.sql`AND eatDate>=${new Date(`${overlapDay ?? dates.from}T00:00:00Z`)} AND eatDate<=${new Date(`${dates.to}T00:00:00Z`)}`;
+      const previousDay = query.period === "today" && !completedOnly ? addReportingDays(today, -1) : undefined;
+      return database.transaction((tx) => timedRequestPhase("archive-snapshot", async () => {
+        const scope = allDates ? cursor ? Prisma.sql`AND eatDate<=${publicationDate(cursor.day)}` : Prisma.empty
+          : Prisma.sql`AND eatDate>=${publicationDate(previousDay ?? dates.from!)} AND eatDate<=${publicationDate(dates.to!)}`;
         const sourceBands = bestSlipPublicationBands(query.oddsBand);
         const publicationLimit = (allDates ? bestSlipsQueryRules.scanDays : bestSlipsQueryRules.maximumDays) * (sourceBands.length + 1);
-        const publications = await tx.$queryRaw<PublicationRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity
-          FROM DailySlipPublication WHERE publishedAt<=${new Date(asOf)} AND oddsBand IN ('legacy',${Prisma.join([...sourceBands])}) ${scope}
+        // Read a table before sampling the clock. A clock-only SELECT does not establish an InnoDB snapshot.
+        const headers = await tx.$queryRaw<PublicationRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity
+          FROM DailySlipPublication WHERE oddsBand IN ('legacy',${Prisma.join([...sourceBands])}) ${scope}
           ORDER BY eatDate DESC, FIELD(oddsBand,'legacy',${Prisma.join([...sourceBands])}) LIMIT ${publicationLimit + 1}`);
+        const asOf = await databaseTime(tx);
+        const activeDays = previousDay ? bestSlipActivePublicationDays(asOf) : [];
+        const overlapDay = activeDays.length === 2 && activeDays[1] === today ? activeDays[0] : undefined;
+        const overlapEnd = overlapDay ? bestSlipFixtureWindow(overlapDay).endExclusive : asOf;
+        const todayStart = previousDay && !overlapDay ? publicationDate(today) : null;
+        const publications = headers.filter(({ publishedAt, eatDate }) => publishedAt.getTime() <= asOf && (!todayStart || eatDate >= todayStart));
         if (!allDates && publications.length > publicationLimit) fail("unavailable");
         const scannedDays = new Set<number>();
         let selected = publications.slice(0, publicationLimit).filter(row => {
@@ -649,7 +654,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
             hasMore: allDates ? nextCursor !== null : offset + retained.length < total, nextCursor,
             from: allDates ? overflow ? scannedThrough : oldest ? parseReportingDate(parents.get(oldest.id)!.day) : null : dates.from,
             to: allDates ? selected[0] ? parseReportingDate(parents.get(selected[0].id)!.day) : null : dates.to } };
-      });
+      }), { ...transactionOptions, maxWait: 5_000 });
     },
     async history(input: PublishedSlipHistoryQuery, completedOnly = false): Promise<PublishedSlipHistory> {
       const query = parsePublishedSlipHistoryQuery(input);

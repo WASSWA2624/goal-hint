@@ -69,15 +69,17 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
       if (!cache) return await read();
       const descriptor = publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: "feed-summary-v15", providerOdds, completedOnly: context.completedOnly === true,
+        query: { ...query, projection: "feed-summary-v16", providerOdds, completedOnly: context.completedOnly === true,
           publishedOnly, publishedForecasts, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedSummarySchema.parse(value) });
       // The public Today audit is shared by the busiest entry point. Keep its
       // original clock, generation checks, and reporting-day cutoff.
       const publicToday = publishedForecasts && !publishedOnly && !context.completedOnly && !query.zone && !query.summary &&
         range.dayCount === 1 && range.startDate === reportingToday && activeFeedFilterCount(query) === 0;
-      return await timedRequestPhase("summary-cache",
-        () => cache.read(publicToday ? { ...descriptor, lifetimeMs: todaySummaryLeaseMs } : descriptor, read));
+      // Counts depend on the same catalog and source dates as storedFeedVersions.
+      return await timedRequestPhase("summary-cache", () => cache.read({ ...descriptor,
+        tags: descriptor.tags.filter((tag) => tag !== "global:progress"),
+        lifetimeMs: publicToday ? todaySummaryLeaseMs : descriptor.lifetimeMs }, read));
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;
       throw new MatchFeedError("unavailable");

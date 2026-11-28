@@ -73,6 +73,40 @@ export function replaceFeedPages(previous: LoadedFeed, pages: readonly MatchFeed
   return { ...next, records };
 }
 
+/** Recover one transient read and rebase a changed window without publishing partial membership. */
+export async function continueFeedPages(view: LoadedFeed, read: (page: number) => Promise<MatchFeedResponse>,
+  waitForRetry: (delayMs: number) => Promise<boolean>, rebase = false): Promise<LoadedFeed> {
+  const nextPage = view.data.nextPage;
+  if (nextPage === null) return view;
+  let retried = false;
+  const readPage = async (page: number) => {
+    const verified = async () => {
+      const result = await read(page);
+      if (result.state === "data-unavailable") throw new FeedPaginationError("unavailable");
+      return result;
+    };
+    try { return await verified(); }
+    catch (error) {
+      if (retried || !(error instanceof FeedPaginationError) || error.code !== "unavailable") throw error;
+      const delay = error.retryAfterMs ?? 500;
+      if (delay > 5_000 || !await waitForRetry(delay)) throw error;
+      retried = true;
+      return verified();
+    }
+  };
+  if (!rebase) {
+    try { return appendFeedPage(view, await readPage(nextPage)); }
+    catch (error) {
+      if (!(error instanceof FeedPaginationError) || error.code !== "changed") throw error;
+    }
+  }
+  const pages = [await readPage(view.firstPage)];
+  for (let page = view.firstPage + 1; page <= nextPage && pages.at(-1)?.nextPage === page; page++) {
+    pages.push(await readPage(page));
+  }
+  return replaceFeedPages(view, pages);
+}
+
 /** One observation updates matching fixtures without applying partial offset membership. */
 export function observeFeedPage(previous: LoadedFeed, page: MatchFeedResponse): LoadedFeed {
   if (page.page < previous.firstPage || page.page > previous.lastPage || page.asOf < previous.data.asOf

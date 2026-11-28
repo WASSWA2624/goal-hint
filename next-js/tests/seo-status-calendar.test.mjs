@@ -77,6 +77,20 @@ test('only browser document navigation enters the progressive Matches route', as
   assert.equal(await request({ 'user-agent': chrome }), false);
 });
 
+test('Matches streams through the installed service worker document request shape', async () => {
+  const request = (values) => isBrowserDocumentRequest(async () => new Headers(values));
+  const navigation = {
+    'user-agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/158.0.0.0 Mobile Safari/537.36',
+    'sec-fetch-dest': 'empty', 'sec-fetch-mode': 'same-origin', 'sec-fetch-site': 'same-origin',
+    accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  };
+  assert.equal(await request(navigation), true);
+  for (const changes of [{ accept: '*/*' }, { accept: 'text/x-component' }, { rsc: '1' },
+    { 'sec-fetch-mode': 'cors' }, { 'sec-fetch-site': 'cross-site' }, { 'user-agent': 'Googlebot/2.1' }]) {
+    assert.equal(await request({ ...navigation, ...changes }), false);
+  }
+});
+
 // The route factories are TSX with bundler-style imports. Resolve `@/` and extensionless paths, compile JSX, and replace
 // the shell clock and page views with stubs, so each factory's own status decisions can be observed directly.
 const source = new URL('../src/', import.meta.url).href;

@@ -24,6 +24,11 @@ export async function isBrowserDocumentRequest(read: () => Promise<Pick<Headers,
   const browserAgent = userAgent && /\b(?:HeadlessChrome|Chrome)\/\d/u.test(userAgent)
     ? userAgent.replace(/\bHeadlessChrome(?=\/\d)/gu, "Chrome").replace(/\b(?:Chrome-Lighthouse|PageSpeed Insights)\b/giu, "")
     : userAgent;
-  return request.get("sec-fetch-dest") === "document" && request.get("sec-fetch-mode") === "navigate"
-    && request.get("rsc") === null && !isBotUserAgent(browserAgent);
+  if (request.get("rsc") !== null || isBotUserAgent(browserAgent)) return false;
+  const destination = request.get("sec-fetch-dest"), mode = request.get("sec-fetch-mode");
+  if (destination === "document" && mode === "navigate") return true;
+  // The installed worker forwards navigations with an abort signal. Chromium
+  // recalculates Fetch Metadata but keeps the browser's original HTML Accept.
+  return destination === "empty" && mode === "same-origin" && request.get("sec-fetch-site") === "same-origin"
+    && /(?:^|,)\s*text\/html(?=\s*(?:[;,]|$))/iu.test(request.get("accept") ?? "");
 }

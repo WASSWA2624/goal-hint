@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { appendFeedPage, applyServerFeedPage, checkedFeedPage, feedPageApiHref, feedPageHref, initialLoadedFeed, observeFeedPage, replaceFeedPages } from '../src/domain/feed-pagination.ts';
+import { appendFeedPage, applyServerFeedPage, checkedFeedPage, continueFeedPages, FeedPaginationError, feedPageApiHref, feedPageHref, initialLoadedFeed, observeFeedPage, replaceFeedPages } from '../src/domain/feed-pagination.ts';
+import { readJson } from '../src/state/refresh-base.ts';
 import { nextLoadedPage } from '../src/domain/browse-period.ts';
 import { feedCheckpointSchema, matchingFeedCheckpoint, readFeedCheckpoints, restorationRules, writeFeedCheckpoint } from '../src/domain/feed-navigation.ts';
 import { resolveFeedDates, feedQueryKey, feedQueryRules } from '../src/domain/feed-query.ts';
@@ -65,6 +66,61 @@ test('rebasing replaces ordered membership atomically and never rolls whole snap
   assert.throws(()=>replaceFeedPages(old,[first,page(2,['b','c'],version)]),e=>e.code==='changed');
   assert.equal(old.records.length,4);
 });
+test('Show More retries one unavailable read in place and honors its Retry-After', async () => {
+  const initial = initialLoadedFeed(page(1, ['a', 'b']));
+  const requested = [], delays = [];
+  const next = await continueFeedPages(initial, async number => {
+    requested.push(number);
+    if (requested.length === 1) throw new FeedPaginationError('unavailable', 5_000);
+    return page(number, ['c', 'd']);
+  }, async delay => { delays.push(delay); return true; });
+  assert.deepEqual(requested, [2, 2]);
+  assert.deepEqual(delays, [5_000]);
+  assert.deepEqual(next.records.map(row => row.fixtureId), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(initial.records.map(row => row.fixtureId), ['a', 'b']);
+
+  for (const error of [new FeedPaginationError('rate-limited'), new FeedPaginationError('subscription-required'),
+    new FeedPaginationError('unavailable', 60_000)]) {
+    await assert.rejects(continueFeedPages(initial, async () => { throw error; }, async () => assert.fail('Unexpected retry')), error);
+  }
+  const failed = new FeedPaginationError('unavailable', 5_000);
+  await assert.rejects(continueFeedPages(initial, async () => { throw failed; }, async () => false), failed);
+  let attempts = 0;
+  await assert.rejects(continueFeedPages(initial, async () => { attempts++; throw failed; }, async () => true), failed);
+  assert.equal(attempts, 2);
+});
+
+test('Show More recovers a changed live generation with contiguous pages and never commits a mismatched rebase', async () => {
+  const initial = initialLoadedFeed(page(1, ['a', 'b']));
+  for (const conflict of ['generation', 'http']) {
+    const requested = [];
+    const result = await continueFeedPages(initial, async number => {
+      requested.push(number);
+      if (requested.length === 1 && conflict === 'http') throw new FeedPaginationError('changed');
+      return page(number, number === 1 ? ['e', 'a'] : ['b', 'c'], otherVersion);
+    }, async () => assert.fail('A cohort conflict cannot be retried as a transient read'));
+    assert.deepEqual(requested, [2, 1, 2]);
+    assert.deepEqual(result.records.map(row => row.fixtureId), ['e', 'a', 'b', 'c']);
+    assert.equal(result.lastPage, 2);
+    assert.equal(result.data.paginationVersion, otherVersion);
+  }
+  let requests = 0;
+  await assert.rejects(continueFeedPages(initial, async number => {
+    requests++;
+    return page(number, number === 1 ? ['e', 'a'] : ['b', 'c'], requests === 3 ? version : otherVersion);
+  }, async () => assert.fail('A cohort conflict cannot be retried as a transient read')), error => error.code === 'changed');
+  assert.equal(requests, 3);
+  assert.deepEqual(initial.records.map(row => row.fixtureId), ['a', 'b']);
+});
+
+test('the refresh transport distinguishes HTTP 409 from temporary outage and wait instructions', async t => {
+  const signal = new AbortController().signal;
+  const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 409 }));
+  await assert.rejects(readJson('/api/matches', signal), error => error.code === 'changed');
+  fetch.mock.mockImplementation(async () => new Response(null, { status: 503, headers: { 'Retry-After': '5' } }));
+  await assert.rejects(readJson('/api/matches', signal), error => error.code === 'unavailable' && error.retryAfterMs === 5_000);
+});
+
 test('a same-route server refresh shows new fixtures in place and ignores an older poll', () => {
   const previous = initialLoadedFeed(page(1, ['a', 'b']));
   const serverPage = page(1, ['a', 'c'], otherVersion, { asOf: now + 10 });

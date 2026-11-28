@@ -15,8 +15,8 @@ const today = parseReportingDate(dayString), free = { tier: 'free', signedIn: fa
 const uuid = (number) => `20000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
 function fixture(days = 1, daily = 4, replacementCycles = false, valuesForRank = () => ({ averageProbability: 0.7, totalOdds: '4.00' })) {
   const publications = [], slips = [], legs = [], outcomes = new Map(), reads = [], resultBatches = [], source = liveRecord();
-  const batches = [];
-  let corrupt = false, asOf = now;
+  const batches = [], transactions = [];
+  let corrupt = false, asOf = now, nextBrowseClock = null;
   for (let dateIndex = 0; dateIndex < days; dateIndex++) {
     const day = addReportingDays(today, -dateIndex), publicationId = evidenceFingerprint({ kind: 'daily-best-slips', version: 1, day });
     const publishedAt = Date.parse(`${day}T00:00:01+03:00`), modelId = 'a'.repeat(64);
@@ -43,19 +43,25 @@ function fixture(days = 1, daily = 4, replacementCycles = false, valuesForRank =
     async $queryRaw(query, ...arguments_) {
       const sql = Array.isArray(query) ? { text: query.join('?'), values: arguments_ } : { text: query.sql, values: query.values };
       reads.push(sql);
-      if (sql.text.includes('UTC_TIMESTAMP')) return [{ at: new Date(asOf) }];
+      if (sql.text === 'SELECT UTC_TIMESTAMP(3) AS at') return [{ at: new Date(asOf) }];
       if (sql.text.includes('FROM DailyBestSlipAppendBatch')) return batches.filter(row => sql.values.includes(row.publicationId))
         .sort((left, right) => left.publicationId.localeCompare(right.publicationId) || left.firstRank - right.firstRank)
         .map(row => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
       if (sql.text.includes('FROM DailySlipPublication')) {
         const dates = sql.values.filter(value => value instanceof Date);
         if (sql.text.includes('WHERE eatDate=')) return publications.filter(row => +row.eatDate === +dates[0]).map(row => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
+        if (nextBrowseClock !== null && sql.text.includes('ORDER BY eatDate DESC, FIELD')) {
+          asOf = nextBrowseClock;
+          nextBrowseClock = null;
+        }
         const historic = sql.text.includes('WHERE eatDate>=');
+        const clockFilter = sql.text.includes('publishedAt<=');
+        const dateOffset = clockFilter ? 1 : 0;
         const available = historic ? dates[2] : dates[0];
-        let rows = publications.filter((row) => +row.publishedAt <= +available);
+        let rows = clockFilter ? publications.filter((row) => +row.publishedAt <= +available) : publications;
         if (historic) rows = rows.filter((row) => +row.eatDate >= +dates[0] && +row.eatDate <= +dates[1]);
-        else if (sql.text.includes('eatDate>=')) rows = rows.filter((row) => +row.eatDate >= +dates[1] && +row.eatDate <= +dates[2]);
-        else if (sql.text.includes('eatDate<=')) rows = rows.filter((row) => +row.eatDate <= +dates[1]);
+        else if (sql.text.includes('eatDate>=')) rows = rows.filter((row) => +row.eatDate >= +dates[dateOffset] && +row.eatDate <= +dates[dateOffset + 1]);
+        else if (sql.text.includes('eatDate<=')) rows = rows.filter((row) => +row.eatDate <= +dates[dateOffset]);
         rows = rows.filter(row => sql.values.includes(row.oddsBand ?? 'legacy') || row.oddsBand === undefined);
         return rows.sort((a, b) => +b.eatDate - +a.eatDate).slice(0, sql.values.at(-1)).map((row) => ({ ...row, validIntegrity: corrupt ? 0 : 1 }));
       }
@@ -71,7 +77,7 @@ function fixture(days = 1, daily = 4, replacementCycles = false, valuesForRank =
       assert.fail(sql.text);
     },
   };
-  const store = createPublishedSlips({ async transaction(run) { return run(tx); } }, {
+  const store = createPublishedSlips({ async transaction(run, options) { transactions.push(options); return run(tx); } }, {
     async resolveResults(_tx, selections) {
       resultBatches.push(selections.length);
       const results = selections.map((selection) => {
@@ -87,7 +93,8 @@ function fixture(days = 1, daily = 4, replacementCycles = false, valuesForRank =
         completed: true, status: 'finished-regulation', regulationHome: result.regulationAway, regulationAway: result.regulationHome })), ...results] : results;
     },
   });
-  return { store, reads, resultBatches, outcomes, publications, slips, legs, batches, advance(value) { asOf = value; }, corrupt() { corrupt = true; } };
+  return { store, reads, resultBatches, outcomes, publications, slips, legs, batches, transactions,
+    advance(value) { asOf = value; }, advanceOnBrowse(value) { nextBrowseClock = value; }, corrupt() { corrupt = true; } };
 }
 const query = (input = {}) => parseBestSlipsQuery({ period: 'last30', status: 'all', ...input }, today);
 
@@ -130,6 +137,14 @@ test('extended publications page every sealed slot and keep canonical links acro
       f.outcomes.set(leg.fixtureId, 'won');
     }
   }
+  // The final batch commits before the first consistent read but after an earlier clock-only read would have sampled time.
+  const committedAt = f.batches.at(-1).publishedAt.getTime();
+  f.advance(committedAt - 1);
+  f.advanceOnBrowse(committedAt);
+  const concurrent = await f.store.browse(query({ period: 'today' }), today);
+  assert.equal(concurrent.summary.asOf, committedAt);
+  assert.equal(concurrent.browse.total, 67);
+  assert.deepEqual(f.transactions[0], { isolationLevel: 'RepeatableRead', timeout: 30_000, maxWait: 5_000 });
   f.advance(midnight + 2 * 3_600_000);
   const expected = f.slips.map(({ rank }) => bestSlipPublicRank(oddsBand, rank));
   const listed = [], archived = [];
@@ -193,6 +208,18 @@ test('Today includes only actionable previous-set legs during the midnight hando
   assert.equal(protectedPrior.preview[0].pick, null);
   f.advance(at('03:00'));
   assert.ok((await f.store.browse(request, today)).slips.every(({ publicationDay }) => publicationDay === today));
+});
+
+test('browse keeps publications dated after the snapshot clock out of the rows and counts', async () => {
+  const f = fixture(2, 4), previous = addReportingDays(today, -1);
+  f.advance(f.publications[0].publishedAt.getTime() - 1);
+  const dated = await f.store.browse(query({ period: 'custom', from: previous, to: today }), today);
+  assert.equal(dated.statistics.total, 4);
+  assert.equal(dated.browse.bandTotal, 4);
+  assert.ok(dated.slips.every(({ publicationDay }) => publicationDay === previous));
+  const archive = await f.store.browse(query({ period: 'all' }), today);
+  assert.ok(archive.slips.every(({ publicationDay }) => publicationDay === previous));
+  assert.equal(archive.browse.to, previous);
 });
 
 test('publication browsing filters original outcomes before pagination and retains whole-period counts', async () => {

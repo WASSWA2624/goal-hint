@@ -192,11 +192,19 @@ test('daily/model rollover during generation withholds the old set; insufficient
   assert.equal(insufficient.slips.length, 1);
 });
 
-test('API rechecks access after generation, strips expired selections, and disables shared/browser caching', async () => {
-  let checks = 0;
-  const handler = createBestSlipsHandler({ read: service(), access: async () => checks++ === 0 ? full : free });
+test('API confirms access after the archive read, strips expired selections, and disables shared/browser caching', async () => {
+  let checks = 0, archiveReady = false;
+  const handler = createBestSlipsHandler({ snapshot: async () => {
+    const result = await service()(full);
+    archiveReady = true;
+    return result;
+  }, access: async () => {
+    assert.equal(archiveReady, true);
+    checks++;
+    return free;
+  } });
   const response = await handler(new Request('https://goalhint.com/api/best-slips'));
-  assert.equal(response.status, 200); assert.equal(checks, 3);
+  assert.equal(response.status, 200); assert.equal(checks, 1);
   assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert.equal(response.headers.get('vary'), 'Cookie');
   assert.equal(response.headers.get('set-cookie'), null);
   const payload = await response.json();
@@ -207,26 +215,29 @@ test('API rechecks access after generation, strips expired selections, and disab
 
 test('anonymous API visitors receive aggregates and safe match previews', async () => {
   const read = service(), expected = await read(free);
-  const handler = createBestSlipsHandler({ read, access: async () => free });
+  const handler = createBestSlipsHandler({ snapshot: () => read(full), access: async () => free });
   const response = await handler(new Request('https://goalhint.com/api/best-slips'));
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), expected);
   assert.equal(response.headers.get('cache-control'), 'private, no-store');
 });
 
-test('filtered API reads receive normalized dates/results and recheck access before returning private selections', async () => {
+test('filtered API reads receive normalized dates and results, then confirm access before projecting selections', async () => {
   let checks = 0, received;
-  const handler = createBestSlipsHandler({ now: () => now, access: async () => checks++ ? free : full,
-    read: async () => { throw new Error('must use the filtered reader'); },
-    browse: async (viewer, query) => {
+  const handler = createBestSlipsHandler({ now: () => now, access: async () => {
+    assert.ok(received);
+    checks++;
+    return free;
+  },
+    snapshot: async (query) => {
       received = query;
-      const result = await service()(viewer);
+      const result = await service()(full);
       return { ...result, slips: result.slips.map((view, index) => ({ ...view, id: `publication-${index}`,
         publicationDay: today, outcome: 'won' })),
         browse: { query, total: result.slips.length, pageSize: 20, hasMore: false, nextCursor: null, from: today, to: today } };
     } });
   const response = await handler(new Request('https://goalhint.com/api/best-slips?period=today&status=won&page=1'));
-  assert.equal(response.status, 200); assert.equal(checks, 3);
+  assert.equal(response.status, 200); assert.equal(checks, 1);
   assert.deepEqual(received, { period: 'today', status: 'won', oddsBand: '1.5-5', page: 1 });
   const data = await response.json();
   assert.equal(data.browse.query.status, 'won'); assert.equal(data.slips.length, 10);
@@ -238,7 +249,7 @@ test('filtered API reads receive normalized dates/results and recheck access bef
 test('filtered API rejects malformed or reversed criteria before accessing private data', async () => {
   let reads = 0;
   const handler = createBestSlipsHandler({ now: () => now, access: async () => { reads++; return full; },
-    browse: async () => { reads++; throw new Error('must not read'); } });
+    snapshot: async () => { reads++; throw new Error('must not read'); } });
   for (const search of ['period=unknown', 'status=unknown', 'period=custom&from=2026-02-30&to=2026-03-01',
     'period=custom&from=2026-10-29&to=2026-10-28', 'period=today&period=yesterday', 'page=0', 'period=all&cursor=broken']) {
     const response = await handler(new Request(`https://goalhint.com/api/best-slips?${search}`));
@@ -251,9 +262,9 @@ test('filtered API rejects malformed or reversed criteria before accessing priva
 test('API requests still default to all results and honor an explicit pending filter', async () => {
   const statuses = [];
   const handler = createBestSlipsHandler({ now: () => now, access: async () => full,
-    browse: async (viewer, query) => {
+    snapshot: async (query) => {
       statuses.push(query.status);
-      return service()(viewer);
+      return service()(full);
     } });
   for (const search of ['period=today', 'period=today&status=pending']) {
     const response = await handler(new Request(`https://goalhint.com/api/best-slips?${search}`));
@@ -264,7 +275,7 @@ test('API requests still default to all results and honor an explicit pending fi
 
 test('filtered API failures return private unavailable responses without internal diagnostics', async () => {
   const handler = createBestSlipsHandler({ now: () => now, access: async () => full,
-    browse: async () => { throw new Error('private database diagnostics'); } });
+    snapshot: async () => { throw new Error('private database diagnostics'); } });
   const response = await handler(new Request('https://goalhint.com/api/best-slips?period=yesterday'));
   assert.equal(response.status, 503); assert.deepEqual(await response.json(), { error: 'unavailable' });
   assert.equal(response.headers.get('cache-control'), 'private, no-store');
@@ -272,7 +283,7 @@ test('filtered API failures return private unavailable responses without interna
 
 test('a failed publication read retains an unavailable HTTP status even when the service returns a safe empty DTO', async () => {
   const handler = createBestSlipsHandler({ now: () => now, access: async () => free,
-    browse: async () => ({ day: today, state: 'data-unavailable', slips: [], searchLimited: false, partialCoverage: false }) });
+    snapshot: async () => ({ day: today, state: 'data-unavailable', slips: [], searchLimited: false, partialCoverage: false }) });
   const response = await handler(new Request('https://goalhint.com/api/best-slips?period=last7'));
-  assert.equal(response.status, 503); assert.equal((await response.json()).state, 'data-unavailable');
+  assert.equal(response.status, 503); assert.deepEqual(await response.json(), { error: 'unavailable' });
 });

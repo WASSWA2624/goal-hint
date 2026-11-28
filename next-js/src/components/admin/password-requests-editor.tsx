@@ -18,12 +18,15 @@ import { Panel, PanelBody, PanelHead } from "./desk-styles";
 import { refreshPendingPasswordRequests } from "./pending-password-requests";
 import { RecordToolbar } from "./record-toolbar";
 import { RecordBack, RecordBody, RecordCard, RecordDetailHead, RecordDetails, RecordEmpty, RecordFeedback, RecordItem, RecordItemTitle,
-  RecordList, RecordListScroll, RecordRowContent, RecordScroll, RecordWorkspace, useRecordView } from "./record-workspace";
+  RecordList, RecordListScroll, RecordListTools, RecordRowContent, RecordScroll, RecordWorkspace, useRecordView } from "./record-workspace";
 import { ReviewFacts } from "./referral-review-styles";
 
 type ConfirmationAction = "ownership" | "replacement" | "sent";
 type Confirmation = Readonly<{ action: ConfirmationAction; generation: number }>;
 const unavailable = "Password requests are temporarily unavailable. Try again.";
+const detailUnavailable = "This password request is temporarily unavailable. Try again.";
+const readDeadlineMs = 30_000;
+type ReadKind = "list" | "detail";
 
 function RequestTime({ value }: { value: string }) {
   return <time dateTime={value}>{formatSubscriptionExpiry(new Date(value))}</time>;
@@ -35,10 +38,10 @@ function RequestStatus({ status }: { status: PasswordRequestRow["status"] }) {
 
 async function readRequests<T>(query: string, signal: AbortSignal): Promise<T> {
   const response = await fetch(`${adminPasswordRequestsApi}${query}`, { cache: "no-store", signal });
+  if (response.status === 401 || response.status === 403) throw new RequestReadError(response.status, authCopy.ownerSessionEnded);
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new RequestReadError(response.status, response.status === 401 ? authCopy.ownerSessionEnded
-      : typeof body?.message === "string" ? body.message : unavailable);
+    throw new RequestReadError(response.status, typeof body?.message === "string" ? body.message : unavailable);
   }
   return response.json();
 }
@@ -47,14 +50,17 @@ class RequestReadError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
 
-export function PasswordRequestsEditor({ initial, initialRequestId }: { initial: readonly PasswordRequestRow[] | null; initialRequestId?: string }) {
+export function PasswordRequestsEditor({ initialRequestId }: { initialRequestId?: string }) {
   const id = useId();
   const { detailOpen, openDetail, closeDetail } = useRecordView({ initiallyOpen: !!initialRequestId });
-  const [rows, setRows] = useState(initial ?? []);
-  const [available, setAvailable] = useState(initial !== null);
+  const [rows, setRows] = useState<readonly PasswordRequestRow[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(initialRequestId ?? null);
   const [detail, setDetail] = useState<PasswordRequestDetails | null>(null);
-  const [loading, setLoading] = useState(!!initialRequestId);
+  const [listBusy, setListBusy] = useState(true);
+  const [detailBusy, setDetailBusy] = useState(!!initialRequestId);
+  const [listError, setListError] = useState("");
+  const [detailError, setDetailError] = useState("");
+  const [sessionEnded, setSessionEnded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -62,55 +68,82 @@ export function PasswordRequestsEditor({ initial, initialRequestId }: { initial:
   const [method, setMethod] = useState<PasswordRequestOwnershipMethod>("call");
   const [channel, setChannel] = useState<PasswordRequestSentChannel>("sms");
   const [confirmed, setConfirmed] = useState(false);
-  const reading = useRef<AbortController | null>(null);
+  const reading = useRef<Partial<Record<ReadKind, AbortController>>>({});
+  const accessEnded = useRef(false);
   const writing = useRef(false);
   const detailsScroll = useRef<HTMLDivElement>(null);
   const confirmationTrigger = useRef<HTMLButtonElement>(null);
-  const busy = loading || saving;
+  const detailActionBusy = detailBusy || saving || sessionEnded;
 
   function updateDetail(request: PasswordRequestDetails) {
     setDetail(request);
-    setRows(previous => previous.map(row => row.id === request.id ?
-      { id: request.id, phone: request.phone, requestedAt: request.requestedAt, status: request.status } : row));
+    setRows(previous => previous?.map(row => row.id === request.id ?
+      { id: request.id, phone: request.phone, requestedAt: request.requestedAt, status: request.status } : row) ?? null);
+  }
+
+  function cancelReads() {
+    reading.current.list?.abort();
+    reading.current.detail?.abort();
+    reading.current = {};
+  }
+
+  function endSession() {
+    accessEnded.current = true;
+    cancelReads();
+    setSessionEnded(true);
+    setListBusy(false);
+    setDetailBusy(false);
+    setRows(null);
+    setDetail(null);
+    setConfirmation(null);
+    setNotice("");
+    setError("");
+    setListError("");
+    setDetailError("");
   }
 
   async function read(requestId: string | null, quiet = false) {
-    if (writing.current || quiet && reading.current) return;
-    reading.current?.abort();
+    const kind = requestId === null ? "list" : "detail";
+    if (accessEnded.current || writing.current || quiet && reading.current[kind]) return;
+    reading.current[kind]?.abort();
     const controller = new AbortController();
-    const clearDeadline = startRequestDeadline(controller);
-    reading.current = controller;
-    if (!quiet) { setLoading(true); setError(""); }
-    let refreshSelected = false;
+    const clearDeadline = startRequestDeadline(controller, readDeadlineMs);
+    const setBusy = kind === "list" ? setListBusy : setDetailBusy;
+    const setReadError = kind === "list" ? setListError : setDetailError;
+    reading.current[kind] = controller;
+    if (!quiet) { setBusy(true); setReadError(""); }
     try {
       if (requestId === null) {
         const { requests } = await readRequests<{ requests: readonly PasswordRequestRow[] }>("", controller.signal);
-        if (reading.current !== controller) return;
+        if (reading.current.list !== controller) return;
+        controller.signal.throwIfAborted();
         if (!Array.isArray(requests)) throw new Error(unavailable);
         setRows(requests);
-        setAvailable(true);
-        refreshSelected = requests.some(row => row.id === selectedId);
-        setDetail(current => {
-          if (!current) return null;
-          const updated = requests.find(row => row.id === current.id);
-          if (!updated) return null;
-          return updated.status === current.status ? current : { ...current, status: updated.status, link: null };
-        });
       } else {
         const { request } = await readRequests<{ request: PasswordRequestDetails }>(`?id=${encodeURIComponent(requestId)}`, controller.signal);
-        if (request?.id !== requestId) throw new Error(unavailable);
-        if (reading.current === controller) updateDetail(request);
+        if (reading.current.detail !== controller) return;
+        controller.signal.throwIfAborted();
+        if (request?.id !== requestId) throw new Error(detailUnavailable);
+        updateDetail(request);
       }
+      setReadError("");
     } catch (failure) {
-      if (reading.current !== controller) return;
-      if (!quiet) setError(failure instanceof RequestReadError ? failure.message : unavailable);
-      if (requestId && failure instanceof RequestReadError && [401, 403, 404].includes(failure.status)) setDetail(null);
+      if (reading.current[kind] !== controller) return;
+      if (failure instanceof RequestReadError && (failure.status === 401 || failure.status === 403)) { endSession(); return; }
+      if (requestId && failure instanceof RequestReadError && failure.status === 404) {
+        setDetail(null);
+        setConfirmation(null);
+        setReadError(failure.message);
+      } else if (!quiet) {
+        const message = failure instanceof RequestReadError && failure.status < 500 ? failure.message
+          : kind === "detail" ? detailUnavailable : unavailable;
+        setReadError(controller.signal.aborted ? "The request took too long. Try again." : message);
+      }
     } finally {
       clearDeadline();
-      if (reading.current === controller) {
-        reading.current = null;
-        setLoading(false);
-        if (refreshSelected && selectedId) void read(selectedId, true);
+      if (reading.current[kind] === controller) {
+        delete reading.current[kind];
+        setBusy(false);
       }
     }
   }
@@ -118,9 +151,13 @@ export function PasswordRequestsEditor({ initial, initialRequestId }: { initial:
   const recheckDetail = useEffectEvent(() => {
     if (detailOpen && selectedId && document.visibilityState === "visible") void read(selectedId, true);
   });
-  const readInitialRequest = useEffectEvent((requestId: string) => { void read(requestId); });
+  const readInitialRequests = useEffectEvent((requestId?: string) => {
+    void read(null);
+    if (requestId) void read(requestId);
+  });
   useEffect(() => {
-    if (initialRequestId) readInitialRequest(initialRequestId);
+    const start = window.setTimeout(() => readInitialRequests(initialRequestId), 0);
+    return () => window.clearTimeout(start);
   }, [initialRequestId]);
   useEffect(() => {
     const recheck = () => recheckDetail();
@@ -129,8 +166,7 @@ export function PasswordRequestsEditor({ initial, initialRequestId }: { initial:
     return () => {
       window.removeEventListener("focus", recheck);
       document.removeEventListener("visibilitychange", recheck);
-      reading.current?.abort();
-      reading.current = null;
+      cancelReads();
     };
   }, []);
 
@@ -140,16 +176,20 @@ export function PasswordRequestsEditor({ initial, initialRequestId }: { initial:
     const expiry = setTimeout(() => {
       setDetail(current => current?.id === detail.id && current.generation === detail.generation
         ? { ...current, status: "expired", link: null } : current);
-      setRows(previous => previous.map(row => row.id === detail.id && row.status === "link-generated" ? { ...row, status: "expired" } : row));
+      setRows(previous => previous?.map(row => row.id === detail.id && row.status === "link-generated" ? { ...row, status: "expired" } : row) ?? null);
       setConfirmation(current => current?.action === "sent" ? null : current);
     }, Math.max(0, expiresAt - Date.now()));
     return () => clearTimeout(expiry);
   }, [detail]);
 
   function open(event: MouseEvent<HTMLButtonElement>, requestId: string) {
-    if (writing.current) return;
-    if (selectedId !== requestId) setDetail(null);
+    if (writing.current || accessEnded.current) return;
+    if (selectedId !== requestId) {
+      setDetail(null);
+      setConfirmation(null);
+    }
     setSelectedId(requestId);
+    setError("");
     setNotice("");
     openDetail(event.currentTarget);
     detailsScroll.current?.scrollTo({ top: 0 });
@@ -172,11 +212,12 @@ export function PasswordRequestsEditor({ initial, initialRequestId }: { initial:
   }
 
   async function mutate(input: PasswordRequestMutation) {
-    if (writing.current) return;
+    if (writing.current || accessEnded.current) return;
     writing.current = true;
-    reading.current?.abort();
-    reading.current = null;
-    setLoading(false);
+    const restartList = !!reading.current.list;
+    cancelReads();
+    setListBusy(false);
+    setDetailBusy(false);
     setSaving(true);
     setError("");
     setNotice("");
@@ -184,8 +225,9 @@ export function PasswordRequestsEditor({ initial, initialRequestId }: { initial:
     try {
       const reply = await postAdmin(adminPasswordRequestsApi, input);
       if (!reply.ok) {
+        if (reply.status === 401 || reply.status === 403) { endSession(); return; }
         setError(replyMessage(reply, unavailable));
-        refreshDetail = reply.status === 401 || reply.status === 404 || reply.status === 409;
+        refreshDetail = reply.status === 404 || reply.status === 409;
         return;
       }
       const request = reply.body.request as PasswordRequestDetails | undefined;
@@ -199,11 +241,12 @@ export function PasswordRequestsEditor({ initial, initialRequestId }: { initial:
     } finally {
       writing.current = false;
       setSaving(false);
+      if (restartList) void read(null);
       if (refreshDetail) void read(input.id, true);
     }
   }
 
-  const selected = rows.find(row => row.id === selectedId);
+  const selected = detail ?? rows?.find(row => row.id === selectedId);
   const activeRequest = detail && (detail.status === "pending" || detail.status === "expired" || detail.status === "link-generated");
   const link = detail?.status === "link-generated" ? detail.link : null;
   const message = link ? passwordResetMessage(link) : null;
@@ -219,32 +262,38 @@ export function PasswordRequestsEditor({ initial, initialRequestId }: { initial:
     if (confirmation.action === "sent" && link) void mutate({ id: detail.id, action: "mark-sent", channel, generation: confirmation.generation, confirmed: true });
   }
 
-  return <RecordWorkspace $compact $detailOpen={detailOpen} data-password-requests data-analytics-ignore aria-busy={busy || undefined}>
-    <RequestToolbar><h1>Password Requests</h1><ActionButton type="button" disabled={busy} onClick={() => {
+  return <RecordWorkspace $compact $detailOpen={detailOpen} data-password-requests data-analytics-ignore aria-busy={saving || undefined}>
+    <RequestToolbar><h1>Password Requests</h1><ActionButton type="button" disabled={listBusy || saving || sessionEnded} onClick={() => {
       setNotice("");
       void read(null);
+      if (selectedId && detailOpen) void read(selectedId, true);
       void refreshPendingPasswordRequests(true);
     }}>Refresh requests</ActionButton></RequestToolbar>
-    {(notice || error && !confirmation || !available) && <RecordFeedback>
-      {notice && <p role="status">{notice}</p>}
-      {error && !confirmation && <FieldError role="alert">{error}</FieldError>}
-      {!available && !error && <FieldError role="status">{unavailable}</FieldError>}
-    </RecordFeedback>}
-    <RecordList aria-label="Password requests">
-      <RecordListScroll aria-label="Requests" tabIndex={0}>{rows.length ? rows.map(row => <li key={row.id}>
+    {sessionEnded && <RecordFeedback><FieldError role="alert">{authCopy.ownerSessionEnded}</FieldError></RecordFeedback>}
+    <RecordList aria-label="Password requests" aria-busy={listBusy || undefined}>
+      {listError && <RecordListTools><FieldError role="alert">{listError}</FieldError></RecordListTools>}
+      <RecordListScroll aria-label="Requests" tabIndex={0}>{rows?.length ? rows.map(row => <li key={row.id}>
         <RecordItem type="button" aria-current={row.id === selectedId ? "true" : undefined} aria-controls={`${id}-detail`}
           aria-label={`Open password request for +${formatPhone(row.phone)}, ${passwordRequestStatusLabels[row.status]}, ${formatSubscriptionExpiry(new Date(row.requestedAt))}`}
           disabled={saving} onClick={event => open(event, row.id)}>
           <RecordRowContent icon={<KeyIcon />} primary={<><RecordItemTitle>+{formatPhone(row.phone)}</RecordItemTitle><RequestStatus status={row.status} /></>}
             secondary={<><RequestTime value={row.requestedAt} /> · Open</>} />
         </RecordItem>
-      </li>) : available && <li><RecordEmpty>No password requests</RecordEmpty></li>}</RecordListScroll>
+      </li>) : rows && <li><RecordEmpty>No password requests</RecordEmpty></li>}</RecordListScroll>
     </RecordList>
-    <RecordDetails id={`${id}-detail`} aria-label="Selected password request">
+    <RecordDetails id={`${id}-detail`} aria-label="Selected password request" aria-busy={detailBusy || undefined}>
       <RecordBack onClick={closeDetail} disabled={saving}>Back to requests</RecordBack>
       <RecordCard><RecordScroll ref={detailsScroll} tabIndex={0} aria-label="Password request details">
-        {selected ? <><RecordDetailHead><h2>+{formatPhone(selected.phone)}</h2><RequestStatus status={detail?.status ?? selected.status} /></RecordDetailHead>
-          {detail ? <RecordBody>
+        {selected && <RecordDetailHead><h2>+{formatPhone(selected.phone)}</h2><RequestStatus status={selected.status} /></RecordDetailHead>}
+        {(notice || error && !confirmation) && <RecordBody>
+          {notice && <p role="status">{notice}</p>}
+          {error && !confirmation && <FieldError role="alert">{error}</FieldError>}
+        </RecordBody>}
+        {selectedId && !sessionEnded && !detailBusy && (detailError || !detail) && <RecordEmpty>
+          {detailError && <FieldError role="alert">{detailError}</FieldError>}
+          <ActionButton type="button" disabled={saving} onClick={() => void read(selectedId)}>Retry request details</ActionButton>
+        </RecordEmpty>}
+        {detail ? <RecordBody>
             <ReviewFacts>
               <div><dt>Registered phone</dt><dd>+{formatPhone(detail.phone)}</dd></div>
               <div><dt>Requested</dt><dd><RequestTime value={detail.requestedAt} /></dd></div>
@@ -260,8 +309,8 @@ export function PasswordRequestsEditor({ initial, initialRequestId }: { initial:
                 {detail.ownershipVerifiedAt ? <p>Ownership confirmed{detail.ownershipMethod && ` by ${passwordRequestOwnershipMethods[detail.ownershipMethod]}`} on <RequestTime value={detail.ownershipVerifiedAt} />.</p>
                   : <><p>Contact the registered phone yourself and confirm the person who answers requested this reset. Send the reset link only to this number.</p>
                     <ButtonRow><ButtonLink variant="secondary" href={telHref(detail.phone)} prefetch={false}>Call registered phone</ButtonLink>
-                      <ActionButton type="button" aria-haspopup="dialog" disabled={busy} onClick={event => openConfirmation(event, "ownership", detail.generation)}>Confirm phone ownership</ActionButton></ButtonRow></>}
-                {detail.ownershipVerifiedAt && <ButtonRow><ActionButton type="button" $variant="primary" disabled={busy}
+                      <ActionButton type="button" aria-haspopup="dialog" disabled={detailActionBusy} onClick={event => openConfirmation(event, "ownership", detail.generation)}>Confirm phone ownership</ActionButton></ButtonRow></>}
+                {detail.ownershipVerifiedAt && <ButtonRow><ActionButton type="button" $variant="primary" disabled={detailActionBusy}
                   aria-haspopup={link ? "dialog" : undefined} onClick={event => link ? openConfirmation(event, "replacement", detail.generation)
                     : void mutate({ id: detail.id, action: "generate-link", generation: detail.generation })}>
                   {link ? "Replace Password Reset Link" : "Generate Password Reset Link"}
@@ -275,16 +324,15 @@ export function PasswordRequestsEditor({ initial, initialRequestId }: { initial:
                 {detail.expiresAt && <p>Expires <RequestTime value={detail.expiresAt} />.</p>}
                 <DraftField aria-label="Prepared password reset message" readOnly value={message} rows={8} />
                 <ButtonRow>
-                  <CopyTextButton value={message} label="Copy Message" ariaLabel="Copy Message" subject="message" disabled={busy} />
+                  <CopyTextButton value={message} label="Copy Message" ariaLabel="Copy Message" subject="message" disabled={detailActionBusy} />
                   <ButtonLink variant="secondary" href={smsHref(detail.phone, message)} prefetch={false} onClick={() => setChannel("sms")}>Send via SMS</ButtonLink>
                   <ButtonLink variant="secondary" href={whatsappDraftHref(detail.phone, message)} prefetch={false} onClick={() => setChannel("whatsapp")}>Send via WhatsApp</ButtonLink>
                 </ButtonRow>
                 <Hint>Press Send in the messaging app. If it does not open, copy the message or select the text and copy it manually.</Hint>
-                {!detail.markedSentAt && <ButtonRow><ActionButton type="button" disabled={busy} aria-haspopup="dialog" onClick={event => openConfirmation(event, "sent", detail.generation)}>Mark as Sent</ActionButton></ButtonRow>}
+                {!detail.markedSentAt && <ButtonRow><ActionButton type="button" disabled={detailActionBusy} aria-haspopup="dialog" onClick={event => openConfirmation(event, "sent", detail.generation)}>Mark as Sent</ActionButton></ButtonRow>}
               </PanelBody>
             </Panel>}
-          </RecordBody> : !loading && <RecordEmpty><ActionButton type="button" onClick={() => void read(selected.id)}>Retry request details</ActionButton></RecordEmpty>}
-        </> : <RecordEmpty><h2>Open a password request</h2></RecordEmpty>}
+          </RecordBody> : !selectedId && !sessionEnded && <RecordEmpty><h2>Open a password request</h2></RecordEmpty>}
       </RecordScroll></RecordCard>
     </RecordDetails>
     {confirmation && detail && <CriteriaDialog id={`${id}-confirmation`} title={confirmationTitle} open onCancel={dismissConfirmation} closeLabel="Close" busy={saving}
