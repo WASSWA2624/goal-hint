@@ -51,6 +51,17 @@ test('summary HTTP uses the ordinary gated feed boundary and returns only comple
   assert.doesNotMatch(JSON.stringify(value), /fixtureId|forecast|prices|revisionId|records/);
 });
 
+test('a cookieless summary has guest access and no membership dependency', async () => {
+  let reads = 0;
+  const handler = createMatchFeedSummaryHandler(async () => { reads++; return stored(); }, { now: () => now });
+  const url = 'https://example.test/api/matches/summary?when=today';
+  const response = await handler(new Request(url));
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).access, { tier: 'free', signedIn: false });
+  assert.equal((await handler(new Request(`${url}&picks=only`))).status, 403);
+  assert.equal(reads, 1);
+});
+
 test('confirmed metrics survive an empty status table and cannot cross a period, source version or viewer change', () => {
   const feed = data(), href = feedPerformanceApiHref(query(), today), seed = { href, reply: summary(feed) };
   assert.equal(retainedFeedPerformance(seed, href, { ...feed, total: 0, paginationVersion: 'b'.repeat(64) }), seed);

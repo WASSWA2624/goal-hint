@@ -6,7 +6,7 @@ const matches = "/en/matches";
 const bestSlips = "/en/best-slips";
 const navigationTimeout = 15_000;
 const phaseTimeout = 30_000;
-const initialListRecoveryTimeout = 45_000;
+const initialRecoveryTimeout = 45_000;
 const totalTimeout = 115_000;
 
 class ReadinessError extends Error {}
@@ -31,6 +31,8 @@ function feedState({ pathname, phase, staging, diagnose = false }) {
     if (shown(shell, "[data-feed-navigation-retry]")) return { failure: "matches-list-navigation-retry" };
     if (shown(shell, '[data-feed-initial-retry="true"][aria-busy="true"]'))
       return diagnose ? { pending: "matches-list-recovery-deadline" } : false;
+    if (phase === "summary" && shown(shell, '[data-feed-summary-retry="true"]'))
+      return diagnose ? { pending: "matches-summary-recovery-deadline" } : false;
     const failedSummary = phase === "summary"
       && shown(shell, '[data-feed-performance-state="unavailable"], [data-feed-performance-state="stale"]');
     if (failedSummary) return diagnose ? { failure: "matches-summary-unavailable" } : false;
@@ -98,8 +100,8 @@ async function phaseState(page, pathname, phase, start, staging, budget = phaseT
       const result = await page.evaluate(feedState, { ...parameters, diagnose: true });
       requireReady(!result?.failure, result?.failure);
       if (result?.list || result?.summary) return result;
-      if (result?.pending && phase === "list" && budget === phaseTimeout)
-        return phaseState(page, pathname, phase, start, staging, initialListRecoveryTimeout);
+      if (result?.pending && budget === phaseTimeout)
+        return phaseState(page, pathname, phase, start, staging, initialRecoveryTimeout);
       requireReady(!result?.pending, result?.pending);
     }
     throw cause;
@@ -140,12 +142,14 @@ async function verifyStagingCoverage(page, origin, start) {
 
 async function qualify(page, origin, observations, state, name, pathname, open) {
   const start = performance.now();
+  state.acceptedList = null;
   state.phase = `${name}-navigation`;
   const confirmDocument = await open();
   state.phase = `${name}-list`;
   const staging = origin === "https://test.goalhint.com";
   const list = await phaseState(page, pathname, "list", start, staging);
   const listMs = Math.round(performance.now() - start);
+  state.acceptedList = { listMs, ...list };
   state.phase = `${name}-summary`;
   const summary = await phaseState(page, pathname, "summary", performance.now(), staging);
   const summaryMs = Math.round(performance.now() - start);
@@ -219,6 +223,15 @@ async function run() {
       isMobile: Boolean(option), hasTouch: Boolean(option) });
     const page = await context.newPage();
     page.on("pageerror", () => { diagnostic.pageErrors++; });
+    page.on("response", response => {
+      const url = new URL(response.url());
+      if (url.origin !== origin || !["/api/matches", "/api/matches/summary", "/api/best-slips"].includes(url.pathname)) return;
+      const headers = response.headers();
+      const id = headers["x-request-id"], duration = headers["server-timing"]?.match(/\bapp;dur=(\d+)\b/u)?.[1];
+      diagnostic.apiResponses.push({ path: url.pathname, status: response.status(),
+        ...(/^[a-f0-9-]{36}$/u.test(id ?? "") && { requestId: id }), ...(duration && { appMs: Number(duration) }) });
+      if (diagnostic.apiResponses.length > 8) diagnostic.apiResponses.shift();
+    });
     if (option) {
       const cdp = await context.newCDPSession(page);
       await cdp.send("Network.enable");
@@ -245,7 +258,7 @@ async function run() {
 }
 
 const observations = [];
-const diagnostic = { phase: "browser-start", pageErrors: 0 };
+const diagnostic = { phase: "browser-start", pageErrors: 0, acceptedList: null, apiResponses: [] };
 const watchdog = setTimeout(() => {
   console.error(JSON.stringify({ ok: false, failure: "browser-deadline", ...diagnostic, observations }));
   process.exit(1);

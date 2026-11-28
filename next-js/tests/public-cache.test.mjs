@@ -10,8 +10,8 @@ const start = Date.parse('2026-10-09T20:59:58Z'), parse = value => {
 };
 const descriptor = (options = {}) => publicCacheDescriptor({ kind: 'feed', locale: 'en', now: start,
   query: { market: 'match-result', page: 1 }, parse, ...options });
-function memory() {
-  let at = start, version = 0, entry, loads = 0, outage = false;
+function memory(at = start) {
+  let version = 0, entry, loads = 0, outage = false;
   const store = { async lookup() {
     if (outage) throw new Error('private cache failure');
     return { generations: { shared: String(version) }, value: entry?.stamp === version ? entry.value : null, createdAt: entry?.createdAt ?? null,
@@ -73,6 +73,28 @@ test('hits preserve response/source time and never extend expiry', async () => {
   m.advance(1000); // EAT midnight caps the ordinary five-second lifetime.
   assert.notDeepEqual(await m.cache.read(d, m.load), first); assert.equal(m.loads, 2);
 });
+
+test('a thirty-second response lease preserves the original clock, generation and midnight cutoff', async () => {
+  const at = start - 60_000, m = memory(at), lease = { ...descriptor({ now: at }), lifetimeMs: 30_000 };
+  const first = await m.cache.read(lease, async () => {
+    m.advance(6_000);
+    return { version: 'original', asOf: at, sourceAt: at - 60_000 };
+  });
+  m.advance(23_999);
+  assert.deepEqual(await m.cache.read(lease, m.load), first);
+  assert.equal(m.loads, 0);
+  m.advance(1);
+  assert.equal((await m.cache.read(lease, m.load)).version, '1');
+  m.invalidate();
+  await assert.rejects(m.cache.read(lease, async () => { throw new Error('source unavailable'); }), /source unavailable/u);
+  assert.equal((await m.cache.read(lease, m.load)).version, '2');
+
+  const nearMidnight = memory(), shortDay = { ...descriptor(), lifetimeMs: 30_000 };
+  await nearMidnight.cache.read(shortDay, nearMidnight.load);
+  nearMidnight.advance(2_000);
+  assert.equal((await nearMidnight.cache.read(shortDay, nearMidnight.load)).version, '2');
+});
+
 test('EAT rollover changes explicit and relative envelope keys but not immutable revision identity', () => {
   assert.notEqual(descriptor().key, descriptor({ now: start + 2000 }).key);
   assert.equal(descriptor({ kind: 'revision' }).key, descriptor({ kind: 'revision', now: start + 2000 }).key);

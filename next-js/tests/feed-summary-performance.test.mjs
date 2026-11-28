@@ -83,7 +83,8 @@ test('lean summaries retain exact feed counts, query filters, cohort versions an
   assert.equal(lean.statements.length, 2, 'only cohort counts and the bounded settlement audit are read');
   assert.deepEqual(full.ancillary, ['coverage', 'attempts', 'run']);
   assert.deepEqual(lean.ancillary, []);
-  assert.deepEqual(lean.options, [{ isolationLevel: 'RepeatableRead', maxWait: 5000, timeout: 90_000 }]);
+  assert.deepEqual(full.options, [{ isolationLevel: 'RepeatableRead', maxWait: 5000, timeout: 30_000 }]);
+  assert.deepEqual(lean.options, [{ isolationLevel: 'RepeatableRead', maxWait: 10_000, timeout: 90_000 }]);
   assert.deepEqual(Object.keys(summary).sort(), ['asOf', 'paginationVersion', 'performance', 'total']);
 });
 
@@ -114,6 +115,29 @@ test('summary identity ignores status selections, ordering and pagination but ch
     assert.equal(keys.at(-1), keys[0]);
   }
   assert.equal(keys[0], keys[1]); assert.notEqual(keys[1], keys[2]);
+});
+
+test('only the unfiltered public summary for the current reporting day receives the longer lease', async () => {
+  let descriptor;
+  const publicScope = { publishedForecasts: true };
+  const service = createMatchFeedSummaryService({ database: {}, competitionIds: [39], providerOdds: true, clock,
+    cache: { read: async (value) => { descriptor = value; return {}; } } });
+  const resolve = async (query, context = publicScope) => { await service.query(new URLSearchParams(query), context); return descriptor; };
+  const today = await resolve('when=today');
+  const date = await resolve('date=2026-10-09&result=pending&page=2&sort=live-first');
+  assert.equal(today.lifetimeMs, 30_000);
+  assert.equal(today.deadlineAt, Date.parse('2026-10-09T21:00:00Z'));
+  assert.equal(today.key, date.key);
+  assert.equal(today.lifetimeMs, date.lifetimeMs);
+  assert.deepEqual(today.tags, ['date:2026-10-09', 'global:catalog', 'global:progress']);
+  for (const query of ['date=2026-10-08', 'when=tomorrow', 'when=last-7-days', 'when=today&status=finished',
+    'when=today&country=England', 'when=today&market=total-goals', 'when=today&prob=20-90',
+    'when=today&odds=2.00-3.00', 'when=today&tz=Africa%2FKampala']) {
+    assert.equal((await resolve(query)).lifetimeMs, 5_000, query);
+  }
+  for (const context of [{}, { publishedOnly: true }, { ...publicScope, completedOnly: true }]) {
+    assert.equal((await resolve('when=today', context)).lifetimeMs, 5_000);
+  }
 });
 
 test('summary configuration, invalid queries and database errors retain the feed failure contract', async () => {

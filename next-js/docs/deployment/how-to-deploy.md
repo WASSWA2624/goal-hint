@@ -306,7 +306,7 @@ binary through the native release process when the shell itself changes.
    safe activation. The Playwright module is the operator's local JavaScript
    entry point. With that option the receiver checks both feeds in Chrome
    before it records the release and removes the previous installation. The
-   browser can wait for the Matches page's bounded initial retry when it is
+   browser can wait for a bounded initial list or summary retry when it is
    visibly pending. Production still requires populated feeds with verified
    counts. A rejection or missed deadline restores the previous release. The VPS needs
    no ordinary application build, npm install, browser or historical release copy.

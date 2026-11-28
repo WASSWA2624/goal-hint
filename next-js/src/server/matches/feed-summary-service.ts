@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock } from "../../domain/calendar.ts";
 import { getDayBoundsInTimeZone } from "../../domain/device-calendar.ts";
 import { feedPerformanceReplySchema, performanceFeedQuery } from "../../domain/feed-performance-summary.ts";
-import { feedQueryRules, getFeedToday, maximumCompetitionScope, resolveFeedDates, type FeedParameters } from "../../domain/feed-query.ts";
+import { activeFeedFilterCount, feedQueryRules, getFeedToday, maximumCompetitionScope, resolveFeedDates, type FeedParameters } from "../../domain/feed-query.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -24,6 +24,7 @@ import { createMysqlPublicSearchLimiter } from "./search-limit.ts";
 const storedSummarySchema = feedPerformanceReplySchema.omit({ access: true }).extend({
   total: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
 }).refine((value) => value.performance.total === value.total);
+const todaySummaryLeaseMs = 30_000;
 
 /** Aggregate reads share the feed's scope, ranking, audit and invalidation rules, without hydrating a discarded page. */
 export function createMatchFeedSummaryService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[];
@@ -46,8 +47,9 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
       await prepareDemoRange(database, sourceRange, asOf);
       if (query.search) await createMysqlPublicSearchLimiter(database).consume();
       const read = () => timedRequestPhase("summary-transaction", () => database.transaction(async (tx) => {
-        const { performanceVersion: paginationVersion } = await storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly,
-          publishedOnly, historyBefore, providerOdds, publishedForecasts);
+        const { performanceVersion: paginationVersion } = await timedRequestPhase("summary-generation",
+          () => storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly,
+            publishedOnly, historyBefore, providerOdds, publishedForecasts));
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
         const sql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly, publishedOnly, historyBefore, publishedForecasts);
         const overrides = await timedRequestPhase("summary-membership",
@@ -63,12 +65,19 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
           { total, available: Number(matching.available ?? 0), void: Number(matching.void ?? 0), cancelled: Number(matching.cancelled ?? 0) },
           cache ? { key: feedPerformanceCacheKey(sql, query.locale, providerOdds), nowMs: asOf } : undefined, undefined, overrides));
         return freezeEvidence(storedSummarySchema.parse({ performance, total, paginationVersion, asOf }));
-      }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 90_000 }));
-      return cache ? await timedRequestPhase("summary-cache", () => cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
+      }, { isolationLevel: "RepeatableRead", maxWait: 10_000, timeout: 90_000 }));
+      if (!cache) return await read();
+      const descriptor = publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
         query: { ...query, projection: "feed-summary-v14", providerOdds, completedOnly: context.completedOnly === true,
           publishedOnly, publishedForecasts, today, dates: { from: range.startDate, to: range.endDate } },
-        scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedSummarySchema.parse(value) }), read)) : await read();
+        scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedSummarySchema.parse(value) });
+      // The public Today audit is shared by the busiest entry point. Keep its
+      // original clock, generation checks, and reporting-day cutoff.
+      const publicToday = publishedForecasts && !publishedOnly && !context.completedOnly && !query.zone && !query.summary &&
+        range.dayCount === 1 && range.startDate === reportingToday && activeFeedFilterCount(query) === 0;
+      return await timedRequestPhase("summary-cache",
+        () => cache.read(publicToday ? { ...descriptor, lifetimeMs: todaySummaryLeaseMs } : descriptor, read));
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;
       throw new MatchFeedError("unavailable");
