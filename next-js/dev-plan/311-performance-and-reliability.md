@@ -12,4 +12,8 @@ Reproduce production-sized feed and archive reads, navigation and document failu
 4. Isolate login dependencies and keep administrator session failures fail-closed with a retryable status. Distinguish document, connection and render failures. Correlate affected API response IDs with fixed server phase names.
 5. Run matching before and after lab measurements, focused fail-then-pass regressions and the production build. Verify staging release and database evidence before promoting the same artifact to production.
 
+## Rollout status
+
+Staging accepted `b0b70301` and verified all 95 required migrations. Production restored `64aba48b` after the candidate's Matches data-readiness check failed. The failing production phase and the PageSpeed reachability error still need qualification.
+
 [Implementation evidence and known limits](../docs/reports/performance-reliability-2026-11-28.md).

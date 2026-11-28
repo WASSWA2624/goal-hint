@@ -66,8 +66,7 @@ async function measure(browser, origin, profile, route, theme, screenshot) {
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
     if (errors.length) throw new Error(errors.join("\n"));
-    if (screenshot) await page.screenshot({ path: screenshot, animations: "disabled" });
-    return await page.evaluate(() => {
+    const sample = await page.evaluate(() => {
       const documentTiming = performance.getEntriesByType("navigation")[0];
       const resources = performance.getEntriesByType("resource").filter(entry => new URL(entry.name).origin === location.origin);
       const scripts = resources.filter(entry => new URL(entry.name).pathname.endsWith(".js"));
@@ -77,6 +76,11 @@ async function measure(browser, origin, profile, route, theme, screenshot) {
         scriptBytes: scripts.reduce((sum, entry) => sum + entry.encodedBodySize, 0),
         documentBytes: documentTiming.encodedBodySize, rows: document.querySelectorAll("[data-fixture-id], [data-slip-key]").length };
     });
+    if (screenshot) {
+      await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, theme);
+      await page.screenshot({ path: screenshot, animations: "disabled" });
+    }
+    return sample;
   } finally { await context.close(); }
 }
 

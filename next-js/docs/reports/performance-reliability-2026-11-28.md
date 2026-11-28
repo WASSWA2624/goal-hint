@@ -44,6 +44,13 @@ A read-only MariaDB 11.4.14 status snapshot showed 14 connected threads, two run
 
 The affected APIs return an opaque `X-Request-Id` and a total app duration in `Server-Timing`. For failures and reads taking at least two seconds, the application records fixed operation and phase names, elapsed time and status. Input, query values, account identifiers, cookies and exception details are excluded from these records. Browser transfer and server phase timings can be compared using that response ID.
 
+### Implementation references
+
+- Matches streams the browser shell from its route and resolves list and summary at their own boundaries. The browser retains verified counts by viewer and cohort. [Matches route](../../src/app/_components/feed-route.tsx), [summary state](../../src/components/match/feed-performance-summary.tsx).
+- Best Slips bounds the archive reader and preserves the accepted result through browse failures. The drawer resolves and copies a canonical share link independently of image readiness. [Publication reader](../../src/server/slips/published-slips.ts), [browse hook](../../src/components/slips/use-best-slips-browse.ts), [share drawer](../../src/components/slips/sharing/slip-share-drawer.tsx).
+- Account login and the Users API separate dependency failure from invalid access. [Login handler](../../src/server/members/member-auth-http.ts), [owner guard](../../src/server/admin/admin-http.ts), [Users workspace](../../src/components/admin/user-workspace.tsx).
+- Document and runtime recovery reuse the theme and retry controls. [Service worker](../../public/offline-worker.js), [global render error](../../src/app/global-error.tsx), [request timing](../../src/server/http/request-timing.ts), [hosted verifier](../../scripts/receive-hosted.py).
+
 ## Isolated benchmarks
 
 | Scenario | Baseline p50 / p95 | Candidate p50 / p95 | Fixture and result |
@@ -98,6 +105,18 @@ Full physical-device acceptance, independent packet-loss and jitter runs, and pr
 Staging activated commit `6a02057d399684312f295bdb460fee783342da5b`, Next build `hIA42rDNw6Q4C8Hg49WRp`, from ZIP SHA-256 `f377548ab9afdef0744aaa15d2a792e6c6b7efeb48a55ab3b08311fdab8714da`. The receiver verified the unchanged 95-migration ledger and its HTTPS cutover checks. All 14 additional probes passed, including the 30-day Matches API at 1.78 seconds, the account session and the guest Users API’s 401. The staged baseline is sparse. Chrome showed a genuine zero in the first Matches cards at 3.29 seconds on mobile and 2.98 seconds on desktop, then exercised Best Slips, Account and history without an uncaught page error.
 
 The first production cutover passed the migration check and failed the old 15-second complete-document smoke on Matches. Apache recorded HTTP 200 for the curl attempts at intervals matching the deadline and retry delay. The receiver restored commit `64aba48b`. The revised verifier requests the browser document, enforces the 15-second response-header budget, checks that the full response contains the intended build, accepted list and ready summary, and separately verifies the bounded Today API's guest payload. The document body has a bounded 40-second data budget. A production response with unavailable coverage fails the gate. Staging can report its known coverage limitation while its provider jobs are disabled. The crawler response behavior and captions retain their independent regression coverage.
+
+The revised gate passed five receiver tests, three archive tests and eleven MariaDB runner tests. Staging then activated `b0b70301d0ff1aa9699f272d580ce2d0a2949ea6` with the unchanged build `hIA42rDNw6Q4C8Hg49WRp` from ZIP SHA-256 `2e9fdadd185f5d1295e21583d04c05d9e38bf312b1c08b5a02ab51451ce61f90`. The delta changed one metadata file. Staging verified the same 95 migrations.
+
+The second production attempt transferred that exact package and verified 95 required migrations. The revised Matches check reached the body-read validation and reported “Matches list or summary unavailable.” Its response did not meet the accepted-list and ready-summary gate. The receiver restored the prior build. Read-only SSH confirmed the production application is active at `64aba48b137e881f2808ef1aa403af8d331ca8aa` with build `s0NZodFIPRZlvqhNvg3gL` and its existing deployment receipt. The candidate remains on staging. No migration was pending or applied.
+
+A read-only browser-header probe after rollback returned HTTP 200 with the prior build, accepted list and ready summary at 14.82 seconds to first byte and 15.39 seconds complete. This observation measures rollback health. It provides no production performance comparison for the candidate.
+
+The deploy account could read the Apache access log. The relevant Apache, Passenger and hosting error-log locations were unavailable to that account. The failing candidate response was not captured before rollback. The current evidence cannot isolate the list, summary, or exact failing data phase in production. Before another cutover, correlate the attempt with the host error logs or reproduce it using an isolated MariaDB cohort with production-like replay and settlement density. The revision retains the readiness gate and the prior release remains available for rollback through the standard restore workflow. The production 30-day failure remains unqualified.
+
+The PageSpeed browser interface still returned “Unable to resolve” for the root, Matches and Best Slips after rollback. The public probes established working IPv4 DNS, HTTPS and canonical redirects at the observed vantage point. The Google failure remains unresolved and returned no scores for either device strategy.
+
+The signed Android APK `1.0.0+8` matched the release digest. The API 36 emulator’s Flutter WebView showed the original production build in light and dark and rendered 50 of 1,079 pending fixtures. Counts settled at Won 21, Pending 1,079, Lost 3 and Others 28. Account navigation and Android Back preserved the list position and counts with 5 Mbps down, 1 Mbps up and 120 ms configured. The AVD lacked Android Chrome, automatic review also blocked its launch, and the three-button system bar overlapped the app dock. Candidate WebView, emulator offline recovery and physical-device behavior remain unverified.
 
 ## Reproduction
 

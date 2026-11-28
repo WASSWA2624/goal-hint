@@ -40,10 +40,9 @@ try {
       const page = await context.newPage();
       await page.goto(new URL("/en", root).href);
       await page.locator("[data-offline-fixture]").waitFor();
-      await page.waitForFunction(async () => {
-        if (!navigator.serviceWorker.controller) return false;
-        return (await fetch("/offline-cache/status").then(response => response.json()).catch(() => null))?.ok === true;
-      }, null, { polling: 500, timeout: 30_000 });
+      await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller)
+        && document.documentElement.dataset.offlineCache === "ready", null, { polling: 500, timeout: 45_000 });
+      assert.equal(await page.evaluate(async () => (await fetch("/offline-cache/status").then(response => response.json())).ok), true);
 
       await setFault("503");
       const unavailable = await navigate(page, target);
