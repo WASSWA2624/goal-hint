@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useMemo, type ReactNode } from "react";
+import { memo, useContext, useMemo, type ReactNode } from "react";
 import { useSearchParams, useSelectedLayoutSegment } from "next/navigation";
 import { HeaderBrand } from "@/components/ui/brand";
 import { AccountLinks } from "@/components/members/account-link";
@@ -26,7 +26,7 @@ type NavigationProps = {
   destinations: ReturnType<typeof navigationDestinations>;
 };
 
-export function PublicHeader({ locale, current, destinations, app, wide, workspace, showAccount, administratorName }: NavigationProps & {
+export const PublicHeader = memo(function PublicHeader({ locale, current, destinations, app, wide, workspace, showAccount, administratorName }: NavigationProps & {
   app: boolean;
   wide: boolean;
   workspace: boolean;
@@ -47,15 +47,15 @@ export function PublicHeader({ locale, current, destinations, app, wide, workspa
     </ContentHeader>
     <NavigationProgress label={messages.text("navigation.loading")} />
   </Header>;
-}
+});
 
-export function PublicTabs({ locale, current, destinations }: NavigationProps) {
+export const PublicTabs = memo(function PublicTabs({ locale, current, destinations }: NavigationProps) {
   const messages = createMessages(locale);
   return <TabBar aria-label={messages.text("navigation.tabs")}>
     <SessionNavigation mobile locale={locale} destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")}
       moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
   </TabBar>;
-}
+});
 
 /** Standalone pages retain their shell. App routes supply the same frame from their common layout. */
 export function PublicShellBoundary({ children, header, tabs, app, locale, workspace }: {

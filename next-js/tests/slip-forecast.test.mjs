@@ -9,7 +9,8 @@ import { cycleFromRows, revisionFromRows } from '../src/server/predictions/histo
 import { goalMarketExtensionFromRow, prepareGoalMarketExtension } from '../src/server/predictions/goal-market-store.ts';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 import { bindSlipForecasts, projectSlipForecastResult, readSlipForecastResults, slipForecastReadRules } from '../src/server/slips/slip-forecast.ts';
-import { projectSlipTotal15Forecast } from '../src/server/slips/slip-goal-forecast.ts';
+import { projectSlipTotal15Forecast, readArchivedSlipGoalExtensions } from '../src/server/slips/slip-goal-forecast.ts';
+import { PredictionHistoryError } from '../src/server/predictions/history-contract.ts';
 import { slipForecastFixture } from './helpers/slip-forecast-fixtures.mjs';
 import { pricedEditorialSelection } from './helpers/best-slip-publication-fixtures.mjs';
 
@@ -106,6 +107,37 @@ test('an exact sealed Total 1.5 extension still needs a numerically qualified pa
     f.goalExtension = undefined;
     assert.equal(await bindSlipForecasts(tx, editorial, f.at), null);
   }
+});
+
+test('archive goal reuse requires the current verified seal and matching row identity', async () => {
+  const f = slipForecastFixture({ localQualification: 'qualified' }), parent = bound(f);
+  const prepared = prepareGoalMarketExtension({ localPoisson: f.candidate.markets['total-goals'].provenance.rates,
+    definitions: liveGoalMarketDefinitions });
+  const { cycleId, revisionId, publishedAt } = parent.forecast;
+  const sealed = { ...prepared, cycleId, revisionId, fixtureId: parent.fixtureId, recordedAt: publishedAt,
+    contentHash: evidenceFingerprint(prepared) };
+  const row = { ...sealed, recordedAt: new Date(publishedAt), body: sealed, integrity: evidenceFingerprint(sealed), validIntegrity: 1 };
+  let rows = [row], query;
+  const tx = { $queryRaw: async (statement) => { query = statement; return rows; } };
+  const read = () => readArchivedSlipGoalExtensions(tx, [revisionId]);
+  const decoded = (await read()).get(revisionId);
+  assert.doesNotMatch(query.sql, /CASE WHEN/u);
+  assert.ok(decoded.markets.length < prepared.markets.length);
+  assert.deepEqual(projectSlipTotal15Forecast(decoded, parent.fixtureId, parent.kickoffAt, parent.forecast, f.at),
+    projectSlipTotal15Forecast(goalMarketExtensionFromRow(row), parent.fixtureId, parent.kickoffAt, parent.forecast, f.at));
+  rows = [{ ...row, body: null }];
+  assert.strictEqual((await read()).get(revisionId), decoded);
+  assert.match(query.sql, /CASE WHEN.+THEN NULL ELSE e\.body END/su);
+  assert.match(query.sql, /SHA2\(CAST\(e\.body AS CHAR\),256\)/u);
+  assert.deepEqual(query.values, [revisionId, row.integrity, revisionId]);
+
+  for (const changed of [{ validIntegrity: 0 }, { fixtureId: randomUUID() }, { recordedAt: new Date(publishedAt + 1) },
+    { contentHash: 'f'.repeat(64) }, { integrity: 'f'.repeat(64) }]) {
+    rows = [{ ...row, body: null, ...changed }];
+    await assert.rejects(read, (error) => error instanceof PredictionHistoryError && error.reason === 'invalid-state');
+  }
+  rows = [];
+  assert.equal((await read()).size, 0);
 });
 
 test('a formally void original cycle retains its adjudication but remains private while its replacement is live', () => {

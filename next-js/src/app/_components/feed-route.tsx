@@ -38,7 +38,9 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
   browserDocument }: { dated?: boolean; read?: typeof readPublicMatchFeedList; instant?: typeof getShellInstant;
     policy?: typeof getDiscoveryPolicy; resolveAccess?: typeof resolveViewerAccess; readSummary?: typeof readGatedFeedSummary;
     document?: typeof isDocumentRequest; browserDocument?: typeof isDocumentRequest } = {}) {
-  const browser = cache(async () => browserDocument?.() ?? false);
+  const browser = cache(async () => browserDocument
+    ? await browserDocument() || !await document()
+    : false);
   const requestInstant = cache(instant);
   const browserView = cache(async (params: Props["params"], searchParams: Props["searchParams"]) => {
     if (dated || !await browser()) return null;

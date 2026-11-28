@@ -558,9 +558,9 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         const sourceBands = bestSlipPublicationBands(query.oddsBand);
         const publicationLimit = (allDates ? bestSlipsQueryRules.scanDays : bestSlipsQueryRules.maximumDays) * (sourceBands.length + 1);
         // Read a table before sampling the clock. A clock-only SELECT does not establish an InnoDB snapshot.
-        const headers = await tx.$queryRaw<PublicationRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity
+        const headers = await timedRequestPhase("archive-headers", () => tx.$queryRaw<PublicationRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(bodyJson AS CHAR),256) AS validIntegrity
           FROM DailySlipPublication WHERE oddsBand IN ('legacy',${Prisma.join([...sourceBands])}) ${scope}
-          ORDER BY eatDate DESC, FIELD(oddsBand,'legacy',${Prisma.join([...sourceBands])}) LIMIT ${publicationLimit + 1}`);
+          ORDER BY eatDate DESC, FIELD(oddsBand,'legacy',${Prisma.join([...sourceBands])}) LIMIT ${publicationLimit + 1}`));
         const asOf = await databaseTime(tx);
         const activeDays = previousDay ? bestSlipActivePublicationDays(asOf) : [];
         const overlapDay = activeDays.length === 2 && activeDays[1] === today ? activeDays[0] : undefined;
@@ -583,7 +583,7 @@ export function createPublishedSlips(database: DatabaseRuntime, {
         }
         const parents = new Map(selected.map((row) => [row.id, publication(row)]));
         const requestedBand = query.oddsBand ?? defaultBestSlipOddsBand;
-        const batches = await readAppendBatches(tx, parents, asOf);
+        const batches = await timedRequestPhase("archive-append-batches", () => readAppendBatches(tx, parents, asOf));
         const dailyPublication = dailyView ? [...parents].find(([, parent]) => parent.day === dates.from && parent.version >= 3
           && parent.oddsBand === requestedBand) : undefined;
         const legacyDailyOrder = dailyView && !dailyPublication;
@@ -778,8 +778,8 @@ async function* readAuditedPublicationPages(tx: Prisma.TransactionClient, parent
     let after = 0;
     do {
       const expected = Math.min(size, count - after), last = after + expected === count;
-      const rows = await tx.$queryRaw<RawSlipRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(snapshotJson AS CHAR),256) AS validIntegrity
-        FROM PublishedSlip WHERE publicationId=${id} AND \`rank\`>${after} ORDER BY \`rank\` LIMIT ${expected + Number(last)}`);
+      const rows = await timedRequestPhase("archive-rows", () => tx.$queryRaw<RawSlipRow[]>(Prisma.sql`SELECT *,integrity=SHA2(CAST(snapshotJson AS CHAR),256) AS validIntegrity
+        FROM PublishedSlip WHERE publicationId=${id} AND \`rank\`>${after} ORDER BY \`rank\` LIMIT ${expected + Number(last)}`));
       if (rows.length !== expected) fail("unavailable");
       yield await readAuditedPublicationSnapshots(tx, scope, rows, batches, after);
       after += expected;
@@ -802,7 +802,7 @@ async function readAuditedPublicationSnapshots(tx: Prisma.TransactionClient, par
     if ((rank > parent.count && !appendBatch) || (row.appendBatchId ?? null) !== (appendBatch?.id ?? null)) return fail("unavailable");
     return { row, parent, publishedAt: appendBatch?.publishedAt ?? parent.publishedAt, ...(appendBatch ? { appendBatch } : {}) };
   });
-  const snapshots = await readSnapshots(tx, memberships.map(({ row }) => row));
+  const snapshots = await timedRequestPhase("archive-row-evidence", () => readSnapshots(tx, memberships.map(({ row }) => row)));
   const windows = new Map<string, ReturnType<typeof bestSlipFixtureWindow>>();
   return memberships.map((membership, index) => {
     const snapshot = snapshots[index]!;

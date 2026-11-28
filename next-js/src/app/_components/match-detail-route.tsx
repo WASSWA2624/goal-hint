@@ -74,11 +74,10 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
       }
       // Section summaries stream into the existing client view without holding its primary content.
       const previewPromise = result.data ? loadPreview(result.data.route.fixtureId) : undefined;
-      const offer = await offerPromise;
       return <>
         {result.data && !query && <script type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: serializeStructuredData(matchStructuredData(result.data, route.locale)) }} />}
-        <MatchDetailPage showAccount offer={offer} result={result} today={today} locale={route.locale}
+        <MatchDetailPage showAccount offerPromise={offerPromise} result={result} today={today} locale={route.locale}
           {...(previewPromise ? { previewPromise } : {})}
           historyResult={historyResult} historyQuery={query}
           retryHref={`/en/matches/${encodeURIComponent(route.fixtureId)}/${encodeURIComponent(route.slug)}`} />

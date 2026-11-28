@@ -39,7 +39,9 @@ test('a played local fixture without a replay pointer is suppressed without read
   let queries = 0;
   const tx = { $queryRaw: async (statement) => {
     assert.equal(++queries, 1);
-    assert.match(statement.sql, /pointer\.kickoffAt=f\.kickoff\) AS hasReplay/u);
+    assert.match(statement.sql, /overrideReplay\.fixtureId IS NOT NULL AS hasReplay/u);
+    assert.match(statement.sql, /LEFT JOIN NovemberReplayProjection overrideReplay ON overrideReplay\.fixtureId=f\.id\s+AND overrideReplay\.revisionId IS NOT NULL AND overrideReplay\.kickoffAt=f\.kickoff/u);
+    assert.match(statement.sql, /overrideClose\.cycleId=c\.id\s+AND overrideClose\.fixtureId=f\.id AND overrideClose\.kind='close' AND overrideClose\.revisionId=rp\.id/u);
     return [{ id, kickoff: new Date(1), cycleState: 'closed', fixtureStatus: 'finished-regulation',
       publishedRevisionId: '00000000-0000-4000-8000-000000000002', legacyAvailable: 1,
       hasLocal: 1, hasFrozen: 0, hasReplay: 0, occurrenceVoid: 0, marketKey: null, selection: null }];
@@ -48,6 +50,27 @@ test('a played local fixture without a replay pointer is suppressed without read
     publishedForecasts: true, useDefaultFeatured: true, includeSettlements: false,
   });
   assert.deepEqual([...overrides], [[id, { baseline: 'pending', result: 'unavailable', hasPrediction: false }]]);
+});
+
+test('list and summary ordering share a completed membership audit only for the same snapshot and scope', async () => {
+  let reads = 0;
+  const tx = { $queryRaw: async () => { reads++; return []; } };
+  const options = { publishedForecasts: true, useDefaultFeatured: true };
+  const snapshot = { database: {}, version: 'first', locale: 'en', providerOdds: false };
+  const listed = { ...query, sort: { by: 'live-first', direction: 'desc' } };
+  const listSql = feedSql(listed, resolveFeedDates(listed, today), [39]);
+  const summarySql = feedSql(query, resolveFeedDates(query, today), [39]);
+  const first = await readFeedResultOverrides(tx, listSql, { ...options, includeSettlements: true }, snapshot);
+  assert.equal(await readFeedResultOverrides(tx, summarySql, options, snapshot), first);
+  assert.equal(reads, 1);
+
+  const other = { ...query, status: 'finished' };
+  const otherSql = feedSql(other, resolveFeedDates(other, today), [39]);
+  await readFeedResultOverrides(tx, otherSql, options, snapshot);
+  await readFeedResultOverrides(tx, summarySql, options, { ...snapshot, version: 'changed' });
+  await readFeedResultOverrides(tx, summarySql, options, { ...snapshot, database: {} });
+  await readFeedResultOverrides(tx, summarySql, { ...options, includeSettlements: false }, snapshot);
+  assert.equal(reads, 5);
 });
 
 test('the displayed exact grade replaces archive membership, including picks without a legacy market', async () => {

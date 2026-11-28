@@ -3,11 +3,14 @@ import "server-only";
 import { isPlayedFinalStatus, playedFinalFixtureStatuses, type SettlementStatus } from "../../domain/market-settlement.ts";
 import { matchesPredictionResult, type PredictionResult, type PredictionResultFilter } from "../../domain/performance-summary.ts";
 import type { GoalSettlement } from "../../domain/score-distribution-markets.ts";
+import { publicCacheRules } from "../cache/public-cache.ts";
+import type { DatabaseRuntime } from "../database/client.ts";
 import { Prisma } from "../generated/prisma/client.ts";
+import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { readNovemberReplayProjectionPicks, readNovemberReplayProjections } from "../intelligence/november-replay-store.ts";
 import { readFeaturedSettlements, type FeaturedSettlementPick } from "./featured-settlement.ts";
 import { MatchFeedError } from "./feed-error.ts";
-import { readFeedPerformance, restrictFeedResultSql, type FeedResultOverrides } from "./feed-performance.ts";
+import { feedPerformanceCacheKey, readFeedPerformance, restrictFeedResultSql, type FeedResultOverrides } from "./feed-performance.ts";
 import type { feedSql } from "./feed-read.ts";
 import { readFrozenLocalFeaturedPicks } from "./frozen-featured-picks.ts";
 
@@ -17,6 +20,11 @@ type Result = PredictionResult | "unavailable";
 type OutcomeRow = { id: string; kickoff: Date; cycleState: string | null; fixtureStatus: SettlementStatus; legacyAvailable: unknown;
   hasLocal: unknown; hasFrozen: unknown; hasReplay: unknown; occurrenceVoid: unknown;
   marketKey: string | null; selection: string | null; publishedRevisionId: string | null };
+type MembershipOptions = Readonly<{ publishedForecasts: boolean; useDefaultFeatured: boolean; includeSettlements?: boolean }>;
+type MembershipSnapshot = Readonly<{ database: DatabaseRuntime; version: string; locale: string; providerOdds: boolean }>;
+type CompletedMembership = Readonly<{ overrides: FeedResultOverrides; expiresAt: number }>;
+const maximumMembershipCohorts = 16, maximumMembershipOverrides = 2_000;
+const processState = globalThis as typeof globalThis & { goalHintFeedMembership?: WeakMap<DatabaseRuntime, Map<string, CompletedMembership>> };
 
 export function displayedFeedResult(settlement: GoalSettlement | undefined, canceled: boolean): Result {
   switch (settlement?.status) {
@@ -35,19 +43,45 @@ function initialFeedOutcome(cycleState: string | null, status: string): Predicti
   return cycleState === "void" ? status === "canceled" ? "cancelled" : "void" : "pending";
 }
 
+/** The version comes from the caller's open read snapshot. Reuse only completed
+ * audits for that exact source and effective SQL cohort. */
+export async function readFeedResultOverrides(tx: Prisma.TransactionClient, sql: ReturnType<typeof feedSql>,
+  options: MembershipOptions, snapshot?: MembershipSnapshot): Promise<FeedResultOverrides> {
+  if (!snapshot || !options.publishedForecasts || !options.useDefaultFeatured || options.includeSettlements === false) {
+    return readFeedMembership(tx, sql, options);
+  }
+  const runtimes = processState.goalHintFeedMembership ??= new WeakMap();
+  let cohorts = runtimes.get(snapshot.database);
+  if (!cohorts) runtimes.set(snapshot.database, cohorts = new Map());
+  const key = evidenceFingerprint({ version: snapshot.version, cohort: feedPerformanceCacheKey(sql, snapshot.locale, snapshot.providerOdds) });
+  const expiresAt = performance.now() + publicCacheRules.todayFeedSummaryMs;
+  const accepted = cohorts.get(key);
+  if (accepted && performance.now() < accepted.expiresAt) return accepted.overrides;
+  const overrides = await readFeedMembership(tx, sql, options);
+  if (overrides.size <= maximumMembershipOverrides && performance.now() < expiresAt) {
+    if (!cohorts.has(key) && cohorts.size >= maximumMembershipCohorts) cohorts.delete(cohorts.keys().next().value!);
+    cohorts.set(key, { overrides, expiresAt });
+  }
+  return overrides;
+}
+
 /** Match the default replay/frozen decision or the explicitly projected search pick before pagination. */
-export async function readFeedResultOverrides(tx: Prisma.TransactionClient, sql: ReturnType<typeof feedSql>, options: Readonly<{
-  publishedForecasts: boolean; useDefaultFeatured: boolean; includeSettlements?: boolean;
-}>): Promise<FeedResultOverrides> {
+async function readFeedMembership(tx: Prisma.TransactionClient, sql: ReturnType<typeof feedSql>,
+  options: MembershipOptions): Promise<FeedResultOverrides> {
   const overrides = new Map<string, { baseline: Result; result: Result; hasPrediction: boolean }>();
   const defaults = options.publishedForecasts && options.useDefaultFeatured;
   if (!defaults && (!sql.projectPick || options.useDefaultFeatured)) return overrides;
   const local = Prisma.sql`EXISTS (SELECT 1 FROM MarketPrediction localMarket
     WHERE localMarket.setId=rp.id AND localMarket.available=TRUE AND localMarket.source='local-engine')`;
-  const sidecar = Prisma.sql`EXISTS (SELECT 1 FROM PredictionCycleOperation closeOp WHERE closeOp.cycleId=c.id
-    AND closeOp.fixtureId=f.id AND closeOp.kind='close' AND closeOp.revisionId=rp.id AND closeOp.featuredDecisionJson IS NOT NULL)`;
-  const replayPointer = Prisma.sql`EXISTS (SELECT 1 FROM NovemberReplayProjection pointer WHERE pointer.fixtureId=f.id
-    AND pointer.revisionId IS NOT NULL AND pointer.kickoffAt=f.kickoff)`;
+  // These joins use the unique cycle/kind and fixture primary keys. Eligibility
+  // and output can share each lookup without changing the candidate row count.
+  const defaultJoins = defaults ? Prisma.sql`LEFT JOIN PredictionCycleOperation overrideClose ON overrideClose.cycleId=c.id
+      AND overrideClose.fixtureId=f.id AND overrideClose.kind='close' AND overrideClose.revisionId=rp.id
+      AND overrideClose.featuredDecisionJson IS NOT NULL
+    LEFT JOIN NovemberReplayProjection overrideReplay ON overrideReplay.fixtureId=f.id
+      AND overrideReplay.revisionId IS NOT NULL AND overrideReplay.kickoffAt=f.kickoff` : Prisma.empty;
+  const sidecar = Prisma.sql`overrideClose.cycleId IS NOT NULL`;
+  const replayPointer = Prisma.sql`overrideReplay.fixtureId IS NOT NULL`;
   const occurrenceVoid = Prisma.sql`(c.state='void' AND f.status IN ('canceled','abandoned','awarded')
     AND c.voidReason=CONCAT('fixture-', f.status))`;
   const eligible = defaults ? Prisma.sql`((f.status IN ('live',${Prisma.join(playedFinalFixtureStatuses)}) AND
@@ -61,7 +95,7 @@ export async function readFeedResultOverrides(tx: Prisma.TransactionClient, sql:
       ${defaults ? replayPointer : Prisma.sql`FALSE`} AS hasReplay,
       ${defaults ? occurrenceVoid : Prisma.sql`FALSE`} AS occurrenceVoid,
       ${defaults ? Prisma.sql`NULL AS marketKey,NULL AS selection` : Prisma.sql`feedPick.marketKey,feedPick.selection`}
-      ${sql.countJoins} ${sql.searchJoin} WHERE ${sql.where} AND f.kickoff IS NOT NULL AND ${eligible}
+      ${sql.countJoins} ${sql.searchJoin} ${defaultJoins} WHERE ${sql.where} AND f.kickoff IS NOT NULL AND ${eligible}
       ${after ? Prisma.sql`AND f.kickoff>=${after.kickoff} AND (f.kickoff>${after.kickoff} OR f.id>${after.id})` : Prisma.empty}
       ORDER BY f.kickoff,f.id LIMIT 500`);
     if (!rows.length) break;

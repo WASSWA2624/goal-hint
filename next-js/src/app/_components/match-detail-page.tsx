@@ -12,16 +12,17 @@ import type { DetailPageResult } from "@/server/matches/detail-page";
 import { createMessages } from "@/i18n/messages";
 import { PublicFooter, PublicShell } from "./public-shell";
 
-export function MatchDetailPage({ result, today, locale = "en", retryHref, historyResult = result, historyQuery = "", preview = null, previewPromise, showAccount = false, offer = null }: {
+export function MatchDetailPage({ result, today, locale = "en", retryHref, historyResult = result, historyQuery = "",
+  preview = null, previewPromise, showAccount = false, offer = null, offerPromise }: {
   result: DetailPageResult; today: ReportingDate; locale?: string; retryHref: string;
   historyResult?: DetailPageResult; historyQuery?: string; preview?: InsightsPreview | null; previewPromise?: Promise<InsightsPreview | null>;
-  showAccount?: boolean; offer?: SubscriptionOffer | null;
+  showAccount?: boolean; offer?: SubscriptionOffer | null; offerPromise?: Promise<SubscriptionOffer | null>;
 }) {
   const messages = createMessages(locale);
   return <PublicShell showAccount={showAccount} locale={locale} today={today} app={result.data !== null} current="today" desktopWorkspace={result.data !== null}>
     {result.data ? <LiveMatchDetail showAccount={showAccount} offer={offer} initial={result.data} today={today} locale={locale} preview={preview}
       footer={<PublicFooter locale={locale} today={today} wide />}
-      {...(previewPromise ? { previewPromise } : {})}>
+      {...(previewPromise ? { previewPromise } : {})} {...(offerPromise ? { offerPromise } : {})}>
       <RevisionHistory current={result.data} result={historyResult} query={historyQuery} locale={locale} open />
     </LiveMatchDetail> : <Stack>
       <PageHeading>{messages.text("detail.unavailableTitle")}</PageHeading>

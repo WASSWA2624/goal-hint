@@ -36,6 +36,8 @@ import { toFeaturedLocalDecision } from "./featured-pick-presentation.ts";
 import { readFeaturedSettlements, type FeaturedSettlementPick } from "./featured-settlement.ts";
 import { eligibleFrozenFeaturedStatus, readFrozenLocalFeaturedPicks } from "./frozen-featured-picks.ts";
 
+const storedFeedWindowSchema = z.array(storedMatchFeedResponseSchema).min(1).max(maximumFeedWindowRecords);
+
 export function parseMatchFeedQuery(input: FeedParameters, today: ReportingDate,
   context: Readonly<{ locale?: string; routeDate?: string; providerOdds?: boolean; asOf?: number }> = {}) {
   try {
@@ -111,7 +113,8 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         const useDefaultFeatured = isDefaultFeaturedScope(query);
         const includeSettlements = Boolean(query.result || options.includePerformance !== false);
         let overrides = predictedMatchesOnly || includeSettlements ? await timedRequestPhase("list-membership",
-          () => readFeedResultOverrides(tx, baseSql, { publishedForecasts, useDefaultFeatured, includeSettlements })) : new Map();
+          () => readFeedResultOverrides(tx, baseSql, { publishedForecasts, useDefaultFeatured, includeSettlements },
+            cache ? { database, version: versions.performanceVersion, locale: query.locale, providerOdds } : undefined)) : new Map();
         const predictionSql = predictedMatchesOnly ? restrictFeedPredictionSql(baseSql, overrides) : baseSql;
         if (predictedMatchesOnly) overrides = new Map([...overrides].filter(([, value]) => value.hasPrediction));
         const resultFilter = query.result;
@@ -141,7 +144,8 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         // Only a true zero may skip the separate summary read. Replay can add a
         // displayed selection to fixtures without an original publication.
         if (!predictedMatchesOnly && total > 0 && legacyPerformanceAvailable === 0 && !query.result && options.includePerformance === false)
-          overrides = await readFeedResultOverrides(tx, baseSql, { publishedForecasts, useDefaultFeatured });
+          overrides = await readFeedResultOverrides(tx, baseSql, { publishedForecasts, useDefaultFeatured },
+            cache ? { database, version: versions.performanceVersion, locale: query.locale, providerOdds } : undefined);
         const visibleOverrides = resultOverridesFor(overrides, query.result);
         const matchingWithPerformancePick = adjustPerformanceAvailability(legacyPerformanceAvailable, visibleOverrides);
         const performance = options.includePerformance === false ? null
@@ -244,33 +248,44 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       };
       const useCompleteForecast = publishedForecasts && isDefaultFeaturedScope(query);
       const decorate = async (response: StoredMatchFeedResponse) => {
-        const current = providerOdds ? await withFeedOdds(database, response, asOf, allowInPlayOdds, !publishedForecasts) : response;
-        return useCompleteForecast ? withUpcomingFeaturedOutcomes(database, current, asOf, providerOdds) : current;
+        const current = providerOdds ? await timedRequestPhase("list-odds",
+          () => withFeedOdds(database, response, asOf, allowInPlayOdds, !publishedForecasts)) : response;
+        return useCompleteForecast ? timedRequestPhase("list-featured",
+          () => withUpcomingFeaturedOutcomes(database, current, asOf, providerOdds)) : current;
       };
+      const todayList = predictedMatchesOnly && publishedForecasts && !publishedOnly && !context.completedOnly
+        && options.includePerformance === false && !query.zone && query.pageSize === feedQueryRules.pageSize
+        && range.dayCount === 1 && range.startDate === reportingToday
+        && (query.result === undefined || query.result === "pending")
+        && activeFeedFilterCount(query) === Number(query.result === "pending");
+      const readCached = <T>(load: () => Promise<T>, parse: (value: unknown) => T) => cache ? timedRequestPhase("list-cache", () => {
+        const descriptor = publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
+          deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
+          query: { ...query, ...(through === undefined ? {} : { through }), projection: 34, providerOdds, completedOnly: context.completedOnly === true,
+            publishedOnly, publishedForecasts, predictedMatchesOnly, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } },
+          scope: [...competitionIds].sort((a, b) => a - b), parse });
+        // Keep a normal live-refresh window for busy Today pages. The same
+        // date, catalog and progress generations still invalidate immediately.
+        return cache.read(todayList ? { ...descriptor, lifetimeMs: publicCacheRules.todayFeedListMs } : descriptor, load);
+      }) : load();
       if (through !== undefined) {
-        const pages = await read();
+        const pages = await readCached(read, (value) => {
+          const window = storedFeedWindowSchema.parse(value), first = window[0]!;
+          if (!first.paginationVersion || window.length !== Math.max(1, Math.min(through, first.totalPages) - query.page + 1)
+            || window.some((page, index) => page.page !== query.page + index || page.pageSize !== query.pageSize
+              || page.paginationVersion !== first.paginationVersion || page.performanceVersion !== first.performanceVersion
+              || page.asOf !== first.asOf || page.total !== first.total)
+            || new Set(window.flatMap((page) => page.records.map((record) => record.fixtureId))).size
+              !== window.reduce((total, page) => total + page.records.length, 0)) throw new MatchFeedError("unavailable");
+          return window;
+        });
         // Display overlays use their independent clocks and preserve the audited order and membership.
         const decorated = await decorate({ ...pages[0]!, records: pages.flatMap((page) => page.records) });
         return freezeEvidence(pages.map((page, index) => ({ ...page, asOf: decorated.asOf,
           records: decorated.records.slice(index * query.pageSize, (index + 1) * query.pageSize) })));
       }
       const readPage = async () => (await read())[0]!;
-      const todayList = predictedMatchesOnly && publishedForecasts && !publishedOnly && !context.completedOnly
-        && options.includePerformance === false && !query.zone && query.pageSize === feedQueryRules.pageSize
-        && range.dayCount === 1 && range.startDate === reportingToday
-        && (query.result === undefined || query.result === "pending")
-        && activeFeedFilterCount(query) === Number(query.result === "pending");
-      const response = cache ? await timedRequestPhase("list-cache", () => {
-        const descriptor = publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
-          deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-          query: { ...query, projection: 34, providerOdds, completedOnly: context.completedOnly === true,
-            publishedOnly, publishedForecasts, predictedMatchesOnly, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } },
-          scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedMatchFeedResponseSchema.parse(value) });
-        // Keep a normal live-refresh window for busy Today pages. The same
-        // date, catalog and progress generations still invalidate immediately.
-        return cache.read(todayList ? { ...descriptor, lifetimeMs: publicCacheRules.todayFeedListMs } : descriptor, readPage);
-      }) : await readPage();
-      return [await decorate(response)];
+      return [await decorate(await readCached(readPage, (value) => storedMatchFeedResponseSchema.parse(value)))];
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;
       throw new MatchFeedError("unavailable");

@@ -52,7 +52,8 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
         const sql = feedSql(query, range, competitionIds, providerOdds, search, context.completedOnly, publishedOnly, historyBefore, publishedForecasts);
         const overrides = await timedRequestPhase("summary-membership",
-          () => readFeedResultOverrides(tx, sql, { publishedForecasts, useDefaultFeatured: isDefaultFeaturedScope(query) }));
+          () => readFeedResultOverrides(tx, sql, { publishedForecasts, useDefaultFeatured: isDefaultFeaturedScope(query) },
+            cache ? { database, version: paginationVersion, locale: query.locale, providerOdds } : undefined));
         const [matching] = await timedRequestPhase("summary-count", () => tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; void: bigint | Prisma.Decimal | null; cancelled: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
           SELECT STRAIGHT_JOIN COUNT(*) AS total, SUM(CASE WHEN ${sql.pickAvailable} THEN 1 ELSE 0 END) AS available,
             SUM(CASE WHEN ${sql.pickAvailable} AND c.state='void' AND f.status<>'canceled' THEN 1 ELSE 0 END) AS void,

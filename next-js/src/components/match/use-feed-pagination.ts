@@ -118,20 +118,21 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
       verifyAccess(observed);
       return observed;
     };
+    const fetchWindow = async (firstPage: number, lastPage: number) => {
+      controller.signal.throwIfAborted();
+      const pages = await readRefreshFeedWindow(applied, today, firstPage, lastPage, controller.signal, budget);
+      verifyAccess(pages[0]!);
+      return pages;
+    };
     work.completion = (async () => {
       try {
         const current = viewRef.current;
         let next: LoadedFeed;
         if (mode === "append") {
           const through = base.data.nextPage;
-          const fetchWindow = through !== null && supportsFeedWindow(base.firstPage, through, applied.pageSize) ? async () => {
-            controller.signal.throwIfAborted();
-            const pages = await readRefreshFeedWindow(applied, today, base.firstPage, through, controller.signal, budget);
-            verifyAccess(pages[0]!);
-            return pages;
-          } : undefined;
           next = await continueFeedPages(base, fetchPage, delay => waitForContinuation(delay, controller.signal, deadlineAt),
-            { rebase: rebaseAppend, readWindow: fetchWindow });
+            { rebase: rebaseAppend, readWindow: through !== null && supportsFeedWindow(base.firstPage, through, applied.pageSize)
+              ? () => fetchWindow(base.firstPage, through) : undefined });
         } else if (mode === "background" && base.pages > 1) {
           backgroundPage.current = nextLoadedPage(backgroundPage.current, base.firstPage, base.lastPage);
           const page = await fetchPage(backgroundPage.current);
@@ -140,9 +141,15 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
         } else {
           const firstPage = checkpoint?.firstPage ?? base.firstPage;
           const lastPage = checkpoint?.lastPage ?? base.lastPage;
-          const pages = [await fetchPage(firstPage)];
-          for (let page = firstPage + 1; page <= lastPage && pages.at(-1)?.nextPage === page; page++) {
-            pages.push(await fetchPage(page));
+          let pages: readonly MatchFeedResponse[];
+          if (supportsFeedWindow(firstPage, lastPage, applied.pageSize)) {
+            pages = await fetchWindow(firstPage, lastPage);
+          } else {
+            const sequential = [await fetchPage(firstPage)];
+            for (let page = firstPage + 1; page <= lastPage && sequential.at(-1)?.nextPage === page; page++) {
+              sequential.push(await fetchPage(page));
+            }
+            pages = sequential;
           }
           if (controller.signal.aborted || !mounted.current || !enabledRef.current) return;
           next = replaceFeedPages({ ...viewRef.current, firstPage }, pages);
@@ -206,14 +213,17 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     if (checkpoint) {
       const { data: current, records } = viewRef.current;
       const now = Date.now(), age = now - current.asOf;
-      const fresh = age >= 0 && age < feedRefreshInterval(current, records, now);
-      // A recent public page may already be in the router cache. Member pages
-      // and stale observations still need a stored read on return.
-      if (checkpoint.lastPage === viewRef.current.lastPage && !current.access.signedIn && fresh && current.paginationVersion !== null && current.paginationVersion === checkpoint.paginationVersion) {
+      // The same guest snapshot can be restored while an older observation is
+      // checked. A changed or private snapshot still needs a foreground read.
+      if (checkpoint.lastPage === viewRef.current.lastPage && !current.access.signedIn && current.access.tier === "free"
+        && age >= 0 && current.paginationVersion !== null && current.paginationVersion === checkpoint.paginationVersion) {
         frame = requestAnimationFrame(() => {
           restored.current = true;
           focusAndSave({ fixtureId: checkpoint.focusFixtureId, checkpoint });
           announce("restored", viewRef.current);
+          if (age >= feedRefreshInterval(current, records, now) && document.visibilityState === "visible" && navigator.onLine) {
+            void run("background");
+          }
         });
       } else void Promise.resolve().then(() => { if (active) return run("restore", checkpoint); });
     }

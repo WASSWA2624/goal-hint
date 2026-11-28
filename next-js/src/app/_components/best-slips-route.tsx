@@ -14,6 +14,7 @@ import { BestSlipsQueryError, parseBestSlipsQuery, type BestSlipsQuery } from "@
 import type { ReportingDate } from "@/domain/calendar";
 import { bestSlipsHref } from "@/domain/navigation";
 import { emptySlipBrowsePage } from "@/domain/slip-browse-window";
+import { singleSlipPage } from "@/domain/slip-pagination";
 import { createMessages } from "@/i18n/messages";
 import { resolveViewerAccessFresh } from "@/server/members/viewer-access";
 import { timedRequestPhase, withDocumentTiming } from "@/server/http/request-timing";
@@ -36,14 +37,17 @@ function BrowsePredictions({ day, locale }: { day: ReportingDate; locale: string
 
 export function createBestSlipsRoute({ read = readBestSlipsBrowseSnapshot, access = resolveViewerAccessFresh,
   policy = getDiscoveryPolicy, document = isDocumentRequest } = {}) {
-  async function Content({ locale, query, today }: { locale: string; query: BestSlipsQuery; today: ReportingDate }) {
-    const result = await withDocumentTiming("best-slips-document", async () => {
+  function readVerified(locale: string, query: BestSlipsQuery, today: ReportingDate) {
+    return withDocumentTiming("best-slips-document", async () => {
       const published = await read(query, locale);
       if (published.state === "data-unavailable") return emptySlipBrowsePage(today, query, "data-unavailable");
       // Confirm access after the viewer-independent read before any selections enter the HTML.
       const viewer = await timedRequestPhase("access", access);
       return gateBestSlips(published, viewer);
     }, result => result.state === "data-unavailable").catch(() => emptySlipBrowsePage(today, query, "data-unavailable"));
+  }
+  async function Content({ locale, query, today }: { locale: string; query: BestSlipsQuery; today: ReportingDate }) {
+    const result = await readVerified(locale, query, today);
     return <BestSlips result={result} locale={locale} signedIn={result.access?.signedIn ?? false}
       emptyNavigation={<BrowsePredictions day={result.day} locale={locale} />} />;
   }
@@ -61,11 +65,14 @@ export function createBestSlipsRoute({ read = readBestSlipsBrowseSnapshot, acces
         throw error;
       }
       const direct = await document();
+      // The segment's loading boundary owns partial prefetch. When the page
+      // actually renders, start the archive before the controls hydrate.
       return <PublicShell locale={locale} today={today} current="best-slips" app compact>
         <VisuallyHidden as="h1">{createMessages(locale).text("bestSlips.title")}</VisuallyHidden>
         {direct ? <Suspense fallback={<BestSlipsLoading locale={locale} today={today} query={query} heading={false} />}>
           <ServerThemeUntilHydrated><Content locale={locale} query={query} today={today} /></ServerThemeUntilHydrated>
         </Suspense> : <BestSlips result={emptySlipBrowsePage(today, query, "data-unavailable")} locale={locale} initialRead
+          initialResult={readVerified(locale, query, today).then(result => result.state === "data-unavailable" ? null : singleSlipPage(result))}
           emptyNavigation={<BrowsePredictions day={today} locale={locale} />} />}
       </PublicShell>;
     },

@@ -20,12 +20,12 @@ import { useLiveRefresh } from "./use-live-refresh";
 
 type LiveDetailProps = { initial: MatchDetailResponse; today: ReportingDate; locale: string; children?: ReactNode;
   preview?: InsightsPreview | null; previewPromise?: Promise<InsightsPreview | null>;
-  showAccount?: boolean; offer?: SubscriptionOffer | null; footer?: ReactNode };
+  showAccount?: boolean; offer?: SubscriptionOffer | null; offerPromise?: Promise<SubscriptionOffer | null>; footer?: ReactNode };
 
-/** Only this invisible boundary waits for optional summaries; the interactive match view stays mounted. */
-function DeferredPreview({ promise, resolve }: { promise: Promise<InsightsPreview | null>; resolve: (preview: InsightsPreview | null) => void }) {
-  const preview = use(promise);
-  useEffect(() => { resolve(preview); }, [preview, resolve]);
+/** Apply optional values after their invisible boundaries resolve. */
+function DeferredMatchValue<T>({ promise, resolve }: { promise: Promise<T>; resolve: (value: T) => void }) {
+  const value = use(promise);
+  useEffect(() => { resolve(value); }, [value, resolve]);
   return null;
 }
 
@@ -41,11 +41,15 @@ const shown = (detail: MatchDetailResponse) => JSON.stringify({ ...detail, asOf:
   extendedOdds: detail.extendedOdds && { kind: detail.extendedOdds.kind, selections: detail.extendedOdds.selections },
 });
 
-function LiveDetail({ initial, today, locale, children, preview: initialPreview = null, previewPromise, showAccount = false, offer = null, footer }: LiveDetailProps) {
+function LiveDetail({ initial, today, locale, children, preview: initialPreview = null, previewPromise,
+  showAccount = false, offer: initialOffer = null, offerPromise, footer }: LiveDetailProps) {
   const [data, setData] = useState(initial);
   const [deferredPreview, setDeferredPreview] = useState<{ promise: Promise<InsightsPreview | null> | undefined; value: InsightsPreview | null } | null>(null);
   const resolvePreview = useCallback((value: InsightsPreview | null) => setDeferredPreview({ promise: previewPromise, value }), [previewPromise]);
   const preview = deferredPreview && deferredPreview.promise === previewPromise ? deferredPreview.value : initialPreview;
+  const [deferredOffer, setDeferredOffer] = useState<{ promise: Promise<SubscriptionOffer | null> | undefined; value: SubscriptionOffer | null } | null>(null);
+  const resolveOffer = useCallback((value: SubscriptionOffer | null) => setDeferredOffer({ promise: offerPromise, value }), [offerPromise]);
+  const offer = deferredOffer && deferredOffer.promise === offerPromise ? deferredOffer.value : initialOffer;
   // The newest accepted response (for staleness checks); `data` changes only when something visible does.
   const accepted = useRef(data), request = useRef<AbortController | null>(null), mounted = useRef(false);
   const dispatch = useDetailDispatch(), router = useRouter();
@@ -91,7 +95,8 @@ function LiveDetail({ initial, today, locale, children, preview: initialPreview 
   const currentPreview = !allowed ? null : preview && sections !== preview.sections ? { ...preview, sections: sections!, totals: { ...preview.totals, news: sections!.news.items.length } } : preview;
   return <>
     <MatchDetails showAccount={showAccount} offer={offer} data={data} preview={currentPreview} locale={locale} history={children} footer={footer} />
-    {previewPromise && <Suspense fallback={null}><DeferredPreview promise={previewPromise} resolve={resolvePreview} /></Suspense>}
+    {previewPromise && <Suspense fallback={null}><DeferredMatchValue promise={previewPromise} resolve={resolvePreview} /></Suspense>}
+    {offerPromise && <Suspense fallback={null}><DeferredMatchValue promise={offerPromise} resolve={resolveOffer} /></Suspense>}
   </>;
 }
 

@@ -230,6 +230,32 @@ async function qualifyCoverage(page, origin, build, observations, state, path, a
   throw new ReadinessError(path === matches ? "production-matches-cohort-uncovered" : "production-best-slips-cohort-uncovered");
 }
 
+async function verifyMore(page, observations, kind) {
+  const matchesFeed = kind === "matches";
+  const pagination = matchesFeed ? "[data-feed-pagination]" : "[data-best-slips-pagination]";
+  const row = matchesFeed ? "[data-feed-match-results] [data-fixture-id]" : "[data-slip-list] [data-slip-key]";
+  const identity = matchesFeed ? "data-fixture-id" : "data-slip-key";
+  const button = page.locator(`${pagination} [data-show-more]`);
+  if (!await button.isVisible()) return;
+  const initialRows = await page.locator(`${row}:visible`).count();
+  requireReady(initialRows > 0, `${kind}-append-needs-rows`);
+  const started = performance.now();
+  diagnostic.phase = `${kind}-load-more`;
+  await button.click({ timeout: remaining(started) });
+  const appended = await page.waitForFunction(({ row, identity, initialRows, pagination }) => {
+    const results = Array.from(document.querySelectorAll(row))
+      .filter(item => item.getClientRects().length && getComputedStyle(item).visibility === "visible")
+      .map(item => item.getAttribute(identity));
+    const pending = document.querySelector(`${pagination} [data-show-more][aria-busy="true"]`);
+    if (pending || results.length <= initialRows) return null;
+    return { rows: results.length, unique: new Set(results).size };
+  }, { row, identity, initialRows, pagination }, { timeout: remaining(started) });
+  const result = await appended.jsonValue();
+  await appended.dispose();
+  requireReady(result.rows === result.unique, `${kind}-append-duplicate-rows`);
+  observations.push({ phase: diagnostic.phase, initialRows, rows: result.rows, listMs: Math.round(performance.now() - started) });
+}
+
 async function verifyStagedSlipFault(page) {
   const start = performance.now();
   diagnostic.phase = "best-slips-injected-503";
@@ -328,22 +354,29 @@ async function run() {
       await page.waitForFunction(() => Boolean(document.querySelector("dialog[data-community-invitation][open]")),
         null, { timeout: navigationTimeout });
     }
-    if (option) await page.route(url => isInitialArchive(url, origin),
+    const initialArchiveRoute = url => isInitialArchive(url, origin);
+    if (option) await page.route(initialArchiveRoute,
       route => route.fulfill({ status: 503, json: { error: "unavailable" } }), { times: 1 });
     const slips = await qualify(page, origin, observations, diagnostic, "best-slips-navigation", bestSlips,
       () => openBestSlips(page, origin));
     if (option) {
       requireReady(diagnostic.communityInvitationDismissed, "staged-community-invitation-not-dismissed");
-      requireReady(observations.some(item => item.phase === "best-slips-navigation" && item.initialArchiveStatus === 503),
-        "staged-best-slips-initial-retry-not-observed");
+      // A completed Flight seed bypasses the initial archive GET. If the page
+      // did request it, exercise its injected fault and same-query retry.
+      if (diagnostic.apiResponses.some(item => item.path === "/api/best-slips"))
+        requireReady(observations.some(item => item.phase === "best-slips-navigation" && item.initialArchiveStatus === 503),
+          "staged-best-slips-initial-retry-not-observed");
+      await page.unroute(initialArchiveRoute);
       await page.unroute(communitySettings);
     }
     const back = await qualify(page, origin, observations, diagnostic, "matches-history-return", matches, async () => {
       await page.goBack({ waitUntil: "commit", timeout: phaseTimeout });
       await page.waitForURL(url => url.origin === origin && url.pathname === matches, { waitUntil: "commit", timeout: phaseTimeout });
     });
+    await verifyMore(page, observations, "matches");
     const coldSlips = await qualify(page, origin, observations, diagnostic, "best-slips-cold", bestSlips,
       () => navigate(page, new URL(bestSlips, origin), build));
+    await verifyMore(page, observations, "best-slips");
     if (option) observations.push(await verifyStagedSlipFault(page));
     if (!staging && !cold && !back) await qualifyCoverage(page, origin, build, observations, diagnostic, matches,
       [["matches-today-all", "when=today&result=all"], ["matches-yesterday-all", "when=yesterday&result=all"]]);

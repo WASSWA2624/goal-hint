@@ -248,6 +248,20 @@ test('browser HTML and client navigation reuse the verified list without awaitin
   }
 });
 
+test('configured Matches Flight returns its loading boundary and metadata before the stored list', async () => {
+  let reads = 0;
+  const page = createFeedRoute({ browserDocument: async () => false, document: rscRequest, instant: async () => at,
+    policy: indexing, resolveAccess: fullAccess, read: async () => { reads++; return stored(12)(); } });
+  const input = props({});
+  const [metadata, rendered] = await Promise.all([page.generateMetadata(input), page.Page(input)]);
+  assert.equal(metadata.alternates.canonical, 'https://goalhint.com/en/matches');
+  assert.equal(rendered.type, Symbol.for('react.suspense'));
+  assert.equal(reads, 0);
+  const content = await rendered.props.children.type(rendered.props.children.props);
+  assert.equal(view(content, 'MatchFeedPage').result.data.coverage.knownFixtures, 12);
+  assert.equal(reads, 1);
+});
+
 test('only the transient initial browser document schedules a quiet retry', async () => {
   for (const [browserDocument, document, read, code, retryInitial] of [
     [async () => true, fullDocument, unavailable, 'unavailable', true],
@@ -415,25 +429,27 @@ test('a slow optional insight read cannot hold the primary match page or metadat
 
 test('the detail price lookup overlaps the primary read and still follows viewer entitlement', async () => {
   const current = liveDetail();
-  let finishRead, offered = 0;
+  let finishRead, finishOffer, offered = 0;
   const pending = new Promise(resolve => { finishRead = resolve; });
+  const pendingOffer = new Promise(resolve => { finishOffer = resolve; });
   const offer = { priceUgx: 1000, durationDays: 7 };
   const route = { fixtureId: current.fixture.fixtureId, slug: current.route.slug };
   const page = createMatchDetailRoute(async () => { await pending; return current; }, indexing, noInsights,
-    async () => ({ tier: 'free', signedIn: false, mode: 'on' }), async () => { offered++; return offer; }, fullDocument);
+    async () => ({ tier: 'free', signedIn: false, mode: 'on' }), async () => { offered++; return pendingOffer; }, fullDocument);
   const rendering = page.Page(props(route));
   await new Promise(setImmediate);
   assert.equal(offered, 1, 'Public pricing must begin before the primary database read completes.');
   finishRead();
   const projection = view(await rendering, 'MatchDetailPage');
-  assert.deepEqual(projection.offer, offer);
   assert.equal(projection.result.data.access.tier, 'free');
+  finishOffer(offer);
+  assert.deepEqual(await projection.offerPromise, offer);
   await projection.previewPromise;
 
   const full = createMatchDetailRoute(async () => current, indexing, noInsights, fullAccess,
     async () => { throw new Error('Full access must not query the public offer.'); }, fullDocument);
   const fullProjection = view(await full.Page(props(route)), 'MatchDetailPage');
-  assert.equal(fullProjection.offer, null);
+  assert.equal(await fullProjection.offerPromise, null);
   await fullProjection.previewPromise;
 });
 

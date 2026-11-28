@@ -11,9 +11,16 @@ const routes = {
   "matches-more": "/api/matches?when=today&result=pending&page=1&pageSize=50&through=2&leagues=0",
   "matches-summary": "/api/matches/summary?when=today",
   "best-slips-list": "/api/best-slips?period=today",
+  "best-slips-more": "/api/best-slips?period=today&status=pending&oddsBand=1.5-5&page=2",
   "account-session": "/api/account/session",
+  "performance-page": "/en/performance",
+  "builder-page": "/en/slips",
+  "account-page": "/en/account",
+  "help-page": "/en/help",
+  "contact-page": "/en/contact",
+  "privacy-page": "/en/privacy",
 };
-const defaultRoutes = Object.keys(routes).filter(name => name !== "matches-more");
+const defaultRoutes = ["matches-page", "matches-list", "matches-summary", "best-slips-list", "account-session"];
 const stagingOrigin = "https://test.goalhint.com";
 const stagingLimits = { concurrency: 2, minimumIntervalMs: 500, requests: 650, durationMs: 15 * 60_000 };
 const userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36 GoalHintOperatorBenchmark/1.0";
@@ -22,7 +29,7 @@ const usage = `Usage: node scripts/benchmark-vps-http.mjs --origin <loopback|sta
   [--interval-ms 500] [--timeout-ms 40000]
 
 Selected routes default to ${defaultRoutes.join(", ")}.
-Select matches-more explicitly to measure the bounded continuation.
+Select matches-more or best-slips-more to measure continuation.
 Hosted staging requires --origin ${stagingOrigin} --staging.
 Writes one JSON report to stdout. Request failures set exit code 1.`;
 

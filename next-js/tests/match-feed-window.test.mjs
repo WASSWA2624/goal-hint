@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { maximumFeedWindowRecords } from '../src/domain/match-feed-rules.ts';
 import { storedMatchFeedResponseSchema } from '../src/domain/match-feed.ts';
+import { createPublicResponseCache } from '../src/server/cache/public-cache.ts';
 import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
 
 const at = Date.parse('2026-10-09T08:00:00Z');
@@ -40,7 +41,19 @@ function fixtureWindow({ knownFixtures } = {}) {
     completedTransactions++;
     return result;
   } };
-  const cache = { read: async (_descriptor, read) => { cached++; return read(); } };
+  const entries = new Map();
+  const responseCache = createPublicResponseCache({
+    async lookup(key) {
+      const generations = { date: String(generation) }, entry = entries.get(key);
+      return entry?.generations.date === generations.date ? entry : { generations, value: null, createdAt: null, expiresAt: null };
+    },
+    async fill(key, _tags, generations, value, createdAt, expiresAt) {
+      entries.set(key, { generations, value, createdAt, expiresAt });
+      return true;
+    },
+    async reconcile() { return { acknowledged: 0, removed: 0 }; },
+  }, () => at);
+  const cache = { read: async (...args) => { cached++; return responseCache.read(...args); } };
   const service = createMatchFeedService({ database, cache, competitionIds: [39], clock: { now: () => at },
     providerOdds: false, includePerformance: false });
   return { service, firstOrder, transactions, selections, hydration, get cached() { return cached; },
@@ -59,7 +72,7 @@ test('a changed source yields adjacent exact pages from one new transaction and 
   const revisedOrder = fixture.rotate();
   const pages = await fixture.service.queryWindow(parameters, 2);
   const [first, second] = pages;
-  assert.equal(fixture.cached, 1, 'the ordinary single page uses its existing cache, and the window bypasses it');
+  assert.equal(fixture.cached, 2);
   assert.deepEqual(fixture.transactions, Array.from({ length: 2 }, () => ({ isolationLevel: 'RepeatableRead', maxWait: 5000, timeout: 30_000 })));
   assert.deepEqual(fixture.selections, [{ limit: 100, offset: 0 }, { limit: maximumFeedWindowRecords, offset: 0 }]);
   assert.deepEqual(fixture.hydration.map((batch) => batch.length), [100, 100, 5]);
@@ -72,6 +85,18 @@ test('a changed source yields adjacent exact pages from one new transaction and 
     [[1, 100, 2, null, 105], [2, 100, null, 1, 105]]);
   assert.match(first.links.next, /page=2&pageSize=100$/u);
   assert.ok(Object.isFrozen(pages) && pages.every((page) => Object.isFrozen(page.records) && storedMatchFeedResponseSchema.safeParse(page).success));
+});
+
+test('an unchanged source reuses the complete window, and a date generation change reloads it', async () => {
+  const fixture = fixtureWindow(), first = await fixture.service.queryWindow(parameters, 2);
+  assert.deepEqual(await fixture.service.queryWindow(parameters, 2), first);
+  assert.equal(fixture.transactions.length, 1);
+
+  const revised = fixture.rotate();
+  const next = await fixture.service.queryWindow(parameters, 2);
+  assert.equal(fixture.transactions.length, 2);
+  assert.notEqual(next[0].paginationVersion, first[0].paginationVersion);
+  assert.deepEqual(next.flatMap((page) => page.records.map(({ fixtureId }) => fixtureId)), revised);
 });
 
 test('windows keep the requested offset, stop at the genuine end and reject unsafe ranges before opening a transaction', async () => {

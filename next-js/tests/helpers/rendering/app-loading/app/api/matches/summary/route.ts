@@ -1,9 +1,12 @@
+import { cookies } from "next/headers";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { parseFeedQuery } from "@/domain/feed-query";
-import { summaryFixture } from "../../../feed-fixture";
+import { guestHistoryFixture, summaryFixture } from "../../../feed-fixture";
 
-export function GET(request: Request) {
+export async function GET(request: Request) {
   const today = getReportingDate(utcInstantFromEpochMilliseconds(Date.now()));
   const query = parseFeedQuery(new URL(request.url).searchParams, { today });
-  return Response.json(summaryFixture(query), { headers: { "Cache-Control": "no-store" } });
+  const summary = summaryFixture(query);
+  const result = (await cookies()).has(guestHistoryFixture) ? { ...summary, access: { tier: "free", signedIn: false } } : summary;
+  return Response.json(result, { headers: { "Cache-Control": "no-store" } });
 }

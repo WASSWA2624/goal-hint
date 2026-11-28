@@ -138,26 +138,39 @@ export async function verifyBestSlipsNavigation(page, origin) {
   const errors = [];
   const onError = error => errors.push(error.message);
   const archive = url => url.pathname === '/api/best-slips';
+  const speculative = [];
+  const observePrefetch = response => {
+    const headers = response.request().headers();
+    if (new URL(response.url()).pathname === '/en/best-slips'
+      && (headers['next-router-prefetch'] || headers['next-router-segment-prefetch'])) {
+      speculative.push(response.text().catch(() => null));
+    }
+  };
   const screen = page.locator('[data-best-slips-page]');
   const headerIsStable = () => page.evaluate(() => window.fixtureArchiveHeader instanceof HTMLElement
     && window.fixtureArchiveHeader === document.querySelector('[data-app-header]'));
   page.on('pageerror', onError);
+  page.on('response', observePrefetch);
+  const unavailableSeed = 'synthetic-best-slips-unavailable';
   try {
     await page.goto(origin);
     const results = [];
     for (const { theme, width, fail } of [{ theme: 'light', width: 390, fail: false }, { theme: 'dark', width: 1440, fail: true }]) {
       await page.setViewportSize({ width, height: 900 });
       await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
+      if (fail) await page.context().addCookies([{ name: unavailableSeed, value: '1', url: origin }]);
       await page.goto(`${origin}/en/matches`);
       await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, theme);
       await page.evaluate(() => { window.fixtureArchiveHeader = document.querySelector('[data-app-header]'); });
       const requests = [];
       const { promise: held, resolve: release } = Promise.withResolvers();
+      const fallback = Promise.withResolvers();
       let scheduled;
       const intercept = route => {
         requests.push(new URL(route.request().url()).search);
-        if (requests.length !== 1) return route.continue();
-        scheduled = held.then(() => fail ? route.fulfill({ status: 503, json: { error: 'unavailable' } }) : route.continue());
+        if (!fail || requests.length !== 1) return route.continue();
+        fallback.resolve();
+        scheduled = held.then(() => route.fulfill({ status: 503, json: { error: 'unavailable' } }));
         return scheduled;
       };
       await page.route(archive, intercept);
@@ -166,7 +179,9 @@ export async function verifyBestSlipsNavigation(page, origin) {
         const link = navigation.locator('a[data-nav-key="best-slips"]:visible').first();
         if (!await link.isVisible()) await navigation.locator('[data-nav-more] summary:visible').click();
         const started = performance.now();
-        await Promise.all([page.waitForRequest(request => archive(new URL(request.url()))), link.click()]);
+        const firstRequest = fail
+          ? page.waitForRequest(request => archive(new URL(request.url()))).catch(() => null) : null;
+        await link.click();
         await page.waitForURL(url => url.pathname === '/en/best-slips');
         const pending = screen.and(page.locator('[data-best-slips-initial-loading]'));
         await pending.waitFor();
@@ -180,9 +195,11 @@ export async function verifyBestSlipsNavigation(page, origin) {
           && await pending.locator('[data-slip-key], [role="alert"], [role="status"]').count() === 0,
           'A pending archive cannot claim results, empty coverage, or an error');
         const query = '?period=today&status=pending&page=1&oddsBand=1.5-5';
-        assert(requests.length === 1 && requests[0] === query, 'Best Slips starts one exact request for its canonical cohort');
-        release();
         if (fail) {
+          assert(await firstRequest, 'The unavailable server seed exhausts its read and starts the API fallback');
+          await fallback.promise;
+          assert(requests.length === 1 && requests[0] === query, 'The unavailable server seed starts one exact fallback request');
+          release();
           const unavailable = screen.getByRole('alert');
           const retry = unavailable.getByRole('button', { name: 'Try again', exact: true });
           await retry.waitFor();
@@ -193,21 +210,129 @@ export async function verifyBestSlipsNavigation(page, origin) {
         const row = screen.locator('[data-slip-key="synthetic-archive-slip"]');
         await row.waitFor();
         assert(await pending.count() === 0 && await screen.getByRole('alert').count() === 0, 'Verified rows clear pending and failure feedback');
-        assert(await screen.locator('[data-summary-count="pending"]').textContent() === '1', 'The archive shows its verified count with the row');
+        assert(await screen.locator('[data-summary-count="pending"]').textContent() === '25', 'The archive shows its verified count with the row');
         assert(await headerIsStable(), 'The archive updates within the initial Best Slips document and shared header');
-        assert(requests.length === (fail ? 2 : 1) && requests.every(request => request === query),
-          'The archive uses one request per explicit attempt and keeps its exact query on retry');
-        results.push({ screen: 'best-slips-navigation', theme, width, shellMs, requests: requests.length, retry: fail });
+        assert(requests.length === (fail ? 2 : 0) && requests.every(request => request === query),
+          'A verified server seed avoids the duplicate API read, and fallback keeps its exact query on retry');
+        const readyMs = Math.round(performance.now() - started), initialRequests = requests.length;
+        const load = screen.locator('[data-show-more]'), secondPage = url => archive(url) && url.searchParams.get('page') === '2';
+        const next = Promise.withResolvers();
+        const holdNext = async route => { await next.promise; await route.continue(); };
+        await page.evaluate(() => { window.fixtureFirstSlip = document.querySelector('[data-slip-key]'); });
+        await page.route(secondPage, holdNext);
+        const moreStarted = performance.now();
+        try {
+          await Promise.all([page.waitForRequest(request => secondPage(new URL(request.url()))), load.click()]);
+          await load.and(screen.locator('[aria-busy="true"]')).waitFor();
+          const pendingMs = Math.round(performance.now() - moreStarted);
+          assert(await screen.locator('[data-slip-key]').count() === 20, 'Show More keeps the accepted first archive page visible');
+          next.resolve();
+          await screen.locator('[data-slip-key="synthetic-archive-slip-25"]').waitFor();
+          const unique = await screen.locator('[data-slip-key]').evaluateAll(rows => new Set(rows.map(row => row.dataset.slipKey)).size);
+          assert(unique === 25 && await screen.locator('[data-summary-count="pending"]').textContent() === '25',
+            'Show More appends the remaining original ranks and preserves the period count');
+          assert(await page.evaluate(() => window.fixtureFirstSlip === document.querySelector('[data-slip-key]')),
+            'Appending the archive leaves the first rendered row mounted');
+          results.push({ screen: 'best-slips-navigation', theme, width, shellMs, readyMs, initialRequests, retry: fail,
+            loadMorePendingMs: pendingMs, loadMoreReadyMs: Math.round(performance.now() - moreStarted), rows: unique });
+        } finally {
+          next.resolve();
+          await page.unroute(secondPage, holdNext);
+        }
       } finally {
         release();
         await scheduled;
         await page.unroute(archive, intercept);
+        await page.context().clearCookies({ name: unavailableSeed });
       }
     }
     assert(errors.length === 0, errors.join('\n'));
+    const prefetched = (await Promise.all(speculative)).filter(body => body !== null);
+    assert(prefetched.every(body => !body.includes('synthetic-archive-slip')), 'Speculative Best Slips prefetches may not stream an archive row');
+    results.push({ screen: 'best-slips-prefetch', checkedFlightResponses: prefetched.length });
     return results;
   } finally {
     page.off('pageerror', onError);
+    page.off('response', observePrefetch);
+  }
+}
+
+/** Exercise the atomic window and same-snapshot history return in both themes. */
+export async function verifyMatchesContinuation(page, origin) {
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  const listEndpoint = url => url.pathname === '/api/matches';
+  const matches = new URL('/en/matches?when=today&result=all', origin);
+  const list = page.locator('[data-feed-match-results]');
+  const rows = list.locator('[data-fixture-id]');
+  const load = page.locator('[data-feed-pagination] [data-show-more]');
+  const guest = 'synthetic-match-history-guest';
+  const results = [];
+  async function openSlips() {
+    const navigation = page.locator('[data-responsive-navigation]:visible').first();
+    const link = navigation.locator('a[data-nav-key="best-slips"]:visible').first();
+    if (!await link.isVisible()) await navigation.locator('[data-nav-more] summary:visible').click();
+    await link.click();
+    await page.waitForURL(url => url.pathname === '/en/best-slips');
+    await page.locator('[data-best-slips-page]').waitFor();
+  }
+  async function heldRead(action, check) {
+    const calls = [], first = Promise.withResolvers(), release = Promise.withResolvers();
+    const intercept = async route => {
+      calls.push(new URL(route.request().url()));
+      first.resolve();
+      await release.promise;
+      await route.continue();
+    };
+    await page.route(listEndpoint, intercept);
+    try {
+      const started = performance.now();
+      await Promise.all([action(), page.waitForRequest(request => listEndpoint(new URL(request.url()))), first.promise]);
+      await check(calls, release.resolve, started);
+    } finally {
+      release.resolve();
+      await page.unroute(listEndpoint, intercept);
+    }
+  }
+  await page.goto(origin);
+  await page.context().addCookies([{ name: guest, value: '1', url: origin }]);
+  try {
+    for (const { theme, width } of [{ theme: 'light', width: 390 }, { theme: 'dark', width: 1440 }]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
+      await page.goto(matches.href);
+      await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, theme);
+      await page.waitForFunction(() => document.querySelectorAll('[data-feed-match-results] [data-fixture-id]').length === 50);
+      await openSlips();
+      await heldRead(() => page.goBack({ waitUntil: 'commit' }), async (calls, release) => {
+        assert(calls.length === 1 && calls[0].searchParams.get('page') === '1', 'The return quietly requests one current list page');
+        assert(await rows.count() === 50 && await list.getAttribute('aria-busy') !== 'true',
+          'An older snapshot of the same guest page remains usable while its history refresh is held');
+        release();
+        await page.waitForURL(matches.href);
+      });
+      await heldRead(() => load.click(), async (calls, release, started) => {
+        await load.and(page.locator('[aria-busy="true"]')).waitFor();
+        const pendingMs = Math.round(performance.now() - started);
+        assert(await rows.count() === 50, 'Show More keeps the accepted first Matches page visible');
+        assert(calls.length === 1 && calls[0].searchParams.get('through') === '2', 'Show More starts one atomic window request');
+        release();
+        await page.waitForFunction(() => document.querySelectorAll('[data-feed-match-results] [data-fixture-id]').length === 55);
+        const unique = await rows.evaluateAll(elements => new Set(elements.map(element => element.dataset.fixtureId)).size);
+        assert(unique === 55, 'The next match page contains every fixture exactly once');
+        results.push({ screen: 'matches-continuation', theme, width, loadMorePendingMs: pendingMs,
+          loadMoreReadyMs: Math.round(performance.now() - started), rows: unique, quietHistory: true });
+      });
+      await openSlips();
+      await heldRead(() => page.goBack({ waitUntil: 'commit' }), async (calls, release) => {
+        assert(calls.length === 1 && calls[0].searchParams.get('through') === '2',
+          'The two-page history return restores the exact window with one request');
+        release();
+        await page.waitForFunction(() => document.querySelectorAll('[data-feed-match-results] [data-fixture-id]').length === 55);
+      });
+    }
+    return results;
+  } finally {
+    await page.context().clearCookies({ name: guest });
   }
 }
 
@@ -280,7 +405,7 @@ export async function verifyColdBestSlipsRetry(page, origin) {
         await response;
         await screen.locator('[data-slip-key="synthetic-archive-slip"]').waitFor();
         assert(await pending.count() === 0 && await alert.count() === 0, 'The recovered archive must clear pending and error feedback');
-        assert(await screen.locator('[data-summary-count="pending"]').textContent() === '1', 'The recovered archive must show its actual count');
+        assert(await screen.locator('[data-summary-count="pending"]').textContent() === '25', 'The recovered archive must show its actual count');
         assert(await sameDocumentAndHeader(), 'The recovered archive must not reload or remount shared navigation');
         assert(requests.length === 2 && requests.every(request => request === query),
           'The quiet fallback and manual retry must request the same canonical cohort once each');
@@ -370,6 +495,7 @@ export async function verifyAppLoading(page, origin) {
       results.push({ screen: 'home', theme, width: 390, immediateFilters: true });
     }
     results.push(...await verifyBestSlipsNavigation(page, origin));
+    results.push(...await verifyMatchesContinuation(page, origin));
     results.push(...await verifyColdBestSlipsRetry(page, origin));
     for (const theme of ['light', 'dark']) {
       await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);

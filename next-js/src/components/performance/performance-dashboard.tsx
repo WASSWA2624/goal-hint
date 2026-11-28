@@ -171,14 +171,17 @@ function usePerformanceAppend<T>(source: object | null, initial: PerformanceWind
 /** Independent reads stream into their existing positions; filters and headings render immediately. */
 export function PerformanceDashboard({ locale, filters, report, history, reportPromise, historyPromise, historyPage }: PerformanceDashboardProps) {
   const m = createMessages(locale), page = historyPage ?? history?.page ?? 1;
-  const [confirmedHistory, setConfirmedHistory] = useState(history);
+  const historyScope = [filters.from, filters.to, filters.slipStatus, page].join(":");
+  const [confirmedHistory, setConfirmedHistory] = useState<{ scope: string; value: PublishedSlipHistory } | null>(null);
+  const retainedHistory = confirmedHistory?.scope === historyScope ? confirmedHistory.value : history;
   const rememberHistory = useCallback((resolved: PublishedSlipHistory | null) => {
-    if (resolved !== null) setConfirmedHistory(resolved);
-  }, []);
+    if (resolved !== null) setConfirmedHistory({ scope: historyScope, value: resolved });
+  }, [historyScope]);
   return <PerformanceSections $gap="lg" data-performance-dashboard>
     <DesktopInset><PageHeading>{m.text("performance.title")}</PageHeading><BodyText>{m.text("performance.description")}</BodyText></DesktopInset>
     <PerformanceFilterPanel><Stack $gap="sm">
-      <PerformanceFilters action={performanceHref(locale)} method="get" aria-label={m.text("performance.filters")}>
+      <PerformanceFilters key={[filters.from, filters.to, filters.market, filters.source].join(":")}
+        action={performanceHref(locale)} method="get" aria-label={m.text("performance.filters")}>
         {filters.slipStatus && <input type="hidden" name="slipStatus" value={filters.slipStatus} />}
         <DateTimeField label={m.text("performance.from")} name="from" required defaultValue={filters.from} />
         <DateTimeField label={m.text("performance.to")} name="to" required defaultValue={filters.to} />
@@ -198,7 +201,7 @@ export function PerformanceDashboard({ locale, filters, report, history, reportP
     {reportPromise ? <Suspense fallback={<LoadingTheme><PredictionSections locale={locale} filters={filters} report={null} page={page} loading /></LoadingTheme>}>
       <ServerThemeUntilHydrated><StreamedPredictions locale={locale} filters={filters} read={reportPromise} page={page} /></ServerThemeUntilHydrated>
     </Suspense> : <PredictionSections locale={locale} filters={filters} report={report} page={page} />}
-    {historyPromise ? <Suspense fallback={<LoadingTheme><HistorySection locale={locale} filters={filters} history={confirmedHistory} loading /></LoadingTheme>}>
+    {historyPromise ? <Suspense fallback={<LoadingTheme><HistorySection locale={locale} filters={filters} history={retainedHistory} loading /></LoadingTheme>}>
       <ServerThemeUntilHydrated><StreamedHistory locale={locale} filters={filters} read={historyPromise} onResolved={rememberHistory} /></ServerThemeUntilHydrated>
     </Suspense> : <HistorySection locale={locale} filters={filters} history={history} />}
     <DesktopInset><MutedText>{m.text("performance.noGuarantee")}</MutedText></DesktopInset>

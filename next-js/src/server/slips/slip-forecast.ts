@@ -11,15 +11,17 @@ import { slipBuilderRules, type BuiltSlip, type SlipSelection } from "../../doma
 import { additionalSlipGoalSelection, isSlipGoalExtensionSelection, isTotal15SlipSelection, type SlipTotal15Forecast } from "../../domain/slip-markets.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
+import { timedRequestPhase } from "../http/request-timing.ts";
 import { reconstructCutoff, revisionEligibleForLock } from "../predictions/cutoff-eligibility.ts";
 import type { CutoffSchedule } from "../predictions/cutoff-contract.ts";
 import { historyFail, type StoredCycle, type StoredRevision } from "../predictions/history-contract.ts";
 import { cycleFromRows, historyTime, revisionFromRows, storedCycle, storedRevision, type HistoryRow } from "../predictions/history-read.ts";
 import { publicationBarrierFromRow, storedPublicationBarrier } from "../predictions/publication-read.ts";
-import { readGoalMarketSettlement, type StoredGoalMarketExtension } from "../predictions/goal-market-store.ts";
+import { readGoalMarketSettlement } from "../predictions/goal-market-store.ts";
 import { fixtureResultFromRow, fixtureResultMatchesCanonical, resultStatus, storedFixtureResult, type StoredFixtureResult } from "../results/result-read.ts";
 import { cycleEligibilityFor, storedSettlementRevision } from "../settlement/settlement-read.ts";
-import { projectSlipAdditionalGoalForecast, projectSlipTotal15Forecast, readSlipGoalExtensions } from "./slip-goal-forecast.ts";
+import { projectSlipAdditionalGoalForecast, projectSlipTotal15Forecast, readArchivedSlipGoalExtensions,
+  readSlipGoalExtensions, type SlipGoalExtension } from "./slip-goal-forecast.ts";
 
 type Tx = Prisma.TransactionClient;
 export const slipForecastReadRules = Object.freeze({
@@ -36,7 +38,7 @@ const matchesGoalSource = (source: MarketSource | undefined, goalSource: SlipTot
   source === undefined || source === (goalSource === "local-poisson" ? "local-engine" : "ai");
 
 export function slipRevisionMatches(selection: SlipMatchWatch & { source?: MarketSource }, revision: StoredRevision | null,
-  extension: StoredGoalMarketExtension | null = null, asOf = revision?.publishedAt ?? 0,
+  extension: SlipGoalExtension | null = null, asOf = revision?.publishedAt ?? 0,
   { editorial = false }: { editorial?: boolean } = {}): revision is StoredRevision {
   const reference = selection.forecast;
   if (!revision || revision.fixtureId !== selection.fixtureId || reference &&
@@ -63,7 +65,7 @@ export function slipRevisionMatches(selection: SlipMatchWatch & { source?: Marke
 
 /** Exact Local Engine authority for editorial slips. The public forecast's provisional label is presentation only. */
 export function qualifiedEditorialSlipRevision(selection: SlipMatchWatch & Pick<SlipSelection, "source">, revision: StoredRevision | null | undefined,
-  extension: StoredGoalMarketExtension | null = null, asOf = revision?.publishedAt ?? 0): boolean {
+  extension: SlipGoalExtension | null = null, asOf = revision?.publishedAt ?? 0): boolean {
   const reference = selection.forecast;
   if (!revision || !reference || selection.source !== "local-engine" || revision.fixtureId !== selection.fixtureId
     || revision.cycleId !== reference.cycleId || revision.id !== reference.revisionId
@@ -135,7 +137,7 @@ const editorialVoidPhases = new Map<string, SlipResult["status"]>([
 /** Pure projection of already validated, sealed records. The saved choice never changes to the cutoff's later choice. */
 export function projectSlipForecastResult(selection: SlipMatchWatch, input: Readonly<{
   fixture: Fixture; cycle: StoredCycle | null; revision: StoredRevision | null; schedules: readonly CutoffSchedule[];
-  goalExtension?: StoredGoalMarketExtension | null;
+  goalExtension?: SlipGoalExtension | null;
   barrier?: PublicationBarrier | undefined;
   result: StoredFixtureResult | null; historical: HistoricalResult | null; asOf: number; editorial?: boolean;
 }>): SlipResult {
@@ -347,12 +349,16 @@ export async function readSlipForecastResults(tx: Tx, selections: readonly SlipM
   const references = selections.flatMap((selection) => selection.forecast ? [selection.forecast] : []);
   const cycleIds = [...new Set(references.map((reference) => reference.cycleId))], revisionIds = [...new Set(references.map((reference) => reference.revisionId))];
   if (Math.max(cycleIds.length, revisionIds.length) > slipForecastReadRules.prefetchThreshold) {
-    await prefetchForecasts(tx, cycleIds, revisionIds, { cycles, revisions, schedules });
+    await timedRequestPhase("slip-forecast-evidence", () => prefetchForecasts(tx, cycleIds, revisionIds, { cycles, revisions, schedules }));
   }
-  const goalExtensions = new Map<string, StoredGoalMarketExtension>();
-  for (const ids of batches(slipGoalRevisionIds(selections))) {
-    for (const [id, extension] of await readSlipGoalExtensions(tx, ids)) goalExtensions.set(id, extension);
-  }
+  const goalExtensions = await timedRequestPhase("slip-goal-evidence", async () => {
+    const extensions = new Map<string, SlipGoalExtension>();
+    const read = editorial ? readArchivedSlipGoalExtensions : readSlipGoalExtensions;
+    for (const ids of batches(slipGoalRevisionIds(selections))) {
+      for (const [id, extension] of await read(tx, ids)) extensions.set(id, extension);
+    }
+    return extensions;
+  });
   const barriers = editorial ? await readEditorialBarriers(tx, selections, fixtures, asOf) : undefined;
   const history = new Map<string, HistoricalResult | null>(), projected: SlipResult[] = [];
   for (const selection of selections) {

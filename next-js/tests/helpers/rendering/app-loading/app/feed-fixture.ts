@@ -5,9 +5,11 @@ import { feedPerformanceReplySchema } from "@/domain/feed-performance-summary";
 import { storedMatchFeedResponseSchema } from "@/domain/match-feed";
 import scenarios from "./scenarios.json";
 
+export const guestHistoryFixture = "synthetic-match-history-guest";
+
 /** Stable synthetic pages let browser checks exercise real filters and the 50-row boundary. */
-function fixtureCohort(query: FeedQuery) {
-  const at = utcInstantFromEpochMilliseconds(Date.now()), today = getFeedToday(query, at), range = resolveFeedDates(query, today);
+function fixtureCohort(query: FeedQuery, clock = Date.now()) {
+  const at = utcInstantFromEpochMilliseconds(clock), today = getFeedToday(query, at), range = resolveFeedDates(query, today);
   const leagues = [{ id: "england", name: "Premier League", country: "England", logoUrl: null, fixtures: 20 },
     { id: "egypt", name: "Egyptian Premier League", country: "Egypt", logoUrl: null, fixtures: 20 },
     { id: "france", name: "Ligue 1", country: "France", logoUrl: null, fixtures: 15 }];
@@ -40,8 +42,8 @@ export function summaryFixture(query: FeedQuery) {
   return feedPerformanceReplySchema.parse({ performance, asOf: at, access: scenarios.feed.access, paginationVersion: scenarios.feed.paginationVersion });
 }
 
-export function feedFixture(query: FeedQuery) {
-  const { at, today, range, leagues, selected } = fixtureCohort(query);
+export function feedFixture(query: FeedQuery, clock = Date.now()) {
+  const { at, today, range, leagues, selected } = fixtureCohort(query, clock);
   const { access, ...stored } = scenarios.feed; void access;
   const total = selected.length, totalPages = Math.ceil(total / query.pageSize), nextPage = query.page < totalPages ? query.page + 1 : null;
   const previousPage = query.page > 1 ? query.page - 1 : null;

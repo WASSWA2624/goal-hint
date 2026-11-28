@@ -28,6 +28,7 @@ import { createMarketSettlementService } from '../src/server/settlement/settleme
 import { createExtendedMarketPerformanceService } from '../src/server/performance/extended-market-performance.ts';
 import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
 import { createMatchFeedSummaryService } from '../src/server/matches/feed-summary-service.ts';
+import { projectSlipTotal15Forecast, readArchivedSlipGoalExtensions } from '../src/server/slips/slip-goal-forecast.ts';
 import { fallbackAuthority } from './helpers/fallback-fixtures.mjs';
 import { modelAuthority, modelVersion } from './helpers/predictor-fixtures.mjs';
 import { predictorOutputOptions, predictorRawOutput } from './helpers/predictor-output-fixtures.mjs';
@@ -154,6 +155,18 @@ test('additive score extensions publish and settle atomically on genuine owned M
         revisionId: revision.id, cycleId: state.cycle.id, fixtureId: state.fixture.id, recordedAt: p.now() })),
         (error) => error instanceof PredictionHistoryError && error.reason === 'conflicting-request');
     });
+    await t.test('archive goal projections retain the sealed MySQL evidence on both cold and repeated reads', async () => {
+      const reference = { cycleId: revision.cycleId, revisionId: revision.id, publishedAt: revision.publishedAt };
+      const input = [revision.fixtureId, state.cycle.kickoffAt, reference, p.now()];
+      const read = () => p.a.query((tx) => readArchivedSlipGoalExtensions(tx, [revision.id]));
+      const first = (await read()).get(revision.id), repeated = (await read()).get(revision.id);
+      assert.ok(first);
+      assert.strictEqual(repeated, first, 'the repeatable snapshot returned the prior validated immutable projection');
+      const original = await p.a.query((tx) => readGoalMarketExtension(tx, revision.id));
+      const expected = projectSlipTotal15Forecast(original, ...input);
+      assert.ok(expected);
+      assert.deepEqual(projectSlipTotal15Forecast(repeated, ...input), expected);
+    });
     await t.test('published-outcome filters match the same revision, including exact zero results', async () => {
       const date = getReportingDate(state.cycle.kickoffAt), scope = { publishedOnly: true };
       const selected = { date, pageSize: '1', sort: 'probability', marketPick: 'total-goals:over-1.5,match-result:away-win' };
@@ -199,7 +212,9 @@ test('additive score extensions publish and settle atomically on genuine owned M
       const closed = await feed.query(scoped, { publishedOnly: true });
       assert.deepEqual(closed.records.map(({ fixtureId }) => fixtureId), [state.fixture.id]);
       const feedAudit = await feedSummary.query(scoped, { publishedOnly: true });
-      assert.equal(feedAudit.performance.total, 1); assert.equal(feedAudit.performance.won, 1);
+      assert.equal(feedAudit.performance.total, 1);
+      assert.equal(feedAudit.performance.won, 0);
+      assert.equal(feedAudit.performance.lost, 1, 'One regulation goal settles Over 1.5 as a loss.');
       const half = view.markets.find((entry) => entry.marketKey === goalResultMarket('half-time').key);
       assert.equal(half.settlement.status, 'pending'); assert.equal(half.settlement.reason, 'missing-verified-half-time-score');
       assert.equal((await settlement.settleFixture(state.fixture.id)).changed, 0); assert.deepEqual(await counts(), initial);

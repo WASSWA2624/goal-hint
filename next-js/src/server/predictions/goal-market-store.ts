@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { settledExtendedStatuses as settledStatuses } from "../../domain/extended-markets.ts";
 import { goalDefinitionsForLocalFirstProfile, legacyLiveGoalMarketDefinitions, liveGoalMarketDefinitions,
@@ -63,8 +64,7 @@ export function parseGoalMarketExtensionInput(input: unknown): GoalMarketExtensi
   if (!parsed.success || Buffer.byteLength(evidenceSerialize(parsed.data)) > goalMarketStorageLimits.bytes) return historyFail("invalid-request");
   return freezeEvidence(parsed.data);
 }
-/** Model probabilities are derived locally; callers cannot supply a precomputed or independently published market. */
-export function prepareGoalMarketExtension(input: unknown): PreparedGoalMarketExtension {
+function prepareCanonicalGoalMarketExtension(input: unknown) {
   const { definitions, ...model } = parseGoalMarketExtensionInput(input);
   const prepared: PreparedGoalMarketExtension = freezeEvidence({ version: 1 as const, ruleVersion: GOAL_MARKET_RULE_VERSION, ...model,
     markets: definitions.map((definition) => {
@@ -74,9 +74,18 @@ export function prepareGoalMarketExtension(input: unknown): PreparedGoalMarketEx
       const derivation = primary?.available ? primary : local ?? primary!;
       return { definition, derivation, ...(primary?.available && local?.available ? { localDerivation: local } : {}) };
     }) });
-  if (Buffer.byteLength(evidenceSerialize(prepared)) > goalMarketStorageLimits.bytes) return historyFail("invalid-request");
-  return prepared;
+  const serialized = evidenceSerialize(prepared);
+  if (Buffer.byteLength(serialized) > goalMarketStorageLimits.bytes) return historyFail("invalid-request");
+  return { prepared, serialized };
 }
+
+/** Model probabilities are derived locally; callers cannot supply a precomputed or independently published market. */
+export function prepareGoalMarketExtension(input: unknown): PreparedGoalMarketExtension {
+  return prepareCanonicalGoalMarketExtension(input).prepared;
+}
+
+// The storage limit and the seal use the same canonical bytes.
+const hashCanonicalGoalMarketExtension = (serialized: string) => createHash("sha256").update(serialized).digest("hex");
 const identitySchema = z.strictObject({ revisionId: historyId, cycleId: historyId, fixtureId: historyId, recordedAt: historyInstant });
 
 const derivedProbabilityPath = /^markets\.\d+\.(?:derivation|localDerivation)\.market\.(?:selectedProbability|selections\.\d+\.(?:winProbability|outcomes\.(?:win|half-win|push|half-loss|loss)))$/u;
@@ -112,13 +121,14 @@ export function goalMarketExtensionFromRow(row: HistoryRow): StoredGoalMarketExt
   const identity = identitySchema.safeParse({ revisionId: body?.revisionId, cycleId: body?.cycleId,
     fixtureId: body?.fixtureId, recordedAt: body?.recordedAt });
   if (!identity.success || !Array.isArray(body.markets)) return historyFail("invalid-state");
-  let prepared;
-  try { prepared = prepareGoalMarketExtension({ ...("localPoisson" in body ? { localPoisson: body.localPoisson } : {}),
+  let canonical;
+  try { canonical = prepareCanonicalGoalMarketExtension({ ...("localPoisson" in body ? { localPoisson: body.localPoisson } : {}),
     ...("scoreDistribution" in body ? { scoreDistribution: body.scoreDistribution } : {}),
     ...("evaluationProfile" in body ? { evaluationProfile: body.evaluationProfile } : {}),
     definitions: body.markets.map((entry) => (entry as { definition?: unknown })?.definition) }); }
   catch { return historyFail("invalid-state"); }
-  const contentHash = evidenceFingerprint(prepared), expected = { ...prepared, ...identity.data, contentHash };
+  const { prepared, serialized } = canonical;
+  const contentHash = hashCanonicalGoalMarketExtension(serialized), expected = { ...prepared, ...identity.data, contentHash };
   if (body.contentHash !== contentHash || row.contentHash !== contentHash || row.ruleVersion !== prepared.ruleVersion ||
       row.revisionId !== expected.revisionId || row.cycleId !== expected.cycleId || row.fixtureId !== expected.fixtureId ||
       historyTime(row.recordedAt) !== expected.recordedAt || !matchesStoredGoalProjection(body, expected)) return historyFail("invalid-state");
@@ -138,8 +148,8 @@ export async function appendGoalMarketExtension(tx: Tx, input: GoalMarketExtensi
 }>): Promise<StoredGoalMarketExtension> {
   const { revisionId, cycleId, fixtureId, recordedAt, ...marketInput } = input;
   const identity = identitySchema.parse({ revisionId, cycleId, fixtureId, recordedAt });
-  const prepared = prepareGoalMarketExtension(marketInput);
-  const contentHash = evidenceFingerprint(prepared), known = await readGoalMarketExtension(tx, identity.revisionId);
+  const { prepared, serialized } = prepareCanonicalGoalMarketExtension(marketInput);
+  const contentHash = hashCanonicalGoalMarketExtension(serialized), known = await readGoalMarketExtension(tx, identity.revisionId);
   if (known) {
     if (known.contentHash !== contentHash || known.cycleId !== identity.cycleId || known.fixtureId !== identity.fixtureId)
       return historyFail("conflicting-request");

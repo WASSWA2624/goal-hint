@@ -30,7 +30,7 @@ export function createPerformanceRoute({ read = readPublicPerformance, history =
       const publications = history({ from: query.range.startDate, to: query.range.endDate, page, pageSize: performancePageSize,
         ...(slipStatus ? { status: slipStatus } : {}) }).catch(() => null);
       return <PublicShell locale={locale} today={getReportingDate(at)} current="performance" app compact>
-        <PerformanceDashboard key={parameters.toString()} locale={locale} filters={{ from: query.range.startDate, to: query.range.endDate,
+        <PerformanceDashboard locale={locale} filters={{ from: query.range.startDate, to: query.range.endDate,
           market: query.market, source: query.source, model: query.model, version: query.version, leaguePage: query.leaguePage,
           ...(slipStatus ? { slipStatus } : {}) }}
           report={null} history={null} reportPromise={predictions} historyPromise={publications} historyPage={page} />

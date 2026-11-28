@@ -15,20 +15,22 @@ import { BestSlipCard } from "./best-slip-card";
 import { SlipMatchRefreshProvider } from "./slip-match-refresh";
 import { BestSlipsFilters } from "./best-slips-filters";
 import { BestSlipsPagination, BestSlipsSummary } from "./best-slips-browse-presentation";
-import { slipViewKey } from "@/domain/slip-browse-window";
+import { slipViewKey, type SlipBrowsePage } from "@/domain/slip-browse-window";
 import { FilterButton } from "./best-slips-filter-styles";
 import { useBestSlipsBrowse } from "./use-best-slips-browse";
 
 const MemoBestSlipCard = memo(BestSlipCard);
+const MemoBestSlipsFilters = memo(BestSlipsFilters);
 
-export function BestSlips({ result, locale, signedIn = false, initialRead = false, emptyNavigation }: {
-  result: SlipsBrowseResult; locale: string; signedIn?: boolean; initialRead?: boolean; emptyNavigation?: ReactNode;
+export function BestSlips({ result, locale, signedIn = false, initialRead = false, initialResult, emptyNavigation }: {
+  result: SlipsBrowseResult; locale: string; signedIn?: boolean; initialRead?: boolean;
+  initialResult?: Promise<SlipBrowsePage | null> | undefined; emptyNavigation?: ReactNode;
 }) {
   const m = createMessages(locale), router = useRouter();
   const desktop = useDesktopLayout();
   const [, startRefresh] = useTransition();
   const recheckAccess = useCallback(() => { startRefresh(() => router.refresh()); }, [router]);
-  const browse = useBestSlipsBrowse(result, recheckAccess, "/api/best-slips", initialRead);
+  const browse = useBestSlipsBrowse(result, recheckAccess, "/api/best-slips", initialRead, initialResult);
   const content = browse.result;
   const oddsRange = bestSlipBand(browse.displayQuery.oddsBand).label, listWindow = content.browse;
   const searchContinues = listWindow?.total === null && browse.hasMore;
@@ -36,13 +38,14 @@ export function BestSlips({ result, locale, signedIn = false, initialRead = fals
     && (listWindow.query.page - 1) * listWindow.pageSize >= listWindow.total;
   const watchedSlips = useMemo(() => content.slips.flatMap((view) => view.slip ? [view.slip] : []), [content.slips]);
   const initialStates = useMemo(() => content.slips.flatMap((view) => view.matchStates ?? []), [content.slips]);
+  const countSummary = useMemo(() => content.state === "generated" || content.state === "awaiting-publication" && content.browse.bandTotal === 0
+    ? <BestSlipsSummary result={content} locale={locale} /> : null, [content, locale]);
   const page = <SlipStack data-best-slips-page data-best-slips-initial-loading={browse.initialLoading ? "" : undefined}
     aria-busy={browse.initialLoading || undefined}>
     <AppBrandBar locale={locale} />
-    <BestSlipsFilters query={browse.displayQuery} today={content.day} locale={locale} busy={browse.updating}
+    <MemoBestSlipsFilters query={browse.displayQuery} today={content.day} locale={locale} busy={browse.updating}
       scannedDates={listWindow?.total === null ? listWindow : undefined}
-      summary={content.summary} statistics={content.summary ? content.summary.statistics : content.statistics} countSummary={content.state === "generated" || content.state === "awaiting-publication" && listWindow?.bandTotal === 0
-        ? <BestSlipsSummary result={content} locale={locale} /> : null} onChange={browse.change} />
+      summary={content.summary} statistics={content.summary ? content.summary.statistics : content.statistics} countSummary={countSummary} onChange={browse.change} />
     {browse.stale && <MutedText role="status" data-best-slips-stale>{m.text("bestSlips.filters.stale")}</MutedText>}
     {browse.readError && content.state !== "data-unavailable" && <CriteriaPanel role="alert" data-best-slips-update-failed><Stack $gap="sm">
       <h2>{m.text(browse.readError === "limited" ? "bestSlips.filters.rateLimited" : "bestSlips.filters.updateUnavailable")}</h2>

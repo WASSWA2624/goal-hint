@@ -56,7 +56,7 @@ function importsOf(file) {
   }
   for (const [, specifier] of text.matchAll(/(?:^|[\n;])\s*import\s*["']([^"']+)["']/gu)) specifiers.push(specifier);
   for (const [, specifier] of text.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/gu)) specifiers.push(specifier);
-  return { client: /^\s*["']use client["']/u.test(text), specifiers };
+  return { client: /^\s*["']use client["']/u.test(text), serverAction: /^\s*["']use server["']/u.test(text), specifiers };
 }
 /** Every module and package the browser loads for these roots, each with the import chain that brought it in. */
 function clientGraph(roots) {
@@ -66,6 +66,9 @@ function clientGraph(roots) {
     if (seen.has(`${client}:${name}`)) continue;
     seen.add(`${client}:${name}`);
     if (client && !chains.has(name)) chains.set(name, item.chain);
+    // A Client Component imports a callable reference to a server action.
+    // The action's implementation and its dependencies stay on the server.
+    if (client && source.serverAction) continue;
     for (const specifier of source.specifiers) {
       const target = resolveImport(item.file, specifier);
       if (target === null) { if (client && !chains.has(specifier)) chains.set(specifier, [...item.chain, specifier]); }
