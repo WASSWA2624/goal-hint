@@ -57,6 +57,8 @@ def export_commit(destination: Path, commit: str) -> None:
                     target.parent.mkdir(parents=True, exist_ok=True)
                     with archive.extractfile(member) as source, target.open("wb") as output:
                         shutil.copyfileobj(source, output)
+                # The tar reader stops at the end marker before Git writes all padding.
+                process.stdout.read()
             if process.wait():
                 raise CommandError("Git could not export the approved application source.")
         except tarfile.TarError:
