@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { appendFeedPage, applyServerFeedPage, checkedFeedPage, continueFeedPages, FeedPaginationError, feedPageApiHref, feedPageHref, initialLoadedFeed, observeFeedPage, replaceFeedPages } from '../src/domain/feed-pagination.ts';
+import { appendFeedPage, applyServerFeedPage, checkedFeedPage, checkedFeedWindow, continueFeedPages, FeedPaginationError, feedPageApiHref, feedPageHref, feedWindowApiHref, initialLoadedFeed, observeFeedPage, replaceFeedPages, supportsFeedWindow } from '../src/domain/feed-pagination.ts';
 import { readJson } from '../src/state/refresh-base.ts';
+import { readRefreshFeedWindow } from '../src/state/refresh-api.ts';
 import { nextLoadedPage } from '../src/domain/browse-period.ts';
 import { feedCheckpointSchema, matchingFeedCheckpoint, readFeedCheckpoints, restorationRules, writeFeedCheckpoint } from '../src/domain/feed-navigation.ts';
 import { resolveFeedDates, feedQueryKey, feedQueryRules } from '../src/domain/feed-query.ts';
@@ -119,6 +120,69 @@ test('the refresh transport distinguishes HTTP 409 from temporary outage and wai
   await assert.rejects(readJson('/api/matches', signal), error => error.code === 'changed');
   fetch.mock.mockImplementation(async () => new Response(null, { status: 503, headers: { 'Retry-After': '5' } }));
   await assert.rejects(readJson('/api/matches', signal), error => error.code === 'unavailable' && error.retryAfterMs === 5_000);
+});
+
+test('an atomic continuation pins the active cohort and starts at the explicit first page when in bounds', () => {
+  assert.equal(supportsFeedWindow(1, 4, 50), true);
+  assert.equal(supportsFeedWindow(1, 5, 50), false);
+  for (const invalid of [[0, 1, 50], [1, 2, 0], [1, 2.5, 50], [10_000, 10_001, 50]]) {
+    assert.equal(supportsFeedWindow(...invalid), false);
+  }
+  const target = new URL(feedWindowApiHref(query('when=today&result=pending&sort=live-first'), today, 2, 3), 'https://unit.test');
+  assert.deepEqual(Object.fromEntries(target.searchParams), {
+    result: 'pending', date: today, sort: 'live-first', page: '2', leagues: '0', through: '3',
+  });
+});
+
+test('an atomic continuation accepts a complete pinned generation or verified real end only', () => {
+  const applied = query('pageSize=2');
+  const first = page(2, ['a', 'b'], otherVersion), second = page(3, ['c', 'd'], otherVersion);
+  const valid = { pages: [first, second] };
+  assert.deepEqual(checkedFeedWindow(valid, applied, today, 2, 3), valid.pages);
+  assert.deepEqual(checkedFeedWindow(valid, applied, today, 2, 4), valid.pages);
+  const empty = page(2, [], otherVersion, { total: 0, totalPages: 0, nextPage: null, state: 'no-filter-matches',
+    coverage: { ...first.coverage, knownFixtures: 0 }, links: { next: null, previous: '/api/matches?page=1' } });
+  assert.deepEqual(checkedFeedWindow({ pages: [empty] }, applied, today, 2, 3), [empty]);
+  const later = page(3, ['c', 'd'], otherVersion, { asOf: now + 1 });
+  for (const candidate of [[], [first], [first, first], [first, later],
+    [first, page(3, ['b', 'c'], otherVersion)], [first, page(3, ['c', 'd'], version)],
+    [first, page(3, ['c', 'd'], otherVersion, { access: { tier: 'full', signedIn: true } })],
+    [first, { ...second, pageSize: 1 }], [first, { ...second, range: { ...second.range, from: '2026-10-01' } }]]) {
+    assert.throws(() => checkedFeedWindow({ pages: candidate }, applied, today, 2, 3), error => error.code === 'invalid-response');
+  }
+});
+
+test('a supported continuation reads the validated window in one same-origin request', async t => {
+  const applied = query('pageSize=2');
+  const pages = [page(2, ['a', 'b'], otherVersion), page(3, ['c', 'd'], otherVersion)];
+  const request = t.mock.method(globalThis, 'fetch', async (href, options) => {
+    assert.equal(href, feedWindowApiHref(applied, today, 2, 3));
+    assert.equal(options.credentials, 'same-origin');
+    assert.equal(options.cache, 'no-store');
+    return Response.json({ pages });
+  });
+  assert.deepEqual(await readRefreshFeedWindow(applied, today, 2, 3, new AbortController().signal), pages);
+  assert.equal(request.mock.callCount(), 1);
+});
+
+test('Show More retries a whole atomic window once and keeps verified membership if any record is stale', async () => {
+  const initial = initialLoadedFeed(page(1, ['a', 'b']));
+  const noLegacyRead = async () => assert.fail('Supported continuation must not read separate pages');
+  const revised = [page(1, ['e', 'a'], otherVersion), page(2, ['b', 'c'], otherVersion)];
+  const delays = [];
+  let calls = 0;
+  const result = await continueFeedPages(initial, noLegacyRead, async delay => { delays.push(delay); return true; }, { readWindow: async () => {
+    if (++calls === 1) throw new FeedPaginationError('unavailable', 5_000);
+    return revised;
+  } });
+  assert.deepEqual(delays, [5_000]);
+  assert.equal(calls, 2);
+  assert.deepEqual(result.records.map(row => row.fixtureId), ['e', 'a', 'b', 'c']);
+  const stale = structuredClone(revised);
+  stale[0].records[1].dataVersion = '8';
+  await assert.rejects(continueFeedPages(initial, noLegacyRead, async () => assert.fail('Stale window cannot retry automatically'),
+    { readWindow: async () => stale }), error => error.code === 'stale-data');
+  assert.deepEqual(initial.records.map(row => row.fixtureId), ['a', 'b']);
 });
 
 test('a same-route server refresh shows new fixtures in place and ignores an older poll', () => {

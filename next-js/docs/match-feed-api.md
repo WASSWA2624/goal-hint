@@ -61,6 +61,7 @@ kickoff default. Explicit page choices remain authoritative.
 | `page` | Integer 1–10,000, default 1. |
 | `pageSize` | Integer 1–100, default 50. |
 | `leagues` | Optional response option, only `0`: the response carries `leagues: []`. Browser page refreshes and live polls use it because they never read filter options. It is removed before query parsing and not charged to the 2 KiB query limit, so it never enters the canonical query, cache key or page links. |
+| `through` | Optional list response option. A single integer larger than `page` requests consecutive pages from `page` through this value, with at most 200 possible fixtures at the original page size. The response is `{ "pages": [...] }` and retains the 1 MiB body limit. The option does not enter filters, canonical URLs or links. |
 
 Prompt 050 makes `league`, `country` and `market` lists. Plain checkbox forms that
 repeat a list key join exactly like a comma list; every other key must stay
@@ -221,8 +222,12 @@ Prompt 034 adds opaque `paginationVersion`, computed from the effective query,
 competition scope and committed date/catalog generations in the records' snapshot.
 Feed cache projection version 3 avoids reusing earlier responses without this
 marker. Legacy omitted markers parse to null and use direct page navigation.
-Appended pages must have the same marker and total; changes require an atomic
-refresh of the loaded prefix. See [pagination consistency](pagination-navigation.md).
+Appended pages must have the same marker and total. For a bounded `through`
+window the server selects the whole ordered range in one repeatable-read
+transaction and returns each page with the same generation and observation
+clock. A verified end of the cohort can shorten the response. The server
+rechecks the viewer before projecting the pages, and the client validates
+the entire response before replacing its visible rows. See [pagination consistency](pagination-navigation.md).
 
 List responses and `GET /api/matches/summary` also carry `performanceScope`,
 an opaque 64-character hexadecimal fingerprint of the reporting period,

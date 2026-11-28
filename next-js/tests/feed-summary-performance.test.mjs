@@ -197,7 +197,7 @@ test('summary HTTP retains strict feed response-option validation without return
     reads++; assert.equal(query.has('leagues'), false);
     return { performance: counts, paginationVersion: 'a'.repeat(64), asOf: at };
   }, clock, fullAccess);
-  for (const query of ['leagues=1', 'leagues=0&leagues=0', 'token=private', 'page=0']) {
+  for (const query of ['leagues=1', 'leagues=0&leagues=0', 'token=private', 'page=0', 'through=2']) {
     assert.equal((await handler(new Request(`https://example.test/api/matches/summary?${query}`))).status, 400);
   }
   assert.equal(reads, 0);

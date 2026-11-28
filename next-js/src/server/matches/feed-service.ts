@@ -6,6 +6,7 @@ import { isLocalFootballDevelopment } from "../../domain/development-demo.ts";
 import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock, type ReportingDate, type ReportingDateRange } from "../../domain/calendar.ts";
 import { activeFeedFilterCount, feedQueryKey, getFeedToday, parseFeedQuery, resolveFeedDates, serializeFeedQuery, feedQueryRules, maximumCompetitionScope, type FeedParameters, type FeedQuery } from "../../domain/feed-query.ts";
 import { matchFeedRules, storedMatchFeedResponseSchema, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
+import { maximumFeedWindowRecords } from "../../domain/match-feed-rules.ts";
 import { createMessages, type TextKey } from "../../i18n/messages.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { Prisma } from "../generated/prisma/client.ts";
@@ -82,12 +83,16 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
   const allowInPlayOdds = options.allowInPlayOdds ?? isLocalFootballDevelopment();
-  return Object.freeze({ async query(input: FeedParameters, context: MatchFeedReadContext = {}): Promise<StoredMatchFeedResponse> {
+  async function readPages(input: FeedParameters, context: MatchFeedReadContext, through?: number): Promise<StoredMatchFeedResponse[]> {
     const publishedOnly = context.publishedOnly === true;
     const publishedForecasts = context.publishedForecasts ?? publishedOnly;
     const predictedMatchesOnly = context.predictedMatchesOnly === true;
     const asOf = clock.now(), reportingToday = getReportingDate(asOf);
     const query = parseMatchFeedQuery(input, reportingToday, { ...context, providerOdds, asOf });
+    const recordLimit = ((through ?? query.page) - query.page + 1) * query.pageSize;
+    if (through !== undefined && (!Number.isSafeInteger(through) || through <= query.page || through > feedQueryRules.maximumPage ||
+      recordLimit > maximumFeedWindowRecords)) throw new MatchFeedError("invalid-query");
+    const offset = (query.page - 1) * query.pageSize;
     const today = getFeedToday(query, asOf), range = resolveFeedDates(query, today);
     const historyBefore = publishedOnly ? historicalFeedCutoff(query, range, today) : null;
     const messages = createMessages(query.locale);
@@ -149,12 +154,21 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         const rows = await tx.$queryRaw<SelectedRow[]>(Prisma.sql`SELECT STRAIGHT_JOIN f.id
           ${sql.projectPick ? Prisma.sql`,(${sql.displayUsesProjection}) AS projected,${selectedFeedPickColumns}` : Prisma.empty}
           ${sql.pageJoins} ${sql.searchJoin} WHERE ${sql.where}
-          ORDER BY ${sql.order} LIMIT ${query.pageSize} OFFSET ${(query.page - 1) * query.pageSize}`);
+          ORDER BY ${sql.order} LIMIT ${recordLimit} OFFSET ${offset}`);
+        if (rows.length !== Math.min(recordLimit, Math.max(0, total - offset)) || new Set(rows.map(({ id }) => id)).size !== rows.length)
+          throw new MatchFeedError("unavailable");
         const dates = await storedFeedCoverage(tx, sourceRange), partial = dates.some((date) => !date.authoritative);
         const { run, window } = await storedFeedRunContext(tx, reportingToday, range);
         if (run?.phase === "updating") run.message = messages.text("feed.updating");
-        const records = await timedRequestPhase("list-hydration", () => storedFeedFixtures(tx, rows.map(({ id }) => id), false, window,
-          query.locale, { prices: providerOdds, preferRecommendation: !publishedForecasts, asOf }));
+        const records = await timedRequestPhase("list-hydration", async () => {
+          const hydrated: Awaited<ReturnType<typeof storedFeedFixtures>> = [];
+          for (let index = 0; index < rows.length; index += feedQueryRules.maximumPageSize) {
+            const ids = rows.slice(index, index + feedQueryRules.maximumPageSize).map(({ id }) => id);
+            hydrated.push(...await storedFeedFixtures(tx, ids, false, window, query.locale,
+              { prices: providerOdds, preferRecommendation: !publishedForecasts, asOf }));
+          }
+          return hydrated;
+        });
         const replayIds = publishedForecasts ? records.filter(({ kickoffAt, status, forecast, cycle }) =>
           kickoffAt !== null && (status === "live" || isPlayedFinalStatus(status)) && (!forecast || cycle?.state === "closed"))
           .map(({ fixtureId }) => fixtureId) : [];
@@ -202,22 +216,38 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           else if (record.filteredPrediction) record.filteredPrediction = { ...record.filteredPrediction, settlementStatus };
           else if (record.featuredPrediction) record.featuredPrediction = { ...record.featuredPrediction, settlementStatus };
         }
-        const totalPages = Math.ceil(total / query.pageSize);
-        const nextPage = query.page < totalPages && query.page < feedQueryRules.maximumPage ? query.page + 1 : null;
-        const previousPage = query.page > 1 ? Math.max(1, Math.min(query.page - 1, totalPages)) : null;
-        const state = knownFixtures === 0 ? partial ? "data-unavailable" : "no-fixtures"
-          : total === 0 ? "no-filter-matches" : records.length === 0 ? "page-out-of-range" : matchingWithMarket === 0 ? "insufficient-data" : "ready";
-        const keys: Partial<Record<typeof state, TextKey>> = { "data-unavailable": "feed.dataUnavailable", "no-fixtures": "feed.noFixtures",
+        const totalPages = Math.ceil(total / query.pageSize), lastPage = Math.max(query.page, Math.min(through ?? query.page, totalPages));
+        const snapshotAt = Math.max(asOf, ...records.map((record) => (record.retrospective ?? record.retrospectiveSuppression)?.activatedAt ?? asOf));
+        const keys: Partial<Record<StoredMatchFeedResponse["state"], TextKey>> = { "data-unavailable": "feed.dataUnavailable", "no-fixtures": "feed.noFixtures",
           "no-filter-matches": "feed.noFilterMatches", "page-out-of-range": "feed.pageOutOfRange", "insufficient-data": "feed.insufficientData" };
-        const response = storedMatchFeedResponseSchema.parse({ performance, ...versions, leagues, records, page: query.page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
-          links: { next: pageLink(query, today, nextPage), previous: pageLink(query, today, previousPage) },
-          asOf: Math.max(asOf, ...records.map((record) => (record.retrospective ?? record.retrospectiveSuppression)?.activatedAt ?? asOf)), today,
-          range: { from: range.startDate, to: range.endDate, ...range.window }, state, message: keys[state] ? messages.text(keys[state]!) : null,
-          coverage: { partial, knownFixtures, matchingWithMarket, matchingWithPerformancePick, dates }, run,
-          search: query.search ? { exact: exactMatches ?? 0, similar: total - (exactMatches ?? 0) } : null });
-        if (Buffer.byteLength(JSON.stringify(response), "utf8") > matchFeedRules.maximumResponseBytes) throw new MatchFeedError("unavailable");
-        return freezeEvidence(response);
+        return Array.from({ length: lastPage - query.page + 1 }, (_, index) => {
+          const page = query.page + index, start = index * query.pageSize, pageRecords = records.slice(start, start + query.pageSize);
+          const nextPage = page < totalPages && page < feedQueryRules.maximumPage ? page + 1 : null;
+          const previousPage = page > 1 ? Math.max(1, Math.min(page - 1, totalPages)) : null;
+          const state = knownFixtures === 0 ? partial ? "data-unavailable" : "no-fixtures"
+            : total === 0 ? "no-filter-matches" : pageRecords.length === 0 ? "page-out-of-range" : matchingWithMarket === 0 ? "insufficient-data" : "ready";
+          const response = storedMatchFeedResponseSchema.parse({ performance, ...versions, leagues, records: pageRecords, page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
+            links: { next: pageLink(query, today, nextPage), previous: pageLink(query, today, previousPage) }, asOf: snapshotAt, today,
+            range: { from: range.startDate, to: range.endDate, ...range.window }, state, message: keys[state] ? messages.text(keys[state]!) : null,
+            coverage: { partial, knownFixtures, matchingWithMarket, matchingWithPerformancePick, dates }, run,
+            search: query.search ? { exact: exactMatches ?? 0, similar: total - (exactMatches ?? 0) } : null });
+          if (Buffer.byteLength(JSON.stringify(response), "utf8") > matchFeedRules.maximumResponseBytes) throw new MatchFeedError("unavailable");
+          return freezeEvidence(response);
+        });
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 }));
+      const useCompleteForecast = publishedForecasts && isDefaultFeaturedScope(query);
+      const decorate = async (response: StoredMatchFeedResponse) => {
+        const current = providerOdds ? await withFeedOdds(database, response, asOf, allowInPlayOdds, !publishedForecasts) : response;
+        return useCompleteForecast ? withUpcomingFeaturedOutcomes(database, current, asOf, providerOdds) : current;
+      };
+      if (through !== undefined) {
+        const pages = await read();
+        // Display overlays use their independent clocks and preserve the audited order and membership.
+        const decorated = await decorate({ ...pages[0]!, records: pages.flatMap((page) => page.records) });
+        return freezeEvidence(pages.map((page, index) => ({ ...page, asOf: decorated.asOf,
+          records: decorated.records.slice(index * query.pageSize, (index + 1) * query.pageSize) })));
+      }
+      const readPage = async () => (await read())[0]!;
       const todayList = predictedMatchesOnly && publishedForecasts && !publishedOnly && !context.completedOnly
         && options.includePerformance === false && !query.zone && query.pageSize === feedQueryRules.pageSize
         && range.dayCount === 1 && range.startDate === reportingToday
@@ -231,14 +261,16 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedMatchFeedResponseSchema.parse(value) });
         // Keep a normal live-refresh window for busy Today pages. The same
         // date, catalog and progress generations still invalidate immediately.
-        return cache.read(todayList ? { ...descriptor, lifetimeMs: publicCacheRules.todayFeedListMs } : descriptor, read);
-      }) : await read();
-      const current = providerOdds ? await withFeedOdds(database, response, asOf, allowInPlayOdds, !publishedForecasts) : response;
-      const useCompleteForecast = publishedForecasts && isDefaultFeaturedScope(query);
-      return useCompleteForecast ? withUpcomingFeaturedOutcomes(database, current, asOf, providerOdds) : current;
+        return cache.read(todayList ? { ...descriptor, lifetimeMs: publicCacheRules.todayFeedListMs } : descriptor, readPage);
+      }) : await readPage();
+      return [await decorate(response)];
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;
       throw new MatchFeedError("unavailable");
     }
-  } });
+  }
+  return Object.freeze({
+    async query(input: FeedParameters, context: MatchFeedReadContext = {}) { return (await readPages(input, context))[0]!; },
+    queryWindow(input: FeedParameters, through: number, context: MatchFeedReadContext = {}) { return readPages(input, context, through); },
+  });
 }

@@ -1,15 +1,16 @@
 import "server-only";
 
-import { getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
 import { matchDetailResponseSchema } from "../../domain/match-detail.ts";
-import { matchFeedResponseSchema } from "../../domain/match-feed.ts";
+import { matchFeedResponseSchema, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
+import type { FeedParameters } from "../../domain/feed-query.ts";
 import { matchInsightsSchema } from "../../domain/match-insights.ts";
 import { isCompletedFixtureStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
 import { gateDetailResponse, gateFeedResponse, gateInsights, usesPremiumFeedOracle } from "../../domain/paywall.ts";
 import { MatchFeedError } from "../matches/feed-error.ts";
-import { parseMatchFeedQuery } from "../matches/feed-service.ts";
+import { parseMatchFeedQuery, type MatchFeedReadContext } from "../matches/feed-service.ts";
 import { readPublicMatchDetail } from "../matches/public-detail.ts";
-import { readPublicMatchFeed } from "../matches/public-feed.ts";
+import { readPublicMatchFeed, readPublicMatchFeedWindow } from "../matches/public-feed.ts";
 import { readPublicMatchInsights } from "../matches/public-insights.ts";
 import { readPublicSlipBuild } from "../slips/public-slips.ts";
 import { resolveViewerAccess, resolveViewerAccessFresh, ViewerAccessUnavailable, type ViewerAccess } from "./viewer-access.ts";
@@ -26,25 +27,39 @@ export async function contentAccess(resolve: AccessResolver): Promise<ViewerAcce
 
 /** Raw caches stay viewer-independent. Every page/API factory injects only raw readers into this boundary. */
 export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed = readPublicMatchFeed, readDetail = readPublicMatchDetail,
-  readInsights = readPublicMatchInsights, readSlips = readPublicSlipBuild, readStatus = readPublicMatchStatus }: {
+  readInsights = readPublicMatchInsights, readSlips = readPublicSlipBuild, readStatus = readPublicMatchStatus,
+  readWindow = readPublicMatchFeedWindow }: {
   resolveAccess?: AccessResolver; readFeed?: typeof readPublicMatchFeed; readDetail?: typeof readPublicMatchDetail;
+  readWindow?: typeof readPublicMatchFeedWindow;
   readInsights?: typeof readPublicMatchInsights; readSlips?: typeof readPublicSlipBuild;
   readStatus?: (id: string) => Promise<SettlementStatus>;
 } = {}) {
   const recheckAccess = resolveAccess === resolveViewerAccess ? resolveViewerAccessFresh : resolveAccess;
+  async function forViewer<T>(parameters: FeedParameters, context: MatchFeedReadContext, clock: Clock | undefined,
+    read: (context: MatchFeedReadContext, clock: Clock) => Promise<T>) {
+    const initial = await contentAccess(resolveAccess);
+    const at = clock?.now() ?? utcInstantFromEpochMilliseconds(Date.now());
+    const query = parseMatchFeedQuery(parameters, getReportingDate(at), { ...context,
+      ...(initial.tier === "free" ? { providerOdds: true } : {}), asOf: at });
+    if (initial.tier === "free" && usesPremiumFeedOracle(query)) throw new MatchFeedError("subscription-required");
+    const result = await read({ ...context, completedOnly: false }, clock ?? { now: () => at });
+    const access = await contentAccess(recheckAccess);
+    if (access.tier === "free" && usesPremiumFeedOracle(query)) throw new MatchFeedError("subscription-required");
+    return { result, access };
+  }
+  function projectFeed(response: StoredMatchFeedResponse, access: ViewerAccess) {
+    const result = gateFeedResponse(response, access);
+    try { return access.tier === "free" ? matchFeedResponseSchema.parse(result) : result; }
+    catch { throw new MatchFeedError("unavailable"); }
+  }
   return {
     async feed(...[parameters, context = {}, clock]: Parameters<typeof readPublicMatchFeed>) {
-      let access = await contentAccess(resolveAccess);
-      const at = clock?.now() ?? utcInstantFromEpochMilliseconds(Date.now());
-      const query = parseMatchFeedQuery(parameters, getReportingDate(at), { ...context,
-        ...(access.tier === "free" ? { providerOdds: true } : {}), asOf: at });
-      if (access.tier === "free" && usesPremiumFeedOracle(query)) throw new MatchFeedError("subscription-required");
-      const response = await readFeed(parameters, { ...context, completedOnly: false }, clock ?? { now: () => at });
-      access = await contentAccess(recheckAccess);
-      if (access.tier === "free" && usesPremiumFeedOracle(query)) throw new MatchFeedError("subscription-required");
-      const result = gateFeedResponse(response, access);
-      try { return access.tier === "free" ? matchFeedResponseSchema.parse(result) : result; }
-      catch { throw new MatchFeedError("unavailable"); }
+      const { result, access } = await forViewer(parameters, context, clock, (...options) => readFeed(parameters, ...options));
+      return projectFeed(result, access);
+    },
+    async feedWindow(...[parameters, through, context = {}, clock]: Parameters<typeof readPublicMatchFeedWindow>) {
+      const { result, access } = await forViewer(parameters, context, clock, (...options) => readWindow(parameters, through, ...options));
+      return result.map(page => projectFeed(page, access));
     },
     async detail(...args: Parameters<typeof readPublicMatchDetail>) {
       const response = await readDetail(...args), access = await contentAccess(recheckAccess), result = gateDetailResponse(response, access);

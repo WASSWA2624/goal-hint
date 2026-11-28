@@ -6,12 +6,12 @@ import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate }
 import { nextLoadedPage } from "@/domain/browse-period";
 import { restoredLiveFeedSearch } from "@/domain/feed-live-search";
 import type { FeedCheckpoint } from "@/domain/feed-navigation";
-import { applyServerFeedPage, continueFeedPages, FeedPaginationError, initialLoadedFeed, observeFeedPage, replaceFeedPages, type LoadedFeed } from "@/domain/feed-pagination";
+import { applyServerFeedPage, continueFeedPages, FeedPaginationError, initialLoadedFeed, observeFeedPage, replaceFeedPages, supportsFeedWindow, type LoadedFeed } from "@/domain/feed-pagination";
 import { feedQueryHref, feedQueryKey, type FeedQuery } from "@/domain/feed-query";
 import { feedRowNumber } from "@/domain/feed-presentation";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
-import { consumeRefresh, readRefreshFeedPage, refreshApi } from "@/state/refresh-api";
+import { consumeRefresh, readRefreshFeedPage, readRefreshFeedWindow, refreshApi } from "@/state/refresh-api";
 import { useAppDispatch } from "@/state/hooks";
 import { acceptRun, feedRefreshInterval, liveRefreshRules } from "@/domain/live-refresh";
 import { startRequestDeadline } from "@/domain/request-deadline";
@@ -104,15 +104,18 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     const deadlineAt = Date.now() + budget, clearDeadline = startRequestDeadline(controller, budget);
     if (mode !== "background") foreground(mode);
     const applied = queryRef.current;
+    const verifyAccess = (observed: MatchFeedResponse) => {
+      if (observed.access.tier !== base.data.access.tier || observed.access.signedIn !== base.data.access.signedIn) {
+        throw new FeedPaginationError("subscription-required");
+      }
+    };
     const fetchPage = async (page: number) => {
       controller.signal.throwIfAborted();
       const observed = mode === "append"
         ? await readRefreshFeedPage(applied, today, page, controller.signal, budget)
         : await consumeRefresh(dispatch(refreshApi.endpoints.feed.initiate({ query: applied, today, page },
           { forceRefetch: true })), controller.signal);
-      if (observed.access.tier !== base.data.access.tier || observed.access.signedIn !== base.data.access.signedIn) {
-        throw new FeedPaginationError("subscription-required");
-      }
+      verifyAccess(observed);
       return observed;
     };
     work.completion = (async () => {
@@ -120,7 +123,15 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
         const current = viewRef.current;
         let next: LoadedFeed;
         if (mode === "append") {
-          next = await continueFeedPages(base, fetchPage, delay => waitForContinuation(delay, controller.signal, deadlineAt), rebaseAppend);
+          const through = base.data.nextPage;
+          const fetchWindow = through !== null && supportsFeedWindow(base.firstPage, through, applied.pageSize) ? async () => {
+            controller.signal.throwIfAborted();
+            const pages = await readRefreshFeedWindow(applied, today, base.firstPage, through, controller.signal, budget);
+            verifyAccess(pages[0]!);
+            return pages;
+          } : undefined;
+          next = await continueFeedPages(base, fetchPage, delay => waitForContinuation(delay, controller.signal, deadlineAt),
+            { rebase: rebaseAppend, readWindow: fetchWindow });
         } else if (mode === "background" && base.pages > 1) {
           backgroundPage.current = nextLoadedPage(backgroundPage.current, base.firstPage, base.lastPage);
           const page = await fetchPage(backgroundPage.current);

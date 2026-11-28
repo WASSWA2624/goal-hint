@@ -74,6 +74,43 @@ test('leagues=0 is not charged to the 2 KiB query limit', async () => {
   assert.equal((await handler(request(`${largest}&leagues=0`))).status, 200);
   assert.equal((await handler(request(`${largest}a&leagues=0`))).status, 400);
 });
+test('through requests one window and applies current viewer access to every page', async () => {
+  const events = [], league = { id: 'league-a', name: 'Example', country: null, logoUrl: null, fixtures: 1 };
+  const access = async () => {
+    events.push('access');
+    return events.length === 1 ? fullAccess() : { tier: 'free', signedIn: false, mode: 'free' };
+  };
+  const handler = createMatchFeedHandler(async () => { assert.fail('ordinary page reader ran'); }, undefined, access,
+    async (query, through) => {
+      events.push('window');
+      assert.equal(query.toString(), 'date=2026-10-09&pageSize=30');
+      assert.equal(through, 2);
+      return [{ ...emptyPage(), leagues: [league] }];
+    });
+  const response = await handler(request('date=2026-10-09&pageSize=30&leagues=0&through=2'));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  const { pages } = await response.json();
+  assert.deepEqual(events, ['access', 'window', 'access']);
+  assert.deepEqual(pages[0].access, { tier: 'free', signedIn: false });
+  assert.deepEqual(pages[0].leagues, []);
+});
+test('invalid through options never reach a stored reader', async () => {
+  const read = async () => assert.fail('invalid options reached storage');
+  const handler = createMatchFeedHandler(read, undefined, fullAccess, read);
+  for (const query of ['through=', 'through=0', 'through=01', 'through=2.5', 'through=10001', 'through=2&through=3']) {
+    const response = await handler(request(query));
+    assert.equal(response.status, 400, query);
+    assert.equal((await response.json()).error.code, 'invalid-query');
+  }
+});
+test('an oversized window fails before returning partial pages', async () => {
+  const handler = createMatchFeedHandler(async () => emptyPage(), undefined, fullAccess,
+    async () => [{ ...emptyPage(), message: 'x'.repeat(1_048_576) }]);
+  const response = await handler(request('date=2026-10-09&pageSize=30&through=2'));
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error.code, 'unavailable');
+});
 for (const [error, status, code, retry] of [[new Error('mysql://private:password@internal/prompt-log'), 503, 'unavailable', '5'],
   [new MatchFeedError('rate-limited', 17), 429, 'rate-limited', '17']]) {
   test(`HTTP ${status} is structured, recoverable and excludes private diagnostics`, async () => {

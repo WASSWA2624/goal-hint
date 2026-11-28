@@ -4,6 +4,7 @@ import { FeedPaginationError } from "./feed-pagination-error.ts";
 import { defaultFeedDatePreset, FeedQueryError, feedQueryHref, feedQueryRules, pinnedDateSelection, resolveFeedDates, serializeFeedQuery, type FeedQuery } from "./feed-query.ts";
 import { fixtureAdvance, mergeFixtureObservation } from "./fixture-reconciliation.ts";
 import { matchFeedResponseSchema, type MatchFeedRecord, type MatchFeedResponse } from "./match-feed.ts";
+import { maximumFeedWindowRecords } from "./match-feed-rules.ts";
 
 export { FeedPaginationError } from "./feed-pagination-error.ts";
 
@@ -24,6 +25,15 @@ export function feedPageHref(query: FeedQuery, today: ReportingDate, page: numbe
 export function feedPageApiHref(query: FeedQuery, today: ReportingDate, page: number): string {
   return `/api/matches?${serializeFeedQuery({ ...pinnedFeedQuery(query, today), page }, today)}`;
 }
+export function supportsFeedWindow(firstPage: number, through: number, pageSize: number): boolean {
+  return Number.isSafeInteger(firstPage) && firstPage >= 1 && Number.isSafeInteger(through)
+    && through > firstPage && through <= feedQueryRules.maximumPage
+    && Number.isSafeInteger(pageSize) && pageSize >= 1 && pageSize <= feedQueryRules.maximumPageSize
+    && (through - firstPage + 1) * pageSize <= maximumFeedWindowRecords;
+}
+export function feedWindowApiHref(query: FeedQuery, today: ReportingDate, firstPage: number, through: number): string {
+  return `${feedPageApiHref(query, today, firstPage)}&leagues=0&through=${through}`;
+}
 export function checkedFeedPage(value: unknown, query: FeedQuery, today: ReportingDate, page: number): MatchFeedResponse {
   const parsed = matchFeedResponseSchema.safeParse(value), range = resolveFeedDates(query, today);
   if (!parsed.success || parsed.data.page !== page || parsed.data.pageSize !== query.pageSize ||
@@ -32,6 +42,37 @@ export function checkedFeedPage(value: unknown, query: FeedQuery, today: Reporti
     throw new FeedPaginationError("invalid-response");
   }
   return parsed.data;
+}
+/** A stored window is complete through the requested page or the verified end of its cohort. */
+export function checkedFeedWindow(value: unknown, query: FeedQuery, today: ReportingDate, firstPage: number, through: number): readonly MatchFeedResponse[] {
+  if (!supportsFeedWindow(firstPage, through, query.pageSize) || !value || typeof value !== "object"
+    || Object.keys(value).length !== 1 || !("pages" in value) || !Array.isArray(value.pages)
+    || value.pages.length === 0 || value.pages.length > through - firstPage + 1) {
+    throw new FeedPaginationError("invalid-response");
+  }
+  const first = checkedFeedPage(value.pages[0], query, today, firstPage);
+  if (first.state === "data-unavailable") throw new FeedPaginationError("unavailable");
+  const last = Math.max(firstPage, Math.min(through, first.totalPages));
+  if (first.paginationVersion === null || value.pages.length !== last - firstPage + 1) {
+    throw new FeedPaginationError("invalid-response");
+  }
+  const seen = new Set<string>();
+  return value.pages.map<MatchFeedResponse>((raw, index) => {
+    const page = index === 0 ? first : checkedFeedPage(raw, query, today, firstPage + index);
+    if (page.state === "data-unavailable" || page.paginationVersion !== first.paginationVersion || page.total !== first.total
+      || page.today !== first.today || page.asOf !== first.asOf || page.search?.exact !== first.search?.exact
+      || page.performanceVersion !== first.performanceVersion || page.performanceScope !== first.performanceScope
+      || page.access.tier !== first.access.tier || page.access.signedIn !== first.access.signedIn
+      || page.nextPage !== (page.page < Math.min(first.totalPages, feedQueryRules.maximumPage) ? page.page + 1 : null)
+      || page.previousPage !== (page.page > 1 ? Math.max(1, Math.min(page.page - 1, first.totalPages)) : null)) {
+      throw new FeedPaginationError("invalid-response");
+    }
+    for (const record of page.records) {
+      if (seen.has(record.fixtureId)) throw new FeedPaginationError("invalid-response");
+      seen.add(record.fixtureId);
+    }
+    return page;
+  });
 }
 export function initialLoadedFeed(data: MatchFeedResponse): LoadedFeed {
   return { data, records: data.records, firstPage: data.page, lastPage: data.page, pages: 1 };
@@ -75,16 +116,14 @@ export function replaceFeedPages(previous: LoadedFeed, pages: readonly MatchFeed
 
 /** Recover one transient read and rebase a changed window without publishing partial membership. */
 export async function continueFeedPages(view: LoadedFeed, read: (page: number) => Promise<MatchFeedResponse>,
-  waitForRetry: (delayMs: number) => Promise<boolean>, rebase = false): Promise<LoadedFeed> {
+  waitForRetry: (delayMs: number) => Promise<boolean>, { rebase = false, readWindow }: {
+    rebase?: boolean;
+    readWindow?: (() => Promise<readonly MatchFeedResponse[]>) | undefined;
+  } = {}): Promise<LoadedFeed> {
   const nextPage = view.data.nextPage;
   if (nextPage === null) return view;
   let retried = false;
-  const readPage = async (page: number) => {
-    const verified = async () => {
-      const result = await read(page);
-      if (result.state === "data-unavailable") throw new FeedPaginationError("unavailable");
-      return result;
-    };
+  const recover = async <T>(verified: () => Promise<T>) => {
     try { return await verified(); }
     catch (error) {
       if (retried || !(error instanceof FeedPaginationError) || error.code !== "unavailable") throw error;
@@ -94,6 +133,12 @@ export async function continueFeedPages(view: LoadedFeed, read: (page: number) =
       return verified();
     }
   };
+  if (readWindow) return replaceFeedPages(view, await recover(readWindow));
+  const readPage = (page: number) => recover(async () => {
+    const result = await read(page);
+    if (result.state === "data-unavailable") throw new FeedPaginationError("unavailable");
+    return result;
+  });
   if (!rebase) {
     try { return appendFeedPage(view, await readPage(nextPage)); }
     catch (error) {

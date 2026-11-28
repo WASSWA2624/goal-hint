@@ -28,6 +28,11 @@ export function readPublicMatchFeedList(parameters: FeedParameters, context: Mat
   return readStoredFeed(parameters, { ...context, ...publicMatchListProjection }, clock, false);
 }
 
+/** One authoritative membership snapshot for a bounded continuation or history restore. */
+export async function readPublicMatchFeedWindow(parameters: FeedParameters, through: number, context: MatchFeedReadContext = {}, clock?: Clock) {
+  return storedFeedService(clock, false).queryWindow(parameters, through, { ...context, ...publicMatchListProjection });
+}
+
 /** Independently bounded aggregate request; list navigation keeps its 30s limit. */
 export function readPublicMatchFeedSummary(parameters: FeedParameters, context: MatchFeedReadContext = {}, clock?: Clock) {
   const database = getDatabase();
@@ -37,8 +42,12 @@ export function readPublicMatchFeedSummary(parameters: FeedParameters, context: 
 
 function readStoredFeed(parameters: FeedParameters, context: MatchFeedReadContext, clock: Clock | undefined, includePerformance: boolean,
   providerOdds = publicOddsEnabled()) {
+  return storedFeedService(clock, includePerformance, providerOdds).query(parameters, context);
+}
+
+function storedFeedService(clock: Clock | undefined, includePerformance: boolean, providerOdds = publicOddsEnabled()) {
   const database = getDatabase();
   return createMatchFeedService({ database, cache: createMysqlPublicResponseCache(database), includePerformance, providerOdds,
     allowInPlayOdds: providerOdds, ...(clock ? { clock } : {}),
-    competitionIds: getRuntimePolicy().choices.competitionIds ?? [] }).query(parameters, context);
+    competitionIds: getRuntimePolicy().choices.competitionIds ?? [] });
 }

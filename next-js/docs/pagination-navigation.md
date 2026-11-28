@@ -23,7 +23,7 @@ of numbered controls while retaining the complete scroll range.
 With JavaScript, Load more calls only `GET /api/matches`, appends a contiguous
 page, and retains the URL's starting page/history entry. It never scroll-loads
 automatically. A synchronous request lock, disabled controls, cancellation and
-a 30-second operation deadline prevent duplicate or obsolete loads. All response
+a 40-second continuation deadline prevent duplicate or obsolete loads. All response
 schemas, positions, reporting bounds and page sizes are checked before commit.
 Failures retain loaded cards and expose a focused Retry control and one polite
 status announcement. A successful append focuses the first new article without
@@ -41,14 +41,14 @@ The marker is conservative: an unrelated catalog change can also invalidate it.
 It exposes no raw generations, internal rows or provider payloads. Feed cache
 projection version 3 prevents earlier cache entries from omitting this marker.
 
-Offset pages are appended only while the marker and totals match. Overlapping
-fixtures under an allegedly unchanged marker are also rejected: de-duplication
-alone could conceal a skipped fixture. A change retains every loaded card and
-asks for an explicit Refresh match list. Refresh re-reads the loaded prefix and
-replaces its ordered membership atomically, with all pages from one cohort.
-If it changes again during the reads, the previous list remains and retry is
-available. Whole fixture snapshots never move to an older `dataVersion`; equal
-versions retain the accepted whole snapshot. No independent market merge occurs.
+Up to 200 rows, Load more requests the existing range and next page in a single
+`through` window. The server selects consecutive pages in one snapshot and the
+client replaces the visible membership together after verifying generation,
+range, viewer and freshness. Longer continuations use guarded offset pages
+and attempt a rebase if their generation changes. Overlap, a stale fixture or a
+mixed response keeps the previous list available with retry. Whole fixture
+snapshots never move to an older `dataVersion`. Equal versions retain the
+accepted whole snapshot. No independent market merge occurs.
 
 At most ten pages remain appended at once (normally 500 cards; at most 1,000 for
 the allowed page-size limit). Numbered page navigation continues beyond that

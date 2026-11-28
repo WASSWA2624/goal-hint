@@ -115,6 +115,39 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       assert.equal(beyond.state, 'page-out-of-range'); assert.equal(beyond.previousPage, 2);
       assert.ok(Object.isFrozen(first.records));
     });
+    await t.test('an atomic page window retains one snapshot while a date write advances the live generation', async () => {
+      const input = { date: '2026-10-09' }, original = await service.query(input);
+      const id = original.records[0].fixtureId;
+      const { retrievedAt } = await p.a.query((tx) => tx.footballFixture.findUniqueOrThrow({ where: { id }, select: { retrievedAt: true } }));
+      const update = (when) => p.b.query((tx) => tx.footballFixture.update({ where: { id }, data: { retrievedAt: when } }));
+      let transactions = 0, writes = 0;
+      const database = { transaction: (read, options) => {
+        transactions++;
+        return p.a.transaction((tx) => read(new Proxy(tx, {
+          get(target, key) {
+            if (key === 'publicCacheTag') return { findMany: async (arguments_) => {
+              const tags = await tx.publicCacheTag.findMany(arguments_);
+              writes++;
+              await update(new Date(retrievedAt.getTime() + 1));
+              return tags;
+            } };
+            const value = Reflect.get(target, key);
+            return typeof value === 'function' ? value.bind(target) : value;
+          },
+        })), options);
+      } };
+      try {
+        const bounded = createMatchFeedService({ database, competitionIds: [39], clock: { now: () => readAt } });
+        const pages = await bounded.queryWindow(input, 3);
+        assert.equal(transactions, 1);
+        assert.equal(writes, 1);
+        assert.deepEqual(pages.map(({ page, nextPage, total, records }) => [page, nextPage, total, records.length]), [[1, 2, 72, 50], [2, null, 72, 22]]);
+        assert.ok(pages.every((page) => page.paginationVersion === original.paginationVersion && page.asOf === original.asOf));
+        assert.deepEqual(pages[0], original);
+        assert.equal(new Set(pages.flatMap(({ records }) => records.map(({ fixtureId }) => fixtureId))).size, 72);
+        assert.notEqual((await service.query(input)).paginationVersion, original.paginationVersion);
+      } finally { await update(retrievedAt); }
+    });
     await t.test('case-insensitive team and league aliases and country search precede pagination', async () => {
       const renamed = structuredClone(rows[65]); renamed.teams.home.name = 'Canonical Renamed Club';
       renamed.teams.home.country = 'Faraway Land'; renamed.league.name = 'Canonical League';
