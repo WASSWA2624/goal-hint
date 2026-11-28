@@ -224,6 +224,10 @@ For the reported Today Pending **Show More** action, the bounded Apache sample c
 
 Best Slips now establishes its read snapshot before sampling archive time, so a newly committed append cannot appear newer than the clock sampled for its own snapshot. The browse path gives connections up to five seconds to become available and keeps a 30-second transaction execution limit. The timing record distinguishes acquisition from the archive snapshot phase. The publication suite reproduced the append timing race. Earlier production archive 503s did not identify a specific failure inside that phase.
 
+The unified package passed 119 focused Node tests and the affected browser and disposable MySQL checks. Staging activated commit `fb06b26781ce7109acaf8a2642cb1509d378bd22`, build `Q6SiJzyOAnBhkZexlQEai`, from archive SHA-256 `cb295826993d329bf2bb1a3cc79521944997e71e9b9145587e5b33cb23a0362e`. Its standard Chrome check accepted direct and in-app Best Slips, Matches and browser history with zero uncaught errors.
+
+Production accepted the exact staging package through the standard HTTPS and migration gates. Both environments verified all 95 required migrations against their existing databases, with zero pending migrations. The final hosted audit matched both release receipts, found one active build per environment and found both interrupted deployment records clear.
+
 ## Reproduction
 
 - Run the pinned runtime in `next-js/`. Run the focused tests for worker, account, administrator, Matches, Best Slips, sharing and request timing. Use the disposable MySQL test fixture for database runs.
