@@ -158,7 +158,9 @@ Production HTTPS returned HTTP 200 for Matches, Best Slips, Builder, Login, the 
 
 The current source serves the renamed directory at `/admin/users` and its collection, detail and bulk endpoints under `/api/admin/users`. Permanent redirects preserve bookmarked queries and legacy API methods and bodies. The earlier rollout below predates this rename. [Route configuration](../next-js/next.config.ts).
 
-Local Chromium checks covered light and dark themes at desktop and phone widths, including the narrow desktop list pane. The directory fixture processed 201 selected users in three bounded requests. Isolated MySQL checks covered administrator authorization, grant retries, device logout, reset and data retention. The rename and layout updates await deployment.
+Local Chromium checks covered light and dark themes at desktop and phone widths, including the narrow desktop list pane. The directory fixture processed 201 selected users in three bounded requests. Isolated MySQL checks covered administrator authorization, grant retries, device logout, reset and data retention.
+
+On 28 November 2026, staging activated `3d1e6031` and served Next build `wOFTSVP5ET04G-Sywp862`. The release ZIP SHA-256 is `d4b025017a575e80563f0fc50a5bf3dac9391323f9fd986e10bae65df402ffa8`. The migration inventory was unchanged and MariaDB verified all 95 required migrations. Seventeen staging HTTPS checks verified the build, Matches, the bounded Matches API, the guest Account session, administrator guards and cache headers, legacy redirects, bookmarked queries and the public design gallery. Production promotion awaits owner approval.
 
 ## User administration staging verification
 
