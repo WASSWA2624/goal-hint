@@ -6,7 +6,7 @@ const agents = {
 };
 
 /** Real download screen acceptance in an isolated browser context; no account changes. */
-export async function verifyAppDownloadScreen(browser, origin, { theme = 'light', width = 1440, platform = 'windows' } = {}) {
+export async function verifyAppDownloadScreen(browser, origin, { theme = 'light', width = 1440, platform = 'windows', available = true } = {}) {
   const context = await browser.newContext({ viewport: { width, height: 960 }, userAgent: agents[platform],
     colorScheme: theme, isMobile: platform === 'android', hasTouch: platform === 'android', acceptDownloads: true });
   try {
@@ -15,12 +15,9 @@ export async function verifyAppDownloadScreen(browser, origin, { theme = 'light'
     await page.bringToFront();
     await page.goto(`${origin}/en/download`, { waitUntil: 'domcontentloaded', timeout: 120000 });
     await page.locator('meta[name="goal-hint-appearance"]').waitFor({ state: 'attached', timeout: 120000 });
-    const platforms = page.locator('[data-download-platform]');
-    assert.deepEqual(await platforms.evaluateAll(buttons => buttons.map(button => button.dataset.downloadPlatform)), ['android', 'windows']);
-    const installer = page.locator('[data-app-installer]');
-    await installer.waitFor({ timeout: 120000 });
-    assert.equal(await page.locator(`[data-download-platform="${platform}"]`).getAttribute('aria-pressed'), 'true');
-    assert.match(await installer.getAttribute('href'), new RegExp(`/api/downloads/${platform}\\?version=`));
+    const downloadPage = page.locator('[data-download-page]');
+    assert.deepEqual(await downloadPage.getByRole('heading', { level: 2 }).allTextContents(), ['Android']);
+    assert.equal(await downloadPage.getByRole('group', { name: 'Choose your platform' }).count(), 0);
     const geometry = await page.evaluate(() => {
       const header = document.querySelector('[data-header-download]'), login = document.querySelector('[data-header-auth="login"]');
       const a = header.getBoundingClientRect(), b = login.getBoundingClientRect();
@@ -34,16 +31,26 @@ export async function verifyAppDownloadScreen(browser, origin, { theme = 'light'
     assert.equal(geometry.labelHidden, width < 1024);
     assert.ok(geometry.cardWidth <= 480 + 1, 'The page stays within the shared compact-form width.');
     assert.equal(await page.locator('#app-download-invitation[open]').count(), 0);
-    const other = platform === 'android' ? 'windows' : 'android';
-    await page.locator(`[data-download-platform="${other}"]`).click();
-    await page.waitForFunction(expected => document.querySelector('[data-app-installer]')?.getAttribute('href')?.includes(`/api/downloads/${expected}?`), other);
-    const downloadEvent = page.waitForEvent('download', { timeout: 90000 });
-    await installer.click();
-    const download = await downloadEvent;
-    assert.ok(download.suggestedFilename().endsWith(other === 'android' ? '.apk' : '.exe'), `Unexpected ${other} installer: ${download.suggestedFilename()}`);
-    const memory = await page.evaluate(() => JSON.parse(localStorage.getItem('goalhint:app-downloads')));
-    assert.ok(memory[`development:${other}`]?.acknowledged, `Download memory missing for ${other}: ${JSON.stringify(memory)}`);
-    await download.cancel();
+    const installer = downloadPage.locator('[data-app-installer]');
+    if (available) {
+      const { channel, releases } = await (await context.request.get(`${origin}/api/downloads`)).json();
+      const android = releases.find(release => release.platform === 'android');
+      assert.equal(android?.kind, 'file');
+      await installer.waitFor();
+      assert.equal(await installer.getAttribute('href'), android.href);
+      await downloadPage.getByText('File details', { exact: true }).click();
+      assert.equal(await downloadPage.locator('details code').textContent(), `SHA-256: ${android.sha256}`);
+      const downloadEvent = page.waitForEvent('download', { timeout: 90000 });
+      await installer.click();
+      const download = await downloadEvent;
+      assert.ok(download.suggestedFilename().endsWith('.apk'), `Unexpected Android installer: ${download.suggestedFilename()}`);
+      const memory = await page.evaluate(() => JSON.parse(localStorage.getItem('goalhint:app-downloads')));
+      assert.ok(memory[`${channel}:android`]?.acknowledged, `Download memory missing for Android: ${JSON.stringify(memory)}`);
+      await download.cancel();
+    } else {
+      assert.equal(await installer.count(), 0);
+      assert.equal(await downloadPage.getByText('Coming soon', { exact: true }).count(), 1);
+    }
     return { theme, width, platform, ...geometry };
   } finally { await context.close(); }
 }

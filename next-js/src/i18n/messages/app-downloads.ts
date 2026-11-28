@@ -1,7 +1,7 @@
 export const appDownloadMessages = {
-  "downloads.title": "Get it on your mobile or PC",
+  "downloads.title": "Get Goal Hint",
   "downloads.metadataTitle": "Download Goal Hint",
-  "downloads.description": "On your phone or computer.",
+  "downloads.description": "Download Goal Hint for Android.",
   "downloads.header": "Download app",
   "downloads.update": "Update available",
   "downloads.platform": "Choose your platform",

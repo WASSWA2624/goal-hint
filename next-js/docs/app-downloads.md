@@ -2,16 +2,14 @@
 
 The header, mobile icon, More menu and `/{locale}/download` are available in both
 development and production. They share the existing theme and control tokens.
-The page offers Android and Windows. Device detection selects the recommended
-option on those platforms. All visitors can choose either option. Downloads
-start after a user action.
+The page presents the Android release immediately on any device. Downloads start
+after a user action.
 
 | Platform | Development | Production |
 | --- | --- | --- |
 | Android | Local APK | Hosted signed APK, with a configured Google Play fallback |
-| Windows | Local setup EXE | Hosted signed x64 setup EXE |
 
-Platforms without a published release show “Coming soon.”
+The page shows “Coming soon” until an Android release is available.
 
 ## Local development
 
