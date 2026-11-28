@@ -8,18 +8,23 @@ import { isBrowserDocumentRequest } from "@/server/seo/read-status";
 import { feedFixture, summaryFixture } from "../feed-fixture";
 
 const instant = async () => utcInstantFromEpochMilliseconds(Date.now());
+const summaryGenerationCookie = "synthetic-summary-generation";
 const route = createFeedRoute({
   instant, browserDocument: isBrowserDocumentRequest,
   policy: () => ({ deployment: "production", index: true }),
-  resolveAccess: async () => ({ tier: "full", signedIn: false, mode: "off" }),
+  resolveAccess: async () => ({ tier: (await cookies()).has(summaryGenerationCookie) ? "free" : "full", signedIn: false, mode: "off" }),
   read: async (parameters) => {
-    const failure = (await cookies()).get("synthetic-feed-unavailable")?.value;
+    const jar = await cookies();
+    const failure = jar.get("synthetic-feed-unavailable")?.value;
+    const generation = jar.get(summaryGenerationCookie)?.value;
     await new Promise(resolve => setTimeout(resolve, 1_800));
     if (failure === "1") throw new Error("Synthetic stored read failure");
     if (failure === "rate-limited") throw new MatchFeedError("rate-limited", 15);
     const feed = feedFixture(parseFeedQuery(parameters, { today: getReportingDate(await instant()) }));
-    return failure === "coverage" ? { ...feed, state: "data-unavailable", records: [], total: 0, totalPages: 0,
-      coverage: { ...feed.coverage, partial: true, knownFixtures: 0, matchingWithMarket: 0 } } : feed;
+    if (failure === "coverage") return { ...feed, state: "data-unavailable", records: [], total: 0, totalPages: 0,
+      coverage: { ...feed.coverage, partial: true, knownFixtures: 0, matchingWithMarket: 0 } };
+    return generation === "a" || generation === "b"
+      ? { ...feed, performanceVersion: generation.repeat(64), performanceScope: "1".repeat(64) } : feed;
   },
   readSummary: async (parameters) => {
     await new Promise(resolve => setTimeout(resolve, 6_000));

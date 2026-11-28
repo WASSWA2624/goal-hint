@@ -223,6 +223,17 @@ Feed cache projection version 3 avoids reusing earlier responses without this
 marker. Legacy omitted markers parse to null and use direct page navigation.
 Appended pages must have the same marker and total; changes require an atomic
 refresh of the loaded prefix. See [pagination consistency](pagination-navigation.md).
+
+List responses and `GET /api/matches/summary` also carry `performanceScope`,
+an opaque 64-character hexadecimal fingerprint of the reporting period,
+filters, competition scope and projection policy. Ordering, pagination and
+the selected outcome do not narrow the period summary. The fingerprint stays
+stable across source generations. The list's `performanceVersion` and the
+summary's `paginationVersion` identify their observed generations. A summary
+returns the original `asOf` time and current access projection. Clients can
+still parse earlier responses that omit `performanceScope` and use the exact
+generation check for those responses.
+
 `records` contains shared `FixtureSnapshot` values, with the feed metadata
 required by `matchFeedRecordSchema`. Maximum query size is 2,048 UTF-8 bytes;
 maximum serialized JSON response is 1 MiB. Responses that cannot be safely

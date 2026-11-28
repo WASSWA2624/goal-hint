@@ -127,9 +127,10 @@ async function navigate(page, url, build) {
 
 async function openBestSlips(page, origin) {
   diagnostic.phase = "best-slips-trigger";
-  const link = page.locator(`a[href="${bestSlips}"]:visible`).first();
+  const navigation = page.locator("[data-responsive-navigation]:visible").first();
+  const link = navigation.locator(`a[data-nav-key="best-slips"][href="${bestSlips}"]:visible`).first();
   if (!await link.isVisible()) {
-    const more = page.locator("[data-nav-more] > summary:visible").first();
+    const more = navigation.locator("[data-nav-more] summary:visible").first();
     if (await more.isVisible()) await more.click({ timeout: navigationTimeout });
   }
   await link.click({ timeout: navigationTimeout });
@@ -245,6 +246,12 @@ async function run() {
     const context = await browser.newContext({ viewport, serviceWorkers: "block", colorScheme: option ? "dark" : "light",
       isMobile: Boolean(option), hasTouch: Boolean(option) });
     page = await context.newPage();
+    const community = page.locator("dialog[data-community-invitation][open]");
+    const communitySettings = url => url.origin === origin && url.pathname === "/api/community";
+    await page.addLocatorHandler(community, async dialog => {
+      await dialog.getByRole("button", { name: "Close", exact: true }).click({ timeout: 5000 });
+      diagnostic.communityInvitationDismissed = true;
+    }, { times: 1 });
     page.on("pageerror", () => { diagnostic.pageErrors++; });
     page.on("request", request => {
       const url = new URL(request.url());
@@ -274,14 +281,26 @@ async function run() {
       if (diagnostic.apiResponses.length > 8) diagnostic.apiResponses.shift();
     });
     if (option) {
+      await page.route(communitySettings, route => route.fulfill({ json: {
+        visible: true, links: [{ type: "whatsapp-channel", url: "https://www.whatsapp.com/channel/goalhint-verification", enabled: true }],
+      } }));
       const cdp = await context.newCDPSession(page);
       await cdp.send("Network.enable");
       await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 160, downloadThroughput: 625_000, uploadThroughput: 312_500 });
     }
     const cold = await qualify(page, origin, observations, diagnostic, "matches-cold", matches,
       () => navigate(page, new URL(matches, origin), build));
+    if (option && !diagnostic.communityInvitationDismissed) {
+      diagnostic.phase = "staged-community-invitation";
+      await page.waitForFunction(() => Boolean(document.querySelector("dialog[data-community-invitation][open]")),
+        null, { timeout: navigationTimeout });
+    }
     const slips = await qualify(page, origin, observations, diagnostic, "best-slips-navigation", bestSlips,
       () => openBestSlips(page, origin));
+    if (option) {
+      requireReady(diagnostic.communityInvitationDismissed, "staged-community-invitation-not-dismissed");
+      await page.unroute(communitySettings);
+    }
     const back = await qualify(page, origin, observations, diagnostic, "matches-history-return", matches, async () => {
       await page.goBack({ waitUntil: "commit", timeout: phaseTimeout });
       await page.waitForURL(url => url.origin === origin && url.pathname === matches, { waitUntil: "commit", timeout: phaseTimeout });
@@ -294,7 +313,7 @@ async function run() {
     if (!staging && !slips && !coldSlips) await qualifyCoverage(page, origin, build, observations, diagnostic, bestSlips,
       [["best-slips-yesterday-all", "period=yesterday&status=all"], ["best-slips-today-all", "period=today&status=all"]]);
     requireReady(!diagnostic.pageErrors, "uncaught-page-error");
-    return { build, viewport, observations, pageErrors: diagnostic.pageErrors };
+    return { build, viewport, observations, communityInvitationDismissed: diagnostic.communityInvitationDismissed, pageErrors: diagnostic.pageErrors };
   } catch (cause) {
     diagnostic.document = await page?.evaluate(() => {
       const navigation = performance.getEntriesByType("navigation")[0];
@@ -311,7 +330,8 @@ async function run() {
 }
 
 const observations = [];
-const diagnostic = { phase: "browser-start", pageErrors: 0, acceptedList: null, apiResponses: [], failedRequests: [], summaryRequests: 0, summaryRequestedAt: 0 };
+const diagnostic = { phase: "browser-start", pageErrors: 0, acceptedList: null, apiResponses: [], failedRequests: [],
+  summaryRequests: 0, summaryRequestedAt: 0, communityInvitationDismissed: false };
 const watchdog = setTimeout(() => {
   console.error(JSON.stringify({ ok: false, failure: "browser-deadline", ...diagnostic, observations }));
   process.exit(1);

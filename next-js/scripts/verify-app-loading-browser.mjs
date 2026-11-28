@@ -73,6 +73,40 @@ export async function verifyBrowserMatches(page, origin) {
         if (updateGeneration) await page.unroute(listUrl, refreshList);
       }
     }
+    await page.setViewportSize({ width: 390, height: 900 });
+    const context = page.context(), cookie = 'synthetic-summary-generation';
+    for (const [listGeneration, summaryGeneration, extraWins] of [['a', 'b', 1], ['b', 'c', 2]]) {
+      let summaryRequests = 0, listRequests = 0;
+      const observe = request => { if (listUrl.test(request.url())) listRequests++; };
+      const newerSummary = async route => {
+        summaryRequests++;
+        const response = await route.fetch();
+        const json = await response.json();
+        const performance = { ...json.performance, won: json.performance.won + extraWins, pending: json.performance.pending - extraWins };
+        await route.fulfill({ response, json: { ...json, performance, asOf: json.asOf + 5_000,
+          access: { tier: 'free', signedIn: false }, performanceScope: '1'.repeat(64), paginationVersion: summaryGeneration.repeat(64) } });
+      };
+      await context.addCookies([{ name: cookie, value: listGeneration, url: origin }]);
+      await page.route(summaryUrl, newerSummary);
+      page.on('request', observe);
+      try {
+        await page.goto(`${origin}/browser-matches`, { waitUntil: 'commit' });
+        const list = page.locator('[data-feed-match-results]');
+        await list.waitFor();
+        const accepted = await list.locator('[data-fixture-id]').count();
+        const ready = page.locator('[data-feed-performance-state="ready"]');
+        await ready.waitFor();
+        assert(await ready.locator('[data-summary-result="won"]').getAttribute('aria-label') === `Won: ${10 + extraWins}`,
+          'The newer verified guest observation must supply the counts');
+        assert(summaryRequests === 1 && listRequests === 0 && await list.locator('[data-fixture-id]').count() === accepted,
+          'A newer verified guest observation must complete without advancing the list generation');
+        results.push({ width: 390, summaryRequests, listRequests, accepted, newerGuestSummary: true });
+      } finally {
+        page.off('request', observe);
+        await page.unroute(summaryUrl, newerSummary);
+        await context.clearCookies({ name: cookie });
+      }
+    }
     assert(errors.length === 0, errors.join('\n'));
     return results;
   } finally {
@@ -152,16 +186,22 @@ export async function verifyAppLoading(page, origin) {
     for (const theme of ['light', 'dark']) {
       await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
       summaryRequests = 0;
+      const summaryUrl = /\/api\/matches\/summary(?:\?|$)/u;
+      await page.route(summaryUrl, route => route.fulfill({ status: 503, body: '{}' }), { times: 1 });
       await page.goto(`${origin}/en/matches?fail=1`);
+      const scheduled = page.locator('[data-feed-summary-retry="true"]');
+      await scheduled.waitFor();
+      assert(await scheduled.locator('[data-performance-summary="matches"]').getAttribute('aria-busy') === 'true',
+        'The same summary cards stay busy until the initial automatic retry finishes');
+      assert(await scheduled.locator('[data-performance-unavailable]').count() === 0, 'A scheduled recovery must not flash unavailable feedback');
       await page.locator('[data-feed-performance-state="unavailable"]').waitFor();
       await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, theme);
       const progress = page.getByRole('progressbar', { name: /loading/i });
       await progress.waitFor({ state: 'hidden' });
       assert(await page.locator('[data-performance-summary="matches"] [data-summary-result="won"]').isDisabled(), 'Unknown result counts cannot be selected');
-      let release;
+      let release, resumed;
       const hold = new Promise(resolve => { release = resolve; });
-      const summaryUrl = /\/api\/matches\/summary(?:\?|$)/u;
-      const delay = async route => { await hold; await route.continue(); };
+      const delay = route => { resumed = hold.then(() => route.continue()); return resumed; };
       await page.route(summaryUrl, delay);
       try {
         await page.getByRole('button', { name: 'Try again', exact: true }).click();
@@ -170,11 +210,12 @@ export async function verifyAppLoading(page, origin) {
         assert(await page.getByRole('button', { name: 'Try again', exact: true }).isDisabled(), 'The retry stays visible and cannot be submitted twice');
       } finally {
         release();
+        await resumed;
         await page.unroute(summaryUrl, delay);
       }
       await page.locator('[data-feed-performance-state="ready"]').waitFor();
       await progress.waitFor({ state: 'hidden' });
-      assert(summaryRequests === 1, 'A failed server summary retries exactly once through the current endpoint');
+      assert(summaryRequests === 2, 'One automatic failure exposes one explicit retry through the current endpoint');
       results.push({ screen: 'matches', theme, retry: true, requests: summaryRequests });
     }
     await page.clock.install();
@@ -182,30 +223,38 @@ export async function verifyAppLoading(page, origin) {
     for (const theme of ['light', 'dark']) {
       await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
       let attempts = 0;
+      let release, resumed;
+      const hold = new Promise(resolve => { release = resolve; });
       const failOnce = async route => {
         if (++attempts === 1) await route.fulfill({ status: 503, headers: { 'Retry-After': '12' }, body: '{}' });
-        else await route.continue();
+        else { await (resumed = hold.then(() => route.continue())); }
       };
       await page.route(summaryUrl, failOnce);
       try {
-        await page.goto(`${origin}/en/matches?fail=1`);
-        const unavailable = page.locator('[data-feed-performance-state="unavailable"]');
-        const retry = unavailable.locator('[data-performance-retry]');
-        await unavailable.waitFor();
-        const rows = await page.locator('[data-fixture-id]').count();
         const failed = page.waitForResponse(response => summaryUrl.test(response.url()) && response.status() === 503);
-        await retry.click();
+        await page.goto(`${origin}/browser-matches`);
         await failed;
-        await unavailable.waitFor();
-        await page.waitForFunction(() => document.querySelector('[data-performance-retry]')?.disabled);
+        const scheduled = page.locator('[data-feed-summary-retry="true"]');
+        await scheduled.waitFor();
+        const rows = await page.locator('[data-fixture-id]').count();
+        const footprint = (await scheduled.boundingBox()).height;
+        assert(await scheduled.locator('[data-performance-unavailable]').count() === 0, 'Unavailable feedback stays hidden during the protected wait');
         await page.clock.fastForward(11_000);
         assert(attempts === 1, 'A transient summary failure must respect Retry-After');
+        const started = page.waitForRequest(request => summaryUrl.test(request.url()));
         await page.clock.fastForward(2_000);
-        await page.locator('[data-feed-performance-state="ready"]').waitFor();
+        await started;
+        assert(await scheduled.isVisible(), 'The initial retry remains marked while its response is in flight');
+        release();
+        const ready = page.locator('[data-feed-performance-state="ready"]');
+        await ready.waitFor();
+        assert(Math.abs((await ready.boundingBox()).height - footprint) < 1, 'Recovering the summary must not resize the cards');
         assert(attempts === 2 && rows === await page.locator('[data-fixture-id]').count(), 'The same cohort auto-recovers without clearing the list');
         assert(await page.getByRole('progressbar', { name: /loading/i }).count() === 0, 'Automatic recovery stays quiet');
         results.push({ screen: 'matches', theme, automaticRetry: true, attempts, retainedRows: rows });
       } finally {
+        release();
+        await resumed;
         await page.unroute(summaryUrl, failOnce);
       }
     }
