@@ -7,17 +7,17 @@ import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
 const at = Date.parse('2026-10-09T08:00:00Z');
 const parameters = { date: '2026-10-09', pageSize: '100' };
 
-function fixtureWindow() {
+function fixtureWindow({ knownFixtures } = {}) {
   const firstOrder = Array.from({ length: 105 }, (_, index) => `10000000-0000-4000-8000-${String(index).padStart(12, '0')}`);
   const homeTeam = { id: 'home', name: 'Synthetic Home', code: null, logoUrl: null };
   const awayTeam = { id: 'away', name: 'Synthetic Away', code: null, logoUrl: null };
   const competition = { id: 'competition-1', name: 'Synthetic league', country: null, logoUrl: null, countryFlagUrl: null };
-  let order = firstOrder, generation = 1n, cached = 0;
+  let order = firstOrder, generation = 1n, cached = 0, completedTransactions = 0;
   const transactions = [], selections = [], hydration = [];
   const database = { async transaction(read, options) {
     transactions.push(options);
     const snapshotOrder = order, snapshotGeneration = generation;
-    return read({
+    const result = await read({
       publicCacheTag: { findMany: async () => [{ tag: 'date:2026-10-09', generation: snapshotGeneration }] },
       footballImport: { findMany: async () => [] }, dailyRunImport: { findMany: async () => [] }, dailyRun: { findUnique: async () => null },
       footballFixture: { async findMany({ where }) {
@@ -29,7 +29,7 @@ function fixtureWindow() {
       } },
       async $queryRaw(statement) {
         const text = statement.sql;
-        if (text.includes('GROUP BY l.id')) return [{ ...competition, fixtures: BigInt(snapshotOrder.length), knownFixtures: BigInt(snapshotOrder.length) }];
+        if (text.includes('GROUP BY l.id')) return [{ ...competition, fixtures: BigInt(snapshotOrder.length), knownFixtures: BigInt(knownFixtures ?? snapshotOrder.length) }];
         if (text.includes(' AS performanceAvailable')) return [{ total: BigInt(snapshotOrder.length), available: 0n, performanceAvailable: 0n, void: 0n, exact: null }];
         assert.match(text, /ORDER BY .* LIMIT \? OFFSET \?/su);
         const [limit, offset] = statement.values.slice(-2);
@@ -37,13 +37,22 @@ function fixtureWindow() {
         return snapshotOrder.slice(offset, offset + limit).map((id) => ({ id }));
       },
     });
+    completedTransactions++;
+    return result;
   } };
   const cache = { read: async (_descriptor, read) => { cached++; return read(); } };
   const service = createMatchFeedService({ database, cache, competitionIds: [39], clock: { now: () => at },
     providerOdds: false, includePerformance: false });
   return { service, firstOrder, transactions, selections, hydration, get cached() { return cached; },
+    get completedTransactions() { return completedTransactions; },
     rotate() { generation++; order = [...order.slice(1), order[0]]; return order; } };
 }
+
+test('page validation rejects an inconsistent response after the read transaction completes', async () => {
+  const fixture = fixtureWindow({ knownFixtures: 0 });
+  await assert.rejects(fixture.service.queryWindow(parameters, 2), (error) => error.code === 'unavailable');
+  assert.equal(fixture.completedTransactions, 1);
+});
 
 test('a changed source yields adjacent exact pages from one new transaction and 100-fixture hydration batches', async () => {
   const fixture = fixtureWindow(), before = await fixture.service.query(parameters);

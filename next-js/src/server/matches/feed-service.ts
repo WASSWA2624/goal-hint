@@ -102,7 +102,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
     try {
       await prepareDemoRange(database, sourceRange, asOf);
       if (query.search) await limiter.consume();
-      const read = () => timedRequestPhase("list-transaction", () => database.transaction(async (tx) => {
+      const readStoredPages = () => timedRequestPhase("list-transaction", () => database.transaction(async (tx) => {
         // Source writes (including live clock updates) and the generations commit atomically.
         const versions = await timedRequestPhase("list-generation", () => storedFeedVersions(tx, query, today, sourceRange,
           competitionIds, context.completedOnly, publishedOnly, historyBefore, providerOdds, publishedForecasts, predictedMatchesOnly));
@@ -226,15 +226,22 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           const previousPage = page > 1 ? Math.max(1, Math.min(page - 1, totalPages)) : null;
           const state = knownFixtures === 0 ? partial ? "data-unavailable" : "no-fixtures"
             : total === 0 ? "no-filter-matches" : pageRecords.length === 0 ? "page-out-of-range" : matchingWithMarket === 0 ? "insufficient-data" : "ready";
-          const response = storedMatchFeedResponseSchema.parse({ performance, ...versions, leagues, records: pageRecords, page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
+          return { performance, ...versions, leagues, records: pageRecords, page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
             links: { next: pageLink(query, today, nextPage), previous: pageLink(query, today, previousPage) }, asOf: snapshotAt, today,
             range: { from: range.startDate, to: range.endDate, ...range.window }, state, message: keys[state] ? messages.text(keys[state]!) : null,
             coverage: { partial, knownFixtures, matchingWithMarket, matchingWithPerformancePick, dates }, run,
-            search: query.search ? { exact: exactMatches ?? 0, similar: total - (exactMatches ?? 0) } : null });
-          if (Buffer.byteLength(JSON.stringify(response), "utf8") > matchFeedRules.maximumResponseBytes) throw new MatchFeedError("unavailable");
-          return freezeEvidence(response);
+            search: query.search ? { exact: exactMatches ?? 0, similar: total - (exactMatches ?? 0) } : null };
         });
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 }));
+      const read = async () => {
+        const pages = await readStoredPages();
+        // The snapshot is complete. Release the connection before response-only validation and serialization.
+        return timedRequestPhase("list-response", async () => pages.map((page) => {
+          const response = storedMatchFeedResponseSchema.parse(page);
+          if (Buffer.byteLength(JSON.stringify(response), "utf8") > matchFeedRules.maximumResponseBytes) throw new MatchFeedError("unavailable");
+          return freezeEvidence(response);
+        }));
+      };
       const useCompleteForecast = publishedForecasts && isDefaultFeaturedScope(query);
       const decorate = async (response: StoredMatchFeedResponse) => {
         const current = providerOdds ? await withFeedOdds(database, response, asOf, allowInPlayOdds, !publishedForecasts) : response;

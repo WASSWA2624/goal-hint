@@ -40,6 +40,45 @@ OP-29/30/32 and infrastructure/billing evidence remain release/activation blocke
 No external message, paid account, provider request, visitor tracker or public
 monitoring interface is enabled. Synthetic test settings approve nothing live.
 
+## VPS performance measurements
+
+Capture host and Apache status measurements privately using the operator SSH
+workflow. From an OpenSSH shell with the verified VPS key, send the collector
+through stdin so the application does not need a separate installation:
+
+```sh
+ssh -T -p 21098 -o StrictHostKeyChecking=yes \
+  -o UserKnownHostsFile="$HOME/.ssh/goalhint_hypernova_known_hosts" \
+  ghprod@104.207.86.22 \
+  'python3 - --sample-seconds 5 --access-log "$HOME/access-logs/goalhint.com-ssl_log"' \
+  < scripts/observe-vps.py
+```
+
+The collector reports Linux CPU, available RAM, pressure stalls, interface rate,
+optional disk counters and fixed guest GET route/status counts. Add a second
+`--access-log` for the staging log. It reports log coverage and bounded-scan
+truncation. Check both window boundaries before comparing rates. Standard Apache
+combined logs provide no latency data. Missing host counters are represented
+as unknown. The collector needs no new package, daemon or external sink.
+
+Run the HTTP comparison from `next-js/`, retaining the same route order,
+rate, concurrency and warmup for both runs:
+
+```sh
+node scripts/benchmark-vps-http.mjs --origin https://test.goalhint.com --staging \
+  --route matches-list --route matches-summary --route best-slips-list \
+  --route account-session --runs 12 --warmup 2 --concurrency 1 --interval-ms 750
+```
+
+The JSON includes a workload fingerprint, TTFB, complete p50/p95/p99, errors
+and achieved throughput. Small per-route sample sizes make upper percentiles
+equivalent to the maximum. Increase samples on an isolated target when
+qualifying the tail. Use HTTPS and Chrome smoke checks for response semantics.
+Use the existing request-timing trace to distinguish database transaction
+and response work. Compare bounded TLS MariaDB status deltas and durable job
+eligibility age and attempt duration over the same time windows. Prioritize
+both guest error rates and scheduled job deadlines. [VPS baseline and rollback](reports/vps-optimization-2026-11-28.md)
+
 ## Operator interface and activation
 
 The trusted local `MonitoringBinding` contract is in
