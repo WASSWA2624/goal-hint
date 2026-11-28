@@ -158,6 +158,8 @@ The clean package for `0f6edcc553f7b2580fcbd7d3ab442957a0bb87ad` produced Next b
 
 The initial production attempt for that artifact passed the migration and HTTP gates and rendered 50 Matches rows in Chrome after 23.17 seconds. Chrome recorded no summary request before the summary deadline. Apache showed 29 successful same-origin script responses whose requests started 7–36 seconds after navigation. The candidate rolled back. The restored Matches document returned HTTP 200 with a rendered list and counts, and its separate bounded Today API returned 503 during rollback verification and the next manual probe. The updated operator verifier times document startup independently, retains a bounded overall deadline, and still requires verified browser counts. It records only fixed request categories and timing data if a subsequent gate fails.
 
+On the next attempt against that same package, production Chrome rendered 50 Matches rows in 19.71 seconds and coherent outcome counts in 27.46 seconds. The summary API returned HTTP 200 in 1.55 seconds of application time. The gate then failed while opening Best Slips. Apache recorded HTTP 200 for the Best Slips Flight requests, and Chrome missed the 15-second in-app URL deadline. The verifier now uses the app's 30-second foreground progress window for the in-app transition and still requires the destination list and counts.
+
 ## Reproduction
 
 - Run the pinned runtime in `next-js/`. Run the focused tests for worker, account, administrator, Matches, Best Slips, sharing and request timing. Use the disposable MySQL test fixture for database runs.

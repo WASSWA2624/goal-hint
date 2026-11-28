@@ -120,13 +120,17 @@ async function navigate(page, url, build) {
 }
 
 async function openBestSlips(page, origin) {
+  diagnostic.phase = "best-slips-trigger";
   const link = page.locator(`a[href="${bestSlips}"]:visible`).first();
   if (!await link.isVisible()) {
     const more = page.locator("[data-nav-more] > summary:visible").first();
     if (await more.isVisible()) await more.click({ timeout: navigationTimeout });
   }
   await link.click({ timeout: navigationTimeout });
-  await page.waitForURL(url => url.origin === origin && url.pathname === bestSlips, { waitUntil: "commit", timeout: navigationTimeout });
+  diagnostic.phase = "best-slips-route-commit";
+  // The app keeps its foreground progress indicator visible for 30 seconds
+  // during client-side route changes. Match that window for the URL commit.
+  await page.waitForURL(url => url.origin === origin && url.pathname === bestSlips, { waitUntil: "commit", timeout: phaseTimeout });
 }
 
 async function verifyStagingCoverage(page, origin, start) {
@@ -246,10 +250,12 @@ async function run() {
     });
     page.on("response", response => {
       const url = new URL(response.url());
-      if (url.origin !== origin || !["/api/matches", "/api/matches/summary", "/api/best-slips"].includes(url.pathname)) return;
       const headers = response.headers();
+      const slipFlight = url.pathname === bestSlips && response.request().headers().rsc === "1";
+      if (url.origin !== origin || (!slipFlight && !["/api/matches", "/api/matches/summary", "/api/best-slips"].includes(url.pathname))) return;
       const id = headers["x-request-id"], duration = headers["server-timing"]?.match(/\bapp;dur=(\d+)\b/u)?.[1];
       diagnostic.apiResponses.push({ path: url.pathname, status: response.status(),
+        ...(slipFlight && { flight: true, componentResponse: headers["content-type"]?.startsWith("text/x-component") ?? false }),
         ...(/^[a-f0-9-]{36}$/u.test(id ?? "") && { requestId: id }), ...(duration && { appMs: Number(duration) }) });
       if (diagnostic.apiResponses.length > 8) diagnostic.apiResponses.shift();
     });
@@ -263,8 +269,8 @@ async function run() {
     const slips = await qualify(page, origin, observations, diagnostic, "best-slips-navigation", bestSlips,
       () => openBestSlips(page, origin));
     const back = await qualify(page, origin, observations, diagnostic, "matches-history-return", matches, async () => {
-      await page.goBack({ waitUntil: "commit", timeout: navigationTimeout });
-      await page.waitForURL(url => url.origin === origin && url.pathname === matches, { waitUntil: "commit", timeout: navigationTimeout });
+      await page.goBack({ waitUntil: "commit", timeout: phaseTimeout });
+      await page.waitForURL(url => url.origin === origin && url.pathname === matches, { waitUntil: "commit", timeout: phaseTimeout });
     });
     const coldSlips = await qualify(page, origin, observations, diagnostic, "best-slips-cold", bestSlips,
       () => navigate(page, new URL(bestSlips, origin), build));
