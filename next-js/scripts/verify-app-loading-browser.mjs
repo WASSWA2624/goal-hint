@@ -193,6 +193,95 @@ export async function verifyBestSlipsNavigation(page, origin) {
   }
 }
 
+/** Exercise a direct archive read that fails before the browser can recover it. */
+export async function verifyColdBestSlipsRetry(page, origin) {
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  const errors = [], results = [];
+  const onError = error => errors.push(error.message);
+  const archive = url => url.origin === origin && url.pathname === '/api/best-slips';
+  const archiveRequest = request => request.method() === 'GET' && archive(new URL(request.url()));
+  const query = '?period=today&status=pending&page=1&oddsBand=1.5-5';
+  const cookie = 'synthetic-best-slips-unavailable';
+  const unavailableTitle = 'Slips could not be loaded. Please try again.';
+  const screen = page.locator('[data-best-slips-page]');
+  page.on('pageerror', onError);
+  await page.context().addCookies([{ name: cookie, value: '1', url: origin }]);
+  try {
+    await page.goto(origin);
+    for (const { theme, width } of [{ theme: 'light', width: 390 }, { theme: 'dark', width: 1440 }]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
+      const requests = [];
+      const manualStarted = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      let quietFlight, manualFlight;
+      const intercept = route => {
+        requests.push(new URL(route.request().url()).search);
+        if (requests.length === 1) {
+          // Keep the quiet fallback pending until the explicit retry replaces it.
+          quietFlight = manualStarted.promise.then(() => route.abort()).catch(() => {});
+          return quietFlight;
+        }
+        if (requests.length !== 2) return route.continue();
+        manualStarted.resolve();
+        manualFlight = release.promise.then(() => route.continue());
+        return manualFlight;
+      };
+      await page.route(archive, intercept);
+      try {
+        const [document] = await Promise.all([
+          page.goto(origin + '/en/best-slips', { waitUntil: 'commit' }),
+          page.waitForRequest(archiveRequest),
+        ]);
+        const alert = screen.getByRole('alert');
+        await alert.getByRole('heading', { name: unavailableTitle, exact: true }).waitFor();
+        assert(document?.ok() && (await document.text()).includes(unavailableTitle),
+          'The direct Best Slips document must contain the archive failure');
+        await page.waitForFunction(mode => document.querySelector('meta[name="color-scheme"]')?.content === mode, theme);
+        const timeOrigin = await page.evaluate(() => {
+          window.fixtureColdArchiveHeader = document.querySelector('[data-app-header]');
+          return performance.timeOrigin;
+        });
+        const sameDocumentAndHeader = () => page.evaluate(start => performance.timeOrigin === start
+          && window.fixtureColdArchiveHeader instanceof HTMLElement
+          && window.fixtureColdArchiveHeader === document.querySelector('[data-app-header]'), timeOrigin);
+
+        await Promise.all([
+          page.waitForRequest(archiveRequest),
+          alert.getByRole('button', { name: 'Try again', exact: true }).click(),
+        ]);
+        const pending = screen.and(page.locator('[data-best-slips-initial-loading][aria-busy="true"]'));
+        await pending.locator('[data-best-slips-filter-trigger]').waitFor({ timeout: 5000 });
+        await alert.waitFor({ state: 'hidden' });
+        assert(await sameDocumentAndHeader(), 'A cold archive retry must preserve the document and shared header');
+        assert(await pending.locator('[data-slip-key], [role="status"]').count() === 0,
+          'A pending cold archive retry must not report results or empty coverage');
+
+        const response = page.waitForResponse(value => archiveRequest(value.request()) && value.status() === 200);
+        release.resolve();
+        await response;
+        await screen.locator('[data-slip-key="synthetic-archive-slip"]').waitFor();
+        assert(await pending.count() === 0 && await alert.count() === 0, 'The recovered archive must clear pending and error feedback');
+        assert(await screen.locator('[data-summary-count="pending"]').textContent() === '1', 'The recovered archive must show its actual count');
+        assert(await sameDocumentAndHeader(), 'The recovered archive must not reload or remount shared navigation');
+        assert(requests.length === 2 && requests.every(request => request === query),
+          'The quiet fallback and manual retry must request the same canonical cohort once each');
+        results.push({ screen: 'cold-best-slips-retry', theme, width, requests: requests.length });
+      } finally {
+        manualStarted.resolve();
+        release.resolve();
+        await Promise.all([quietFlight, manualFlight]);
+        await page.unroute(archive, intercept);
+      }
+    }
+    assert(errors.length === 0, errors.join('\n'));
+    return results;
+  } finally {
+    await page.context().clearCookies({ name: cookie });
+    page.off('pageerror', onError);
+  }
+}
+
 /** Run against verify-app-loading-rendering.py's isolated server using a Playwright page. */
 export async function verifyAppLoading(page, origin) {
   const failures = [], results = [];
@@ -263,6 +352,7 @@ export async function verifyAppLoading(page, origin) {
       results.push({ screen: 'home', theme, width: 390, immediateFilters: true });
     }
     results.push(...await verifyBestSlipsNavigation(page, origin));
+    results.push(...await verifyColdBestSlipsRetry(page, origin));
     for (const theme of ['light', 'dark']) {
       await page.evaluate(mode => localStorage.setItem('goal-hint-theme', mode), theme);
       summaryRequests = 0;

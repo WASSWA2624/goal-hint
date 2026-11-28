@@ -256,7 +256,7 @@ export function useBestSlipsBrowse(input: SlipsBrowseResult, onAccessChanged: ()
     onAccessChanged();
   }, [cancel, initial, onAccessChanged]);
   const loadingMore = busy && intent.mode === "append";
-  const initialLoading = initialRead && accepted.state === "data-unavailable" && !failed;
+  const initialLoading = accepted.state === "data-unavailable" && !failed && (initialRead || busy);
   return { displayQuery: accepted.browse.query, change, goToFirstPage, showMore, loadingMore,
     hasMore: nextSlipPageQuery(pages.at(-1)!) !== null, appendError: failed?.mode === "append",
     readError: failed?.mode === "replace" || failed?.mode === "refresh" ? failed.issue : null,

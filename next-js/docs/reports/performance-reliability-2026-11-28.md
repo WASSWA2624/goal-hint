@@ -198,7 +198,13 @@ Throttled staging Chrome passed the revised browser gate with injected 503s on b
 
 The subsequent production deployment lost its SSH connection after transfer. Pinned read-only SSH confirmed staging's receipt for `87d3c727` and production's active receipt for the prior release `64aba48b`. The production recovery record persisted and both hosting release locks remained held on repeat checks. The standard preview and apply commands rejected new work while the locks were held. The deploy account could not identify the holder through either the available process view or its lock-owner probes. The 95 migrations were verified in each environment during the rollout attempts and the migration inventory was identical across the packaged releases.
 
-A final read of the live Matches document returned HTTP 200, the previous build and an accepted list. Headers arrived in 23.87 seconds and the body completed in 24.55 seconds. The response did not contain ready outcome counts, so production performance remained unqualified.
+A read of the live Matches document returned HTTP 200, the previous build and an accepted list. Headers arrived in 23.87 seconds and the body completed in 24.55 seconds. The response did not contain ready outcome counts, so production performance remained unqualified.
+
+Root inspection identified one inactive deployment receiver waiting on its input pipe with both release locks held and no child processes. The receiver handled a targeted SIGTERM, cleared its recovery record and released both locks. Production stayed on the previous active release throughout recovery.
+
+The next trial passed all 95 migration checks and the HTTPS gate. Chrome reached 50 Matches rows in 17.48 seconds and ready counts in 25.61 seconds. In-app Best Slips navigation committed in 245 ms and recovered from an initial 503, with 20 rows and ready counts in 29.83 seconds. Browser history passed. A direct Best Slips visit showed the unavailable alert. Its retry received HTTP 200 headers, but the same alert remained visible as the body was being read. The gate rejected the trial and verified that production returned to `64aba48b`. The hook now uses the pending state on a foreground retry with no accepted archive data, preserving the controls and withholding unverified values until the response is fully read and validated.
+
+In the isolated production-mode fixture, Chrome held a successful manual retry after a failed direct archive read. At light 390 px and dark 1,440 px, the controls and header stayed visible while pending, the old alert cleared and the same document rendered the verified row and count. Each run observed one quiet attempt and one manual request for the same query. The healthy direct document and adjacent in-app recovery checks also passed.
 
 ## Reproduction
 
