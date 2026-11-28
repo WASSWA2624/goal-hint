@@ -162,6 +162,12 @@ On the next attempt against that same package, production Chrome rendered 50 Mat
 
 Another cold production run rendered 50 rows in 10.56 seconds and reached `DOMContentLoaded` in 10.45 seconds. Apache recorded the summary request 28 seconds after navigation began. The request returned HTTP 200 in 4.29 seconds of application time and passed all five observed summary phases. Chrome still displayed the summary placeholder when the deadline elapsed. The operator check can now allow the late request its own response time within the bounded summary and overall deadlines. It still waits for figures in the page.
 
+With the updated verifier, a production run showed 50 rows in 22.60 seconds, then received two HTTP 200 summary responses with a successful list recheck between them. The first summary took 1.41 seconds of application time, the list recheck 17.18 seconds, and the second summary 1.00 second. The summary ended unavailable and the receiver restored the old release. This request sequence follows the generation reconciliation path. A live source can advance again while the page waits for a list recheck, so successful counts for the same period and the visible list can keep missing each other's exact generation.
+
+A bounded guest probe of the restored production Today Best Slips API returned HTTP 200 in 18.92 seconds with 20 displayed rows and a period count of 53. This confirms that the tested publication cohort was populated and that its read could outlast the first in-app verification window.
+
+The list and summary now expose a verified cohort fingerprint derived from the same normalized reporting period, filters, competition scope and projection policy. For a matching anonymous request and viewer, the browser can display a newer summary with its original revision and observation time. The eligible path keeps the confirmed list and lets it refresh at its ordinary cadence. Older or incompatible observations still follow the existing guarded recovery path. The verifier measures the Best Slips URL commit and the completed list separately while preserving both the populated result gate and the overall deadline.
+
 ## Reproduction
 
 - Run the pinned runtime in `next-js/`. Run the focused tests for worker, account, administrator, Matches, Best Slips, sharing and request timing. Use the disposable MySQL test fixture for database runs.

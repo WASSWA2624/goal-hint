@@ -11,7 +11,7 @@ import { parseMatchFeedQuery } from "./feed-service.ts";
 import { readPublicMatchFeedSummary } from "./public-feed.ts";
 
 export type FeedSummarySource = (...args: Parameters<typeof readPublicMatchFeedSummary>) =>
-  Promise<Pick<Awaited<ReturnType<typeof readPublicMatchFeedSummary>>, "performance" | "paginationVersion" | "asOf">>;
+  Promise<Pick<Awaited<ReturnType<typeof readPublicMatchFeedSummary>>, "performance" | "paginationVersion" | "performanceScope" | "asOf">>;
 
 /** Pages and APIs share the same access checks, including after a long aggregate read. */
 export function createGatedFeedSummary(source: FeedSummarySource = readPublicMatchFeedSummary,
@@ -26,6 +26,7 @@ export function createGatedFeedSummary(source: FeedSummarySource = readPublicMat
     const access = await contentAccess(resolveAccess);
     if (access.tier === "free" && usesPremiumFeedOracle(query)) throw new MatchFeedError("subscription-required");
     return feedPerformanceReplySchema.parse({ performance: data.performance, paginationVersion: data.paginationVersion,
+      ...(data.performanceScope !== undefined ? { performanceScope: data.performanceScope } : {}),
       asOf: data.asOf, access: { tier: access.tier, signedIn: access.signedIn } });
   };
 }

@@ -47,7 +47,7 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
       await prepareDemoRange(database, sourceRange, asOf);
       if (query.search) await createMysqlPublicSearchLimiter(database).consume();
       const read = () => timedRequestPhase("summary-transaction", () => database.transaction(async (tx) => {
-        const { performanceVersion: paginationVersion } = await timedRequestPhase("summary-generation",
+        const { performanceVersion: paginationVersion, performanceScope } = await timedRequestPhase("summary-generation",
           () => storedFeedVersions(tx, query, today, sourceRange, competitionIds, context.completedOnly,
             publishedOnly, historyBefore, providerOdds, publishedForecasts));
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale, context.completedOnly);
@@ -64,12 +64,12 @@ export function createMatchFeedSummaryService(options: Readonly<{ database: Data
         const performance = await timedRequestPhase("summary-settlements", () => readFeedPerformance(tx, sql,
           { total, available: Number(matching.available ?? 0), void: Number(matching.void ?? 0), cancelled: Number(matching.cancelled ?? 0) },
           cache ? { key: feedPerformanceCacheKey(sql, query.locale, providerOdds), nowMs: asOf } : undefined, undefined, overrides));
-        return freezeEvidence(storedSummarySchema.parse({ performance, total, paginationVersion, asOf }));
+        return freezeEvidence(storedSummarySchema.parse({ performance, total, paginationVersion, performanceScope, asOf }));
       }, { isolationLevel: "RepeatableRead", maxWait: 10_000, timeout: 90_000 }));
       if (!cache) return await read();
       const descriptor = publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: "feed-summary-v14", providerOdds, completedOnly: context.completedOnly === true,
+        query: { ...query, projection: "feed-summary-v15", providerOdds, completedOnly: context.completedOnly === true,
           publishedOnly, publishedForecasts, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b), parse: (value) => storedSummarySchema.parse(value) });
       // The public Today audit is shared by the busiest entry point. Keep its

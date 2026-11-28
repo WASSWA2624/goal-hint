@@ -53,17 +53,21 @@ function pageLink(query: FeedQuery, today: ReportingDate, number: number | null)
     ? { kind: "date", date: dates.startDate } : { kind: "range", from: dates.startDate, to: dates.endDate } }, today)}`;
 }
 
-/** List membership and period totals share a source snapshot, with independent filter identities. */
+/** Derive list and aggregate revisions from one source snapshot and identify the aggregate cohort across revisions. */
 export async function storedFeedVersions(tx: Prisma.TransactionClient, query: FeedQuery, today: ReportingDate,
   sourceRange: ReportingDateRange, competitionIds: readonly number[], completedOnly = false, publishedOnly = false,
   historyBefore: number | null = null, providerOdds = publicPolicy.features.providerOdds, publishedForecasts = publishedOnly, predictedMatchesOnly = false) {
   const tags = ["global:catalog", ...Array.from({ length: sourceRange.dayCount }, (_, day) => `date:${addReportingDays(sourceRange.startDate, day)}`)];
-  const generations = await readPublicCacheGenerations(tx, tags), scope = [...competitionIds].sort((a, b) => a - b);
-  const version = (query: FeedQuery, predictedOnly = false) => evidenceFingerprint({ contract: "feed-pagination-v13",
-    completedOnly, publishedOnly, historyBefore, providerOdds, publishedForecasts,
-    ...(predictedOnly ? { predictedOnly } : {}),
-    query: feedQueryKey(query, today), scope, generations });
-  return { paginationVersion: version(query, predictedMatchesOnly), performanceVersion: version(performanceFeedQuery(query)) };
+  const generations = await readPublicCacheGenerations(tx, tags);
+  const projection = { completedOnly, publishedOnly, historyBefore, providerOdds, publishedForecasts,
+    scope: [...competitionIds].sort((a, b) => a - b) };
+  const performance = { ...projection, query: feedQueryKey(performanceFeedQuery(query), today) };
+  return {
+    paginationVersion: evidenceFingerprint({ contract: "feed-pagination-v13", ...projection, query: feedQueryKey(query, today),
+      ...(predictedMatchesOnly ? { predictedOnly: true } : {}), generations }),
+    performanceVersion: evidenceFingerprint({ contract: "feed-pagination-v13", ...performance, generations }),
+    performanceScope: evidenceFingerprint({ contract: "feed-performance-scope-v1", ...performance }),
+  };
 }
 
 export type MatchFeedReadContext = Readonly<{ locale?: string; routeDate?: string; completedOnly?: boolean;
@@ -216,7 +220,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 }));
       const response = cache ? await timedRequestPhase("list-cache", () => cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: 33, providerOdds, completedOnly: context.completedOnly === true,
+        query: { ...query, projection: 34, providerOdds, completedOnly: context.completedOnly === true,
           publishedOnly, publishedForecasts, predictedMatchesOnly, includePerformance: options.includePerformance !== false, today, dates: { from: range.startDate, to: range.endDate } },
         scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read)) : await read();

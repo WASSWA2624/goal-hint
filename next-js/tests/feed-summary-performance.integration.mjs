@@ -38,6 +38,7 @@ test('compact summaries match full stored feed counts and invalidate on genuine 
       assert.deepEqual({ ...counts, void: counts.void + cancelled }, full.performance, JSON.stringify(input));
       assert.equal(compact.total, full.total);
       assert.equal(compact.paginationVersion, full.performanceVersion);
+      assert.equal(compact.performanceScope, full.performanceScope);
       if (result) assert.equal((await feed.query(input)).performanceVersion, compact.paginationVersion);
       assert.equal(compact.asOf, full.asOf);
       return compact;
@@ -55,6 +56,7 @@ test('compact summaries match full stored feed counts and invalidate on genuine 
     await p.first.voidCycle({ ...p.target(state), actor: 'synthetic-summary-test', reason: 'formal-postponement', evidenceRef: 'synthetic-void-proof' });
     const after = await compare({ date: '2026-10-09', picks: 'only' });
     assert.notEqual(after.paginationVersion, before.paginationVersion);
+    assert.equal(after.performanceScope, before.performanceScope);
     assert.equal(after.performance.void, before.performance.void + 1);
     assert.deepEqual(await summary.query({ date: '2026-10-09', picks: 'only' }), after, 'repeated compact reads retain authoritative cached counts');
     await t.test('348 filtered fixtures and 37 original predictions retain one summary across search, pagination, and every outcome', async () => {

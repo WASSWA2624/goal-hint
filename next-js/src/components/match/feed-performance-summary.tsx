@@ -4,7 +4,7 @@ import { use, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 
 import { PerformanceSummary } from "@/components/performance/performance-summary";
 import { TextButton } from "@/components/ui/controls";
 import { Stack } from "@/components/ui/layout";
-import { checkedFeedPerformance, emptyFeedPerformanceReply, feedPerformanceApiHref, performanceFeedQuery, retainedFeedPerformance, selectFeedSummaryResult, type FeedPerformanceReply, type FeedPerformanceSeed } from "@/domain/feed-performance-summary";
+import { canReplaceFeedPerformance, checkedFeedPerformance, emptyFeedPerformanceReply, feedPerformanceApiHref, performanceFeedQuery, retainedFeedPerformance, selectFeedSummaryResult, type FeedPerformanceReply, type FeedPerformanceSeed } from "@/domain/feed-performance-summary";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { FeedPaginationError } from "@/domain/feed-pagination-error";
 import { getFeedToday, type FeedQuery } from "@/domain/feed-query";
@@ -36,8 +36,8 @@ export function FeedPerformancePlaceholder(props: Presentation) {
     showCoverage={false} compactHeader activeResult={props.query.result} onResult={ignoreResult} onOthers={ignoreResult} disabled loading="background" /></LoadingTheme>;
 }
 
-type Reply = { key: string; scope: string; attempt: number; asOf: number; refreshAfter: number;
-  counts: NonNullable<MatchFeedResponse["performance"]> | null; error: FeedPaginationError["code"] | null;
+type Reply = { key: string; scope: string; attempt: number; refreshAfter: number;
+  summary: FeedPerformanceReply | null; observed?: true | undefined; error: FeedPaginationError["code"] | null;
   retryAt: number; withinRetryBudget: boolean };
 const refreshIntervalMs = 60_000;
 const automaticRetryDelayMs = 5_000;
@@ -51,6 +51,10 @@ function subscribeConnection(change: () => void) {
     window.removeEventListener("online", change);
     window.removeEventListener("offline", change);
   };
+}
+
+function summaryScope(href: string, data: MatchFeedResponse) {
+  return `${href}:${data.access.tier}:${data.access.signedIn}:${data.performanceScope ?? ""}`;
 }
 
 /** Browser audits load independently of the list and preserve confirmed figures during polling. */
@@ -70,18 +74,18 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
   const retried = useRef<string | null>(null);
   const pendingGeneration = useRef<{ scope: string; reply: FeedPerformanceReply } | null>(null);
   const offline = useSyncExternalStore(subscribeConnection, offlineSnapshot, initiallyOnline);
-  const scope = `${href}:${data.access.tier}:${data.access.signedIn}`;
+  const scope = summaryScope(href, data);
   const key = `${scope}:${data.performanceVersion}`;
   const readSeed = (): Reply | null => {
     if (seed?.href !== href) return null;
     if (!seed.reply) {
       const retryAt = seed.failure?.retryAt ?? 0;
-      return { key, scope, attempt: attempt.number, counts: null, asOf: data.asOf, refreshAfter: Infinity,
+      return { key, scope, attempt: attempt.number, summary: null, refreshAfter: Infinity,
         error: seed.failure?.code ?? "unavailable", retryAt, withinRetryBudget: retryAt - data.asOf <= refreshIntervalMs };
     }
     try {
-      const checked = checkedFeedPerformance(seed.reply, data);
-      return { key, scope, attempt: attempt.number, counts: checked.performance, asOf: checked.asOf,
+      const checked = checkedFeedPerformance(seed.reply, data, seed.observed ? { requestedHref: seed.href, currentHref: href } : undefined);
+      return { key, scope, attempt: attempt.number, summary: checked, observed: seed.observed,
         refreshAfter: checked.asOf + refreshIntervalMs, error: null, retryAt: 0, withinRetryBudget: false };
     } catch {
       return null;
@@ -95,17 +99,16 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
   }
   const latest = useRef({ query, today, data });
   useEffect(() => { latest.current = { query, today, data }; }, [data, query, today]);
-  const { tier, signedIn } = data.access;
   useEffect(() => {
     if (empty) onConfirmed?.({ href, reply: empty });
-    else if (reply?.key === key && reply.counts && !reply.error) onConfirmed?.({ href,
-      reply: { performance: reply.counts, paginationVersion: data.performanceVersion, asOf: reply.asOf, access: { tier, signedIn } } });
-  }, [data.performanceVersion, empty, href, key, onConfirmed, reply, signedIn, tier]);
+    else if (reply?.key === key && reply.summary && !reply.error) onConfirmed?.({ href, reply: reply.summary,
+      ...(reply.observed ? { observed: true } : {}) });
+  }, [empty, href, key, onConfirmed, reply]);
   const current = reply?.key === key ? reply : null;
   const matchingScope = reply?.scope === scope ? reply : null;
   const retrying = !empty && Boolean(current?.error) && current?.attempt !== attempt.number && attempt.foreground;
   const needsRead = enabled && !empty && (!current || current.attempt !== attempt.number || !current.error && data.asOf >= current.refreshAfter);
-  const counts = empty?.performance ?? matchingScope?.counts ?? null;
+  const counts = empty?.performance ?? matchingScope?.summary?.performance ?? null;
   const automaticRetryScheduled = enabled && !empty && !needsRead && current?.error === "unavailable"
     && current.withinRetryBudget && automaticallyRetried !== key;
   const automaticRetryActive = needsRead && current?.error === "unavailable" && automaticallyRetried === key && !attempt.foreground;
@@ -156,6 +159,7 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
     const controller = new AbortController();
     const { query: currentQuery, today } = latest.current;
     const query = performanceFeedQuery(currentQuery);
+    const requestedHref = feedPerformanceApiHref(query, today);
     const queued = pendingGeneration.current;
     if (queued?.scope !== scope) pendingGeneration.current = null;
     const read = queued?.scope === scope && queued.reply.paginationVersion === latest.current.data.performanceVersion
@@ -163,28 +167,34 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
       : consumeRefresh(dispatch(refreshApi.endpoints.feedSummary.initiate({ query, today }, { forceRefetch: true })), controller.signal);
     void read.then(async (value) => {
       if (controller.signal.aborted) return;
-      const { data } = latest.current;
+      const { data, query, today } = latest.current;
+      const currentHref = feedPerformanceApiHref(query, today);
+      if (requestedHref !== currentHref || summaryScope(currentHref, data) !== scope) return;
       if (value.access.tier !== data.access.tier || value.access.signedIn !== data.access.signedIn)
         throw new FeedPaginationError("subscription-required");
-      // A newer audit can trigger one quiet list observation. It stays hidden
-      // until that observation confirms the same generation and viewer.
-      if (value.paginationVersion && value.paginationVersion !== data.performanceVersion && value.asOf >= data.asOf &&
-          !pendingGeneration.current && navigator.onLine && document.visibilityState === "visible") {
-        pendingGeneration.current = { scope, reply: value };
-        await onGenerationChanged?.();
-        if (controller.signal.aborted) return;
-        // The effect for the new list generation owns acceptance of this reply.
-        throw new FeedPaginationError("changed");
+      let checked;
+      try { checked = checkedFeedPerformance(value, data, { requestedHref, currentHref }); }
+      catch (cause) {
+        // Legacy replies and authenticated readers can qualify only through one matching list observation.
+        if (cause instanceof FeedPaginationError && cause.code === "changed"
+          && (!value.performanceScope || !data.performanceScope || value.performanceScope === data.performanceScope)
+          && value.paginationVersion && value.paginationVersion !== data.performanceVersion && value.asOf >= data.asOf
+          && !pendingGeneration.current && navigator.onLine && document.visibilityState === "visible") {
+          pendingGeneration.current = { scope, reply: value };
+          await onGenerationChanged?.();
+          if (controller.signal.aborted) return;
+        }
+        throw cause;
       }
-      const checked = checkedFeedPerformance(value, data);
       pendingGeneration.current = null;
       retried.current = null;
       setAutomaticallyRetried(null);
       setReply(previous => {
-        if (previous?.key === key && previous.counts && previous.asOf > checked.asOf) return { ...previous,
-          attempt: attempt.number, refreshAfter: data.asOf + refreshIntervalMs, error: null, retryAt: 0 };
-        return { key, scope, attempt: attempt.number, asOf: checked.asOf, refreshAfter: data.asOf + refreshIntervalMs,
-          counts: checked.performance, error: null, retryAt: 0, withinRetryBudget: false };
+        if (previous?.scope === scope && previous.summary && !canReplaceFeedPerformance(previous.summary, checked)) {
+          return previous.key === key ? { ...previous, attempt: attempt.number, refreshAfter: data.asOf + refreshIntervalMs } : previous;
+        }
+        return { key, scope, attempt: attempt.number, refreshAfter: data.asOf + refreshIntervalMs,
+          summary: checked, observed: true, error: null, retryAt: 0, withinRetryBudget: false };
       });
     }).catch((cause: unknown) => {
       if (controller.signal.aborted) return;
@@ -194,15 +204,15 @@ export function FeedPerformanceSummary({ query, today, data, enabled, onApply, i
       const retryAt = retryAfter ? Date.now() + retryAfter : 0;
       setReply((previous) => {
         const retained = !accessChanged && previous?.scope === scope ? previous : null;
-        return { key, scope, attempt: attempt.number, asOf: retained?.asOf ?? latest.current.data.asOf,
-          refreshAfter: Infinity, counts: retained?.counts ?? null, error: error.code, retryAt, withinRetryBudget: retryAfter <= refreshIntervalMs };
+        return { key, scope, attempt: attempt.number, refreshAfter: Infinity, summary: retained?.summary ?? null,
+          observed: retained?.observed, error: error.code, retryAt, withinRetryBudget: retryAfter <= refreshIntervalMs };
       });
       if (accessChanged) { pendingGeneration.current = null; onConfirmed?.(null); onAccessChanged?.(); }
     });
     return () => controller.abort();
   }, [attempt, dispatch, key, needsRead, onAccessChanged, onConfirmed, onGenerationChanged, scope]);
   const failed = !empty && !loading && !counts && current?.error;
-  const stale = !empty && Boolean(matchingScope?.counts && (matchingScope.error || matchingScope.key !== key));
+  const stale = !empty && Boolean(matchingScope?.summary && (matchingScope.error || matchingScope.key !== key));
   const summaryCounts = useMemo(() => counts ? { ...counts, cancelled: counts.cancelled ?? 0 } : null, [counts]);
   return <Stack $gap="sm" data-feed-performance-state={loading ? "loading" : failed ? "unavailable" : stale ? "stale" : counts ? "ready" : "unknown"}
     data-feed-performance-deferred={!initial && loading ? true : undefined}

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createMatchFeedService, parseMatchFeedQuery, storedFeedVersions } from '../src/server/matches/feed-service.ts';
 import { getReportingDate, validateReportingDateRange } from '../src/domain/calendar.ts';
+import { createMatchFeedHandler } from '../src/server/matches/feed-http.ts';
 import { createMatchFeedSummaryService } from '../src/server/matches/feed-summary-service.ts';
 import { createMatchFeedSummaryHandler } from '../src/server/matches/feed-summary-http.ts';
 import { fullAccess } from './helpers/full-access.ts';
@@ -11,7 +12,7 @@ const at = Date.parse('2026-10-09T08:00:00Z'), clock = { now: () => at };
 const counts = { total: 80, won: 0, lost: 0, pending: 20, void: 10, unavailable: 50 };
 const parameters = new URLSearchParams('date=2026-10-09&page=4&country=England&status=finished&market=match-result&prob=20-90');
 
-test('period versions survive table selections but change with filters and source generations', async () => {
+test('period scope survives source updates and table selections while versions identify the source snapshot', async () => {
   let generation = '1';
   const tx = { publicCacheTag: { findMany: async () => [{ tag: 'global:catalog', generation }] } };
   const today = getReportingDate(at), range = validateReportingDateRange(today, today, 1);
@@ -21,19 +22,48 @@ test('period versions survive table selections but change with filters and sourc
   const published = await storedFeedVersions(tx, query, today, range, [39], false, true);
   assert.notEqual(published.performanceVersion, baseline.performanceVersion);
   assert.notEqual(published.paginationVersion, baseline.paginationVersion);
+  assert.notEqual(published.performanceScope, baseline.performanceScope);
   for (const result of ['won', 'lost', 'pending', 'void', 'cancelled']) {
     const selected = await version({ ...query, result, page: 9, pageSize: 100, sort: { by: 'probability', direction: 'asc' } });
     assert.equal(selected.performanceVersion, baseline.performanceVersion);
+    assert.equal(selected.performanceScope, baseline.performanceScope);
     assert.notEqual(selected.paginationVersion, baseline.paginationVersion);
   }
   for (const change of [{ search: 'Club' }, { countries: ['France'] }, { markets: ['total-goals'] },
-    { dates: { kind: 'date', date: '2026-10-08' } }]) {
-    assert.notEqual((await version({ ...query, ...change })).performanceVersion, baseline.performanceVersion);
+    { status: 'scheduled' }, { dates: { kind: 'date', date: '2026-10-08' } }, { zone: 'America/New_York' }]) {
+    const selected = await version({ ...query, ...change });
+    assert.notEqual(selected.performanceVersion, baseline.performanceVersion);
+    assert.notEqual(selected.performanceScope, baseline.performanceScope);
   }
+  assert.match(baseline.performanceScope, /^[a-f0-9]{64}$/u);
   generation = '2';
   const changed = await version(query);
   assert.notEqual(changed.paginationVersion, baseline.paginationVersion);
   assert.notEqual(changed.performanceVersion, baseline.performanceVersion);
+  assert.equal(changed.performanceScope, baseline.performanceScope);
+});
+
+test('period scope canonicalizes equivalent dates and competition ordering and separates projection and odds policies', async () => {
+  const tx = { publicCacheTag: { findMany: async () => [] } };
+  const today = getReportingDate(at), range = validateReportingDateRange(today, today, 1);
+  const parse = (query) => parseMatchFeedQuery(new URLSearchParams(query), today, { providerOdds: true });
+  const relative = parse('when=today&odds=2.00-3.00'), pinned = parse(`date=${today}&odds=2.00-3.00`);
+  const version = (query, ids, options = {}) => storedFeedVersions(tx, query, today, range, ids,
+    options.completedOnly, options.publishedOnly, options.historyBefore, options.providerOdds ?? true,
+    options.publishedForecasts ?? true, options.predictedMatchesOnly);
+  const baseline = await version(relative, [39, 45]);
+  assert.deepEqual(await version(pinned, [45, 39]), baseline);
+  const predicted = await version(relative, [39, 45], { predictedMatchesOnly: true });
+  assert.notEqual(predicted.paginationVersion, baseline.paginationVersion);
+  assert.equal(predicted.performanceVersion, baseline.performanceVersion);
+  assert.equal(predicted.performanceScope, baseline.performanceScope, 'the list only shows predictions while the audit also counts unavailable outcomes');
+  assert.notEqual((await version(relative, [39, 46])).performanceScope, baseline.performanceScope);
+  assert.notEqual((await version(parse('when=today&odds=2.00-4.00'), [39, 45])).performanceScope, baseline.performanceScope);
+  for (const options of [{ completedOnly: true }, { publishedOnly: true }, { publishedForecasts: false }, { historyBefore: at }]) {
+    assert.notEqual((await version(relative, [39, 45], options)).performanceScope, baseline.performanceScope);
+  }
+  const noOdds = parse('when=today');
+  assert.notEqual((await version(noOdds, [39, 45], { providerOdds: false })).performanceScope, (await version(noOdds, [39, 45])).performanceScope);
 });
 
 function database({ summaryOnly = false, cancelled = 0n } = {}) {
@@ -70,6 +100,16 @@ test('lean summaries retain exact feed counts, query filters, cohort versions an
   assert.deepEqual(summary.performance, { ...counts, cancelled: 0 });
   assert.equal(summary.total, fullResult.total);
   assert.equal(summary.paginationVersion, fullResult.performanceVersion);
+  assert.equal(summary.performanceScope, fullResult.performanceScope);
+  assert.equal(descriptors[0].parse(JSON.parse(JSON.stringify(fullResult))).performanceScope, fullResult.performanceScope);
+  assert.equal(descriptors[1].parse(JSON.parse(JSON.stringify(summary))).performanceScope, fullResult.performanceScope);
+  const listHandler = createMatchFeedHandler(async () => fullResult, clock, fullAccess);
+  const summaryHandler = createMatchFeedSummaryHandler(async () => summary, clock, fullAccess);
+  const listResponse = await listHandler(new Request(`https://example.test/api/matches?${parameters}&leagues=0`));
+  const summaryResponse = await summaryHandler(new Request(`https://example.test/api/matches/summary?${parameters}`));
+  assert.equal(listResponse.status, 200);
+  assert.equal(summaryResponse.status, 200);
+  assert.equal((await listResponse.json()).performanceScope, (await summaryResponse.json()).performanceScope);
   assert.equal(summary.asOf, fullResult.asOf);
   assert.deepEqual(descriptors[1].tags, descriptors[0].tags);
   assert.equal(descriptors[1].deadlineAt, descriptors[0].deadlineAt);
@@ -85,7 +125,7 @@ test('lean summaries retain exact feed counts, query filters, cohort versions an
   assert.deepEqual(lean.ancillary, []);
   assert.deepEqual(full.options, [{ isolationLevel: 'RepeatableRead', maxWait: 5000, timeout: 30_000 }]);
   assert.deepEqual(lean.options, [{ isolationLevel: 'RepeatableRead', maxWait: 10_000, timeout: 90_000 }]);
-  assert.deepEqual(Object.keys(summary).sort(), ['asOf', 'paginationVersion', 'performance', 'total']);
+  assert.deepEqual(Object.keys(summary).sort(), ['asOf', 'paginationVersion', 'performance', 'performanceScope', 'total']);
 });
 
 test('cancelled predictions have their own category and are excluded from pending and void counts', async () => {
@@ -163,6 +203,11 @@ test('summary HTTP retains strict feed response-option validation without return
   const response = await handler(new Request('https://example.test/api/matches/summary?date=2026-10-09&leagues=0'));
   assert.equal(response.status, 200); assert.equal(reads, 1);
   assert.deepEqual(await response.json(), { performance: counts, paginationVersion: 'a'.repeat(64), asOf: at, access: { tier: 'full', signedIn: false } });
+  const performanceScope = 'b'.repeat(64);
+  const scoped = createMatchFeedSummaryHandler(async () => ({ performance: counts, paginationVersion: 'a'.repeat(64), performanceScope, asOf: at }), clock, fullAccess);
+  const scopedResponse = await scoped(new Request('https://example.test/api/matches/summary?date=2026-10-09'));
+  assert.equal(scopedResponse.status, 200);
+  assert.equal((await scopedResponse.json()).performanceScope, performanceScope);
 });
 
 test('streamed page summaries and HTTP summaries recheck restricted filters after access expires', async () => {

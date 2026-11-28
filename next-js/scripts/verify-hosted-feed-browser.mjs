@@ -157,9 +157,11 @@ async function qualify(page, origin, observations, state, name, pathname, open) 
   state.summaryRequestedAt = 0;
   state.phase = `${name}-navigation`;
   const confirmDocument = await open();
+  const navigationAt = performance.now();
+  const navigationMs = Math.round(navigationAt - start);
   state.phase = `${name}-list`;
   const staging = origin === "https://test.goalhint.com";
-  const list = await phaseState(page, pathname, "list", start, staging);
+  const list = await phaseState(page, pathname, "list", confirmDocument ? start : navigationAt, staging);
   const listMs = Math.round(performance.now() - start);
   state.acceptedList = { listMs, ...list };
   let documentReadyMs;
@@ -184,7 +186,7 @@ async function qualify(page, origin, observations, state, name, pathname, open) 
   }
   requireReady(new URL(page.url()).origin === origin, "unexpected-navigation-origin");
   requireReady(!state.pageErrors, "uncaught-page-error");
-  observations.push({ phase: name, listMs, summaryMs, ...(documentReadyMs !== undefined && { documentReadyMs }), ...list, ...summary });
+  observations.push({ phase: name, navigationMs, listMs, summaryMs, ...(documentReadyMs !== undefined && { documentReadyMs }), ...list, ...summary });
   return list.rows > 0 && summary.summary === "ready";
 }
 
@@ -261,11 +263,13 @@ async function run() {
     page.on("response", response => {
       const url = new URL(response.url());
       const headers = response.headers();
-      const slipFlight = url.pathname === bestSlips && response.request().headers().rsc === "1";
+      const routeHeaders = url.pathname === bestSlips ? response.request().headers() : {};
+      const slipFlight = routeHeaders.rsc === "1";
       if (url.origin !== origin || (!slipFlight && !["/api/matches", "/api/matches/summary", "/api/best-slips"].includes(url.pathname))) return;
       const id = headers["x-request-id"], duration = headers["server-timing"]?.match(/\bapp;dur=(\d+)\b/u)?.[1];
       diagnostic.apiResponses.push({ path: url.pathname, status: response.status(),
-        ...(slipFlight && { flight: true, componentResponse: headers["content-type"]?.startsWith("text/x-component") ?? false }),
+        ...(slipFlight && { flight: true, prefetch: Boolean(routeHeaders["next-router-prefetch"] || routeHeaders["next-router-segment-prefetch"]),
+          componentResponse: headers["content-type"]?.startsWith("text/x-component") ?? false }),
         ...(/^[a-f0-9-]{36}$/u.test(id ?? "") && { requestId: id }), ...(duration && { appMs: Number(duration) }) });
       if (diagnostic.apiResponses.length > 8) diagnostic.apiResponses.shift();
     });

@@ -31,8 +31,10 @@ const storedFeedBaseSchema = z.strictObject({
   /** Inline audit of the filtered list. The independently streamed period summary uses performanceVersion. */
   performance: feedPerformanceSchema.nullable().default(null),
   paginationVersion: z.string().regex(/^[a-f0-9]{64}$/u).nullable().default(null),
-  /** Period aggregate identity, independent of selected outcome and list pagination/order. */
+  /** Period aggregate revision, independent of selected outcome and list pagination/order. */
   performanceVersion: z.string().regex(/^[a-f0-9]{64}$/u).nullable().default(null),
+  /** Reporting cohort and projection policy, independent of source revisions. */
+  performanceScope: z.string().regex(/^[a-f0-9]{64}$/u).optional(),
   leagues: z.array(z.strictObject({ id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u),
     name: z.string().max(256).nullable(), country: z.string().max(128).nullable(),
     logoUrl: z.string().refine(isSafeRemoteImageUrl, "Unsafe logo URL.").nullable().default(null),
