@@ -15,7 +15,7 @@ while reviewing. Use `-- --port 3112` if the default port is occupied.
 
 - Select a design in the left navigator or the top dropdown. Previous/next
   buttons and **Alt + Left/Right** also switch designs.
-- **Viewing as** previews a subscriber, visitor, unsubscribed member, or member
+- **Viewing as** previews a user, visitor, unsubscribed member, or member
   with active referral access. **Match status** previews upcoming, live,
   completed, and postponed fixtures.
 - Changes preserve the selected information tab, viewer and fixture status.

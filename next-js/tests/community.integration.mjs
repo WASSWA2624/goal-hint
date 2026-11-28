@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { communityLinksWithDefaults, communityReminderIntervalMs, defaultCommunityLinks } from "../src/domain/community.ts";
-import { createSubscribers } from "../src/server/admin/subscribers.ts";
+import { createUsers } from "../src/server/admin/users.ts";
 import { createCommunityHandler } from "../src/server/members/community-http.ts";
 import { createMemberAuth } from "../src/server/members/member-auth.ts";
 import { createMemberCommunityHandler } from "../src/server/members/member-community-http.ts";
@@ -167,7 +167,7 @@ test("Community invitations are account-wide while a return is bound to the clai
   await sessions.signOut(otherAccount);
   await post(otherAccount, { action: "status" }, 403);
 
-  assert.equal((await createSubscribers(database, now, config).action(otherId, "erase", null, "test-owner")).status, "saved");
+  assert.equal((await createUsers(database, now, config).action(otherId, "erase", null, "test-owner")).status, "saved");
   assert.deepEqual(await readState(otherId), { communityInvitedAt: null, communityJoinedAt: null,
     communityInvitationId: null, communityAttemptId: null });
 });

@@ -59,7 +59,7 @@ indicator on desktop and a compact, centered equivalent on mobile.
   slips and keeps header/body status alignment.
 - Existing SSR rendering acceptance passed across Best slips/access summaries,
   saved snapshots, generation states, native form limits/cutoff behavior and
-  subscriber/account actions. Stale rendering expectations were updated to
+  user/account actions. Stale rendering expectations were updated to
   the current probability copy, aggregate access panel and observed statuses.
 - Production build, TypeScript, scoped ESLint, Python compilation and whitespace
   checks passed. Reviewed full-size mobile/desktop captures in both themes.

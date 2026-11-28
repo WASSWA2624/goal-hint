@@ -4,7 +4,7 @@ import { redirectToAccountLogin } from "@/server/members/account-login-redirect"
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { RecordBody } from "@/components/admin/record-workspace";
 import { adminPageGate } from "@/server/admin/admin-http";
-import { createSubscribers } from "@/server/admin/subscribers";
+import { createUsers } from "@/server/admin/users";
 import { AuditReport } from "@/components/admin/audit-report";
 import { ownerAuditActions } from "@/server/admin/audit";
 import { auditDateBounds, auditPeriods } from "@/domain/admin-audit";
@@ -20,7 +20,7 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
   const endDate = period === "custom" && typeof params.endDate === "string" ? params.endDate : "";
   try { auditDateBounds({ period, startDate, endDate }); }
   catch { return <RecordBody><VisuallyHidden as="h1">Audit</VisuallyHidden><Notice $tone="error" role="alert">Invalid audit date range. <ButtonLink variant="secondary" href="/admin/audit">Reset filters</ButtonLink></Notice></RecordBody>; }
-  const data = db ? await createSubscribers(db).audit(action, { period, startDate, endDate }).catch(() => null) : null;
+  const data = db ? await createUsers(db).audit(action, { period, startDate, endDate }).catch(() => null) : null;
   // The report and the error state each provide the page heading.
   return data ? <AuditReport rows={data} actions={ownerAuditActions} action={action} period={period} startDate={startDate} endDate={endDate} />
     : <RecordBody><VisuallyHidden as="h1">Audit</VisuallyHidden><Notice $tone="error" role="alert">Activity is unavailable. Try again shortly.</Notice></RecordBody>;

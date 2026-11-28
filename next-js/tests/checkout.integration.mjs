@@ -435,7 +435,7 @@ test("checkout accounting and concurrent receipt reconciliation on real MySQL", 
     assert.equal((await act(original.id, { action: "approve-checkout" })).ok, false);
     assert.equal((await verify(original.id, 5000)).ok, true);
     const detail = await review.detail(original.id), receiptId = detail.claims[0].receipt.id;
-    assert.equal((await act(original.id, { action: "resolve-dispute", receiptId, intendedSubmissionId: original.id, reason: "Verified payer intended this subscriber", contactedVerifiedPayer: true, ownershipClear: true })).ok, true);
+    assert.equal((await act(original.id, { action: "resolve-dispute", receiptId, intendedSubmissionId: original.id, reason: "Verified payer intended this user", contactedVerifiedPayer: true, ownershipClear: true })).ok, true);
     assert.equal((await act(original.id, { action: "approve-checkout" })).ok, true);
     const third = await member(); const late = await submit(third, select(), receipt);
     assert.equal(late.status, "disputed");

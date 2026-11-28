@@ -34,15 +34,15 @@ def fixture_json(origin, path, body=None, method=None, headers=None):
         return response.status, json.loads(response.read())
 
 
-def subscriber_directory(origin):
-    run_path(str(ROOT / "scripts/verify-subscriber-directory-rendering.py"),
-        run_name="subscriber_directory_acceptance")["verify"](origin)
+def user_directory(origin):
+    run_path(str(ROOT / "scripts/verify-user-directory-rendering.py"),
+        run_name="user_directory_acceptance")["verify"](origin)
 
 
-def subscriber_mutations(origin):
+def user_mutations(origin):
     account_id = "00000000-0000-4000-8000-000000000100"
-    endpoint = "/api/admin/subscribers/" + account_id
-    state_path = "/api/fixture/subscribers"
+    endpoint = "/api/admin/users/" + account_id
+    state_path = "/api/fixture/users"
     def snapshot():
         status, state = fixture_json(origin, state_path)
         assert status == 200
@@ -81,7 +81,7 @@ def subscriber_mutations(origin):
         action({"action": "revoke", "id": code["id"], "reason": "owner-revoked"}, path="/api/admin/codes")
         assert next(row for row in snapshot()["codes"] if row["id"] == code["id"])["status"] == "revoked"
         action({"action": "manual", "phone": "256700000999", "amount": 0, "days": 3, "note": "Synthetic new account"}, 201, "/api/admin/codes")
-        assert len(fixture_json(origin, "/api/admin/subscribers", {"search": "256700000999"})[1]["accounts"]) == 1
+        assert len(fixture_json(origin, "/api/admin/users", {"search": "256700000999"})[1]["accounts"]) == 1
         # The historical baseline expires; transfer checks need their own live period.
         action({"action": "manual", "phone": "0700000101", "amount": 0, "days": 7, "note": "Synthetic transferable access"}, 201, "/api/admin/codes")
         transfer = {"action": "change-number", "newPhone": "256700000777", "verifiedBy": "payment-details"}
@@ -100,8 +100,8 @@ def subscriber_mutations(origin):
         refused = action({"action": "delete", "confirmed": True}, 409)
         assert "can't be deleted" in refused["message"]
         assert account(snapshot())["status"] == "erased"
-        fresh_id = fixture_json(origin, "/api/admin/subscribers", {"search": "256700000999"})[1]["accounts"][0]["id"]
-        fresh_endpoint = "/api/admin/subscribers/" + fresh_id
+        fresh_id = fixture_json(origin, "/api/admin/users", {"search": "256700000999"})[1]["accounts"][0]["id"]
+        fresh_endpoint = "/api/admin/users/" + fresh_id
         action({"action": "delete", "confirmed": True}, path=fresh_endpoint)
         deleted = snapshot()
         for table in ["accounts", "codes", "payments", "audits"]:
@@ -243,7 +243,7 @@ def audit_rendering(origin):
 def plans_api(origin):
     """Exercise the production plan service, including its owner and same-origin guards."""
     endpoint = "/api/admin/plans"
-    state_path = "/api/fixture/subscribers"
+    state_path = "/api/fixture/users"
     def action(body, expected=200):
         status, reply = fixture_json(origin, endpoint, body)
         assert status == expected, (body.get("action"), status, reply)
@@ -288,11 +288,11 @@ def plans_api(origin):
 
 def record_workspaces_rendering(origin):
     """Shared desktop geometry is identified server-side; panes are checked after browser hydration."""
-    for path in ["/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/password-requests", "/admin/plans", "/admin/audit"]:
+    for path in ["/admin/payments", "/admin/codes", "/admin/users", "/admin/password-requests", "/admin/plans", "/admin/audit"]:
         html = visible_html(request(origin, path).text)
         assert len(re.findall(r'data-record-workspace=', html)) == 1, path
     sidebar = match(r'<(?:nav|aside)\b(?=[^>]*data-admin-sidebar)[^>]*>([\s\S]*?)</(?:nav|aside)>', visible_html(request(origin, "/admin/payments").text)).group(1)
-    expected = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/password-requests", "/admin/referrals", "/admin/plans", "/admin/audit", "/admin/settings", "/analytics"]
+    expected = ["/admin", "/admin/payments", "/admin/codes", "/admin/users", "/admin/password-requests", "/admin/referrals", "/admin/plans", "/admin/audit", "/admin/settings", "/analytics"]
     assert re.findall(r'href="([^"]+)"', sidebar) == expected
 
 
@@ -469,7 +469,7 @@ def payments_rendering(origin):
                 no_match(r'Expected payment|Reported amount:', html, "The receipt form shows the deposit only once.")
                 first_row = unescape(re.sub(r'<[^>]+>', " ", rows[0]))
                 assert "256 700 000 118" in first_row and "4,500" in first_row
-                assert "256 700 000 101" not in first_row, "Queue identifies the payer, not the subscriber account."
+                assert "256 700 000 101" not in first_row, "Queue identifies the payer, not the user account."
                 approve = match(r'<button\b(?=[^>]*data-payment-approve)[^>]*>', html).group(0)
                 match(r'\bdisabled(?:=""|\s|>)', approve, "Approval requires checking the incoming transfer and covering the package price.")
                 for field, value in [("payment-confirmed-id", "TEST1234"), ("payment-confirmed-amount", "4500")]:
@@ -575,7 +575,7 @@ def overview_notices(origin):
         match(r'<a\b[^>]*href="/admin/payments"[^>]*>Pending payments<', html)
         match(r'<a\b[^>]*href="/admin/audit\?action=uploads_busy&amp;period=custom'
               r'&amp;startDate=\d{4}-\d{2}-\d{2}&amp;endDate=\d{4}-\d{2}-\d{2}"[^>]*>Upload alerts this week<', html)
-        for removed in ["Payment queue", "data-payment-notices", "View subscriber", "Send again", "Payment numbers updated",
+        for removed in ["Payment queue", "data-payment-notices", "View user", "Send again", "Payment numbers updated",
                         "How totals are calculated", "PTEST", "Your account has been updated", "Log in to view"]:
             assert removed not in html, removed
 
@@ -589,7 +589,7 @@ def overview_notices(origin):
 
 def owner_navigation(origin):
     """All owner routes share regular navigation and preserve the production private gate."""
-    routes = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/password-requests",
+    routes = ["/admin", "/admin/payments", "/admin/codes", "/admin/users", "/admin/password-requests",
         "/admin/plans", "/admin/settings", "/admin/audit", "/analytics"]
     for path in routes:
         response = request(origin, path)
@@ -636,9 +636,9 @@ def main():
         record_workspaces_rendering(server.origin)
         password_requests_api(server.origin)
         overview_notices(server.origin)
-        subscriber_directory(server.origin)
-        for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue this week","Revenue this month","Pending payments","Trials this week",
-            "Upload alerts this week","Credit held by members","Message notices to check"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search subscribers","Grant access / add subscriber","Change number","Delete or erase"]),("/admin/audit",["Audit"])]:
+        user_directory(server.origin)
+        for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Users with active paid access","Revenue this week","Revenue this month","Pending payments","Trials this week",
+            "Upload alerts this week","Credit held by members","Message notices to check"]),("/admin/users?accountId=00000000-0000-4000-8000-000000000100",["Search users","Grant access / add user","Change number","Delete or erase"]),("/admin/audit",["Audit"])]:
             response=request(server.origin,path);html=visible_html(response.text)
             assert response.status==200,(path,response.status)
             for label in labels:assert label in html,(path,label)
@@ -647,7 +647,7 @@ def main():
             for removed in ["#code=", 'href="sms:', 'href="https://wa.me/', "Reissue"]:
                 assert removed not in html, (path, removed)
             if path=="/admin/payments":assert "(1) Payments" in response.text
-        note = request(server.origin, "/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100&action=note")
+        note = request(server.origin, "/admin/users?accountId=00000000-0000-4000-8000-000000000100&action=note")
         assert note.status == 200 and "Save note" in visible_html(note.text)
         for action in ["approve", "manual"]:
             endpoint = "/api/admin/payments/00000000-0000-4000-8000-000000000200" if action == "approve" else "/api/admin/codes"
@@ -666,7 +666,7 @@ def main():
         for action in ["trial", "dismiss-trial"]:
             status, _ = fixture_json(server.origin, "/api/admin/codes", {"action": action, "id": "00000000-0000-4000-8000-000000000100"})
             assert status == 400, "Former manual trial actions must not grant or dismiss access."
-        subscriber_mutations(server.origin)
+        user_mutations(server.origin)
         settings_api(server.origin)
         settings_rendering(server.origin)
         audit_rendering(server.origin)
@@ -675,7 +675,7 @@ def main():
         payments_queue_rendering(server.origin)
         payment_filters_rendering(server.origin)
         payments_api(server.origin)
-        print("PASS all eight owner routes and regular navigation; five shared record workspaces; removed admin password workflow; subscriber actions, Plans create/edit/order/activation, Settings saves/modes, read-only audit filters, payment queue/history decisions, private attachments and confirmation guards.",flush=True)
+        print("PASS all eight owner routes and regular navigation; five shared record workspaces; removed admin password workflow; user actions, Plans create/edit/order/activation, Settings saves/modes, read-only audit filters, payment queue/history decisions, private attachments and confirmation guards.",flush=True)
         if args.serve:
             print(f"Synthetic administrator browser entry: {server.origin}/api/fixture/session", flush=True)
             print(f"Settings browser entry: {server.origin}/api/fixture/session?page=settings&scenario=writable", flush=True)

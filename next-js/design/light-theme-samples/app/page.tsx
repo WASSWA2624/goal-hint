@@ -26,6 +26,6 @@ export default async function Page({ searchParams }: {
     {slip && <SlipCard slip={slip} index={0} locale="en" />}
   </Stack>;
   return <PreviewTheme themeId={themeId}>
-    <MatchFeedPage {...feed} showAccount={false} subscriberOnly={false} pagination={samples} />
+    <MatchFeedPage {...feed} showAccount={false} premiumOnly={false} pagination={samples} />
   </PreviewTheme>;
 }

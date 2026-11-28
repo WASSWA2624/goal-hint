@@ -94,7 +94,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, hasNext, ne
     <ReviewHead data-payment-head>
       <PaymentAccountSummary payment={p} status={status} busy={action.busy} />
       {!desktop &&
-        <TextAction as={Link} data-review-link href={`/admin/subscribers?accountId=${encodeURIComponent(p.accountId)}`} prefetch={false}><UserIcon />View subscriber</TextAction>
+        <TextAction as={Link} data-review-link href={`/admin/users?accountId=${encodeURIComponent(p.accountId)}`} prefetch={false}><UserIcon />View user</TextAction>
       }
     </ReviewHead>
     <ReviewZones data-payment-zones>
@@ -147,7 +147,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, hasNext, ne
           </PaymentFacts>
           {recovery?.carried && <Notice $tone="warning">Other days moved with this payment. Restore any verified remaining access manually.</Notice>}
           {recovery?.recovery && p.purpose === "topup" && <Notice $tone="warning">This was a credit top-up. Add {formatUgx(p.final?.amount ?? p.amount)} to the real payer&apos;s account
-            with Subscribers → Credit → Correct credit, noting {p.reference}.</Notice>}
+            with Users → Credit → Correct credit, noting {p.reference}.</Notice>}
         </DecisionPanel>}
       </DecisionZone>
       {p.hasImage && <ProofZone aria-label="Payment evidence" data-payment-zone="proof">

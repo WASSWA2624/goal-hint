@@ -1,8 +1,8 @@
 "use client";
 
-import { CircleMinusIcon, SubscriberIcon } from "@/components/ui/icons";
+import { CircleMinusIcon, StarIcon } from "@/components/ui/icons";
 import { UnlockButton } from "@/components/members/prediction-unlock";
-import { subscriberHref } from "@/domain/subscriber-navigation";
+import { subscriptionHref } from "@/domain/subscription-navigation";
 
 import Link from "@/components/navigation/navigation-link";
 import { memo, useContext, useId, type ComponentProps, type ReactNode } from "react";
@@ -48,7 +48,7 @@ import { FittedCardText } from "./fitted-card-text";
 
 export type MatchCardProps = {
   fixture: FixtureSnapshot;
-  /** The viewer lacks subscriber access: an unfinished fixture's published forecast in an eligible family renders locked even
+  /** The viewer lacks premium access: an unfinished fixture's published forecast in an eligible family renders locked even
    * when delivered whole. A fixture without one shows the no-prediction reason every viewer gets. */
   gated?: boolean;
   /** Disable row-wide navigation inside a containing preview; explicit access actions remain available. */
@@ -623,7 +623,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const featured = retrospective?.pick ?? filtered ??
     (publishedMarket && !snapshotPick && !suppressPick && (fixture.status === "scheduled" || fixture.featuredDecisionFrozen) ? fixture.featuredPrediction : null);
   // Only a published eligible family is locked: forecast null means none was published, and the gated families already
-  // name the published markets, so a filter outside them shows the subscriber's no-prediction reason.
+  // name the published markets, so a filter outside them shows the user's no-prediction reason.
   const best = snapshotPick?.family ?? featured?.family ?? (suppressPick ? null : bestCardFamily(fixture, eligible, !publishedMarket));
   const guestFeed = phoneFeed && !offline && !signedIn;
   const gated = lockedPrediction || (snapshotPick ? requiresAccess || gatedForecast !== null
@@ -632,7 +632,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const detailHref = matchHref(fixture.fixtureId, analysisSlug, locale);
   const unlockReturnTo = accessReturnTo ?? detailHref;
   const unlockLabel = accessReturnTo ? "paywall.unlockSlip" : "paywall.unlockPredictions";
-  const targetHref = gated ? subscriberHref(signedIn, unlockReturnTo) : detailHref;
+  const targetHref = gated ? subscriptionHref(signedIn, unlockReturnTo) : detailHref;
   const shownFamily = best ?? eligible[0]!;
   const coreFamily = shownFamily === "team-goals" ? "total-goals" : shownFamily;
   const publicChance = gatedForecast?.probabilities.find((entry) => entry.family === shownFamily)?.probability;
@@ -733,7 +733,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     data-pick-absence={noForecast ? "no-forecast" : "no-qualifying-pick"} title={absenceTitle}>
     <CircleMinusIcon /><VisuallyHidden>{absenceTitle}</VisuallyHidden>
   </NoRecommendedPick> : null;
-  const pickState = gated ? "subscriber" : !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
+  const pickState = gated ? "locked" : !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
   if (desktop) {
     const marketDescription = offline ? "Predictions are unavailable in the saved view."
       : gated ? messages.text("paywall.card")
@@ -808,8 +808,8 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       {offline ? <PredictionCell prediction={null} price={null} reason="Predictions are unavailable in the saved view." locale={locale}>
         <PickShort $family={coreFamily} $available={false} data-ledger-field="prediction"><span data-pick-value="">Unavailable offline</span></PickShort>
         <span data-match-metrics><Odds data-ledger-field="odds" data-stack-label={stackOddsCaption} aria-hidden="true">—</Odds><Probability data-ledger-field="probability" data-stack-label={stackProbabilityCaption} aria-hidden="true"><Percent>—</Percent></Probability></span>
-      </PredictionCell> : gated ? <><GatedPick data-ledger-field="prediction"><SubscriberIcon />
-        <span data-subscriber-notice>{messages.text(unlockLabel)}</span>
+      </PredictionCell> : gated ? <><GatedPick data-ledger-field="prediction"><StarIcon />
+        <span data-premium-notice>{messages.text(unlockLabel)}</span>
       </GatedPick>
         <span data-match-metrics><Odds data-ledger-field="odds" aria-hidden="true">—</Odds>
         <Probability data-ledger-field="probability" data-stack-label={stackProbabilityCaption} aria-label={messages.text("details.probability")}><Percent data-public-probability>{publicChanceLabel}</Percent></Probability></span>

@@ -243,7 +243,7 @@ administrator phone and password. The launcher reads `GOAL_HINT_ADMIN_PHONES` an
 `GOAL_HINT_ADMIN_PASSWORD` from `.env.development` and accepts process overrides.
 A valid configured administrator is provisioned in the isolated
 demo database through normal login; the original database is not connected.
-Startup does not create synthetic subscriber or financial examples. Analytics includes 61
+Startup does not create synthetic user or financial examples. Analytics includes 61
 days of diverse synthetic visits, devices, locations, sources and conversions.
 These application records are separate from the unchanged provider payloads.
 Restarts preserve your existing account records, package settings and edits.

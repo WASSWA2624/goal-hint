@@ -30,9 +30,9 @@ export const samples: readonly BestSlipView[] = dayCounts.flatMap((count, dayInd
   });
 });
 
-export function browseSamples(query: BestSlipsQuery, viewer: ReviewViewer = "subscriber"): BestSlipsResult {
+export function browseSamples(query: BestSlipsQuery, viewer: ReviewViewer = "user"): BestSlipsResult {
   const dates = resolveBestSlipsDates(query, reviewDay);
-  const entitled = viewer === "subscriber";
+  const entitled = viewer === "user";
   const cohort = samples.filter((sample) => (entitled || sample.completed)
     && (!dates.from || sample.publicationDay! >= dates.from && sample.publicationDay! <= dates.to!));
   const filtered = cohort.filter((sample) => query.status === "all" || (query.status === "cancelled" ? sample.status === "cancelled"

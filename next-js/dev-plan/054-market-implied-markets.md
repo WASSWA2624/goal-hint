@@ -10,7 +10,7 @@
 
 For each non-goal bet in `/odds/bets`, convert stored prices into de-margined implied probabilities with a documented method, labelled "market-implied" and never mixed with AI groups. Add settlement from stored fixture statistics and events (corners, cards, scorers), refusing settlement when the statistic is missing. Report performance separately from AI markets.
 
-New families join `publicPolicy.markets` and the generalized family-total invariant from 053 (and, after 061, the gated forecast's `families` list in policy order); add no fixed family count. Market-implied probabilities and their prices are subscriber-only for unfinished fixtures, like every other probability (OP-36). Per-market performance stays aggregate-only: it never lists picks or probabilities of unfinished fixtures.
+New families join `publicPolicy.markets` and the generalized family-total invariant from 053 (and, after 061, the gated forecast's `families` list in policy order); add no fixed family count. Market-implied probabilities and their prices are premium-only for unfinished fixtures, like every other probability (OP-36). Per-market performance stays aggregate-only: it never lists picks or probabilities of unfinished fixtures.
 
 ## Acceptance checks
 

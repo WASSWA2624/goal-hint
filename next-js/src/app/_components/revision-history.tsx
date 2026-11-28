@@ -9,7 +9,7 @@ import { Disclosure } from "@/components/ui/disclosure";
 import { ButtonLink, TextLink } from "@/components/ui/controls";
 import { BodyText, Inline, MutedText, SectionHeading, Stack, Surface } from "@/components/ui/layout";
 import { DetailTime, HistorySnapshot } from "./match-detail-content";
-import { SubscriberNotice } from "@/components/members/subscriber-notice";
+import { PremiumNotice } from "@/components/members/premium-notice";
 import { MatchSummaryLink } from "@/components/match/details/match-summary-link";
 
 type Cycle = NonNullable<MatchDetailResponse["selectedCycle"]>;
@@ -35,7 +35,7 @@ export function RevisionHistory({ current, result, query, locale = "en", open = 
 }) {
   const messages = createMessages(locale), parameters = new URLSearchParams(query);
   const data = result.data ?? current;
-  if ("gated" in data.history) return <div id="revision-history"><SubscriberNotice locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} /></div>;
+  if ("gated" in data.history) return <div id="revision-history"><PremiumNotice locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} /></div>;
   const { revisions, cycles } = data.history;
   const selected = result.data && (parameters.has("revision") || parameters.has("cycle")) ? result.data : null;
   const nextRevisions = historyNextHref(data, revisions.next), nextCycles = historyNextHref(data, cycles.next);

@@ -5,7 +5,7 @@ import { createAccessCodes } from "../src/server/members/access-codes.ts";
 import { createAutoRenew } from "../src/server/members/auto-renew.ts";
 import { createMembersPurge } from "../src/server/members/purge.ts";
 import { createPayments } from "../src/server/members/payments.ts";
-import { createSubscribers } from "../src/server/admin/subscribers.ts";
+import { createUsers } from "../src/server/admin/users.ts";
 import { createAuthenticatedTestSessions as createMemberSessions } from "./helpers/member-fixtures.mjs";
 import { paidDatabase } from "./helpers/paid-database.mjs";
 import { jpeg } from "./helpers/payment-fixtures.mjs";
@@ -22,7 +22,7 @@ test("account credit on restricted real MySQL", { timeout: 240000 }, async (t) =
   const now = () => clock, renewals = [];
   const notifications = { ...silentPaymentNotifications, async renewed(renewal) { renewals.push(renewal); return "sent"; } };
   const codes = createAccessCodes({ database: db, config, now, notifications }), sessions = createMemberSessions({ database: db, config, now });
-  const payments = createPayments({ database: db, config, now }), subscribers = createSubscribers(db, now, config);
+  const payments = createPayments({ database: db, config, now }), users = createUsers(db, now, config);
   const daily = randomUUID(), weekly = randomUUID();
   await db.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "on", mtnEnabled: true, mtnNumber: "256700000901", mtnName: "TEST", airtelEnabled: true, airtelNumber: "256700000902",
     airtelName: "TEST AIRTEL", updatedAt: new Date(clock), updatedBy: "test" } }));
@@ -156,7 +156,7 @@ test("account credit on restricted real MySQL", { timeout: 240000 }, async (t) =
     assert.equal(moved.creditUgx, 7000); assert.equal(moved.autoRenew, true); assert.equal(moved.autoRenewPlanId, daily);
     assert.equal(await balance(who.accountId), 0);
     assert.deepEqual((await ledger(moved.id)).map(e => [e.kind, e.amountUgx]), [["transfer", 7000]]);
-    assert.equal((await subscribers.action(moved.id, "erase", undefined, "owner")).status, "saved");
+    assert.equal((await users.action(moved.id, "erase", undefined, "owner")).status, "saved");
     const erased = await db.query(tx => tx.memberAccount.findUniqueOrThrow({ where: { id: moved.id } }));
     assert.equal(erased.creditUgx, 0); assert.equal(erased.autoRenew, false);
     assert.equal((await ledger(moved.id)).at(-1).note, "Forfeited when the account was erased");
@@ -197,7 +197,7 @@ test("account credit on restricted real MySQL", { timeout: 240000 }, async (t) =
     assert.deepEqual([await balance(unspent.accountId), await balance(hopAccount.id), await balance(lastAccount.id)], [0, 0, 0]);
     // Forfeited at erasure: nothing left to owe.
     const gone = await member(), { row: forfeited } = await topUp(gone, 3000);
-    assert.equal((await subscribers.action(gone.accountId, "erase", undefined, "owner")).status, "saved");
+    assert.equal((await users.action(gone.accountId, "erase", undefined, "owner")).status, "saved");
     assert.equal((await codes.reversePayment(forfeited.id, "network-reversal", "owner")).status, "saved");
     assert.equal(await balance(gone.accountId), 0);
     assert.ok(!(await kinds(gone.accountId)).some(([kind]) => kind === "reversal"));
@@ -258,14 +258,14 @@ test("account credit on restricted real MySQL", { timeout: 240000 }, async (t) =
     assert.deepEqual([await balance(who.accountId), await balance(middleAccount.id), await balance(lastAccount.id), await balance(againAccount.id)], [0, 0, 0, 1000],
       "the 6,000 is taken back where it went; the later 1,000 that moved elsewhere is untouched");
     // Move history is what traces credit, so an account in it can be erased but not deleted, and the rows never change.
-    const refused = await subscribers.action(middleAccount.id, "delete", undefined, "owner");
+    const refused = await users.action(middleAccount.id, "delete", undefined, "owner");
     assert.equal(refused.status, "refused"); assert.match(refused.message, /Erase/u);
     await assert.rejects(root.query("DELETE FROM MemberAccount WHERE id = ?", [middleAccount.id]), /foreign key/iu);
     await assert.rejects(root.query("DELETE FROM AccountMove WHERE fromAccountId = ?", [who.accountId]), /append-only/u);
     await assert.rejects(root.query("UPDATE AccountMove SET toAccountId = ? WHERE fromAccountId = ?", [who.accountId, middleAccount.id]), /append-only/u);
     await assert.rejects(db.query(tx => tx.accountMove.deleteMany({ where: { fromAccountId: who.accountId } })), "the application role cannot delete moves");
-    assert.equal((await subscribers.action(middleAccount.id, "erase", undefined, "owner")).status, "saved");
-    const kept = await subscribers.action(middleAccount.id, "delete", undefined, "owner");
+    assert.equal((await users.action(middleAccount.id, "erase", undefined, "owner")).status, "saved");
+    const kept = await users.action(middleAccount.id, "delete", undefined, "owner");
     assert.equal(kept.status, "refused"); assert.match(kept.message, /accounting/u); assert.doesNotMatch(kept.message, /Erase/u);
     // A request key names one plan: reusing it for another plan never returns the first purchase as if it were the second.
     const buyer = await member(); await topUp(buyer, 6000);
@@ -339,7 +339,7 @@ test("account credit on restricted real MySQL", { timeout: 240000 }, async (t) =
       VALUES (?, ?, 2, 'topup', 1000, 3000, 'admin', NOW(3))`, [randomUUID(), who.accountId]), /links exactly/u);
     await assert.rejects(root.query(`INSERT INTO WalletEntry (id, accountId, entryNumber, kind, amountUgx, balanceAfter, paymentSubmissionId, actor, createdAt)
       VALUES (?, ?, 2, 'topup', 1000, 3000, ?, 'member', NOW(3))`, [randomUUID(), who.accountId, row.id]), /check/iu, "only the owner adds credit");
-    assert.equal((await subscribers.action(who.accountId, "delete", undefined, "owner")).status, "saved");
+    assert.equal((await users.action(who.accountId, "delete", undefined, "owner")).status, "saved");
     assert.equal((await ledger(who.accountId)).length, 0);
     assert.equal(await db.query(tx => tx.paymentSubmission.count({ where: { id: row.id } })), 0);
   });

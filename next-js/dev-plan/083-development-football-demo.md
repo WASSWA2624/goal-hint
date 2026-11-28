@@ -30,7 +30,7 @@ with at least 500 distinct fixtures per day.
   exact raw bookmaker prices, Best Slips, saved history and a real member save.
   A separate clock test passed scheduled-to-live transitions, source provenance,
   version changes and protection against delayed requests rewinding state.
-- Owner acceptance passed overview, all payment tabs, subscriber/credit/access
+- Owner acceptance passed overview, all payment tabs, user/credit/access
   history, reset requests, analytics conversions, administrator authentication
   and repeat-seed preservation of financial records and visit history.
 - Pinned Node 24.18.1: the broad 2,225-test run passed 2,220 tests, skipped one,

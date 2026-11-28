@@ -8,7 +8,7 @@ import { createBestSlipsHandler } from '../src/server/slips/best-slips-http.ts';
 const today = parseReportingDate('2026-10-30'), yesterday = addReportingDays(today, -1), tomorrow = addReportingDays(today, 1);
 const at = Date.parse(`${today}T12:00:00+03:00`);
 const guest = { tier: 'free', signedIn: false, mode: 'off' };
-const expired = { ...guest, signedIn: true }, subscriber = { ...expired, tier: 'full' };
+const expired = { ...guest, signedIn: true }, user = { ...expired, tier: 'full' };
 function publication(day) {
   const publishedAt = Date.parse(`${day}T06:15:00+03:00`);
   const slip = { id: `private-${day}`, selections: [{ fixtureId: `public-fixture-${day}`, kickoffAt: at,
@@ -37,11 +37,11 @@ test('canonical links read the complete original day, including higher bands and
   assert.equal(view.slips[1].slip, undefined);
 });
 
-test('all viewers start today with public previews and subscriber predictions', async () => {
+test('all viewers start today with public previews and predictions for users with access', async () => {
   const dates = [];
   const read = createPublishedBestSlipsService({ providerOdds: true, now: () => at,
     read: async (day) => { dates.push(day); return { ...result([publication(day)]), day }; } });
-  for (const viewer of [guest, expired, subscriber]) {
+  for (const viewer of [guest, expired, user]) {
     const data = await read(viewer), entitled = viewer.tier === 'full';
     assert.equal(data.day, today); assert.equal(data.entitled, entitled);
     assert.equal(data.slips[0].publicationDay, today);
@@ -65,13 +65,13 @@ test('completion controls prediction release independently of date or an early s
     assert.equal(data.slips.at(-1).publicationDay, today);
     assert.equal(data.slips.at(-1).outcome, 'won');
   }
-  const full = gateBestSlips(input, subscriber);
+  const full = gateBestSlips(input, user);
   assert.equal(full.entitled, true); assert.equal(full.slips.length, input.slips.length);
 });
 
 test('API expiry re-reads a custom range and returns safe previews with unchanged public totals', async () => {
   let checks = 0;
-  const handler = createBestSlipsHandler({ now: () => at, access: async () => checks++ === 0 ? subscriber : expired,
+  const handler = createBestSlipsHandler({ now: () => at, access: async () => checks++ === 0 ? user : expired,
     browse: async (_viewer, query) => ({ ...result([publication(yesterday), publication(today), publication(tomorrow)]), entitled: true,
       browse: { query, total: 3, pageSize: 20, hasMore: false, nextCursor: null, from: yesterday, to: tomorrow } }) });
   const response = await handler(new Request(`https://goalhint.com/api/best-slips?period=custom&from=${yesterday}&to=${tomorrow}`));
@@ -84,7 +84,7 @@ test('API expiry re-reads a custom range and returns safe previews with unchange
 });
 
 test('API filters without a date use the viewer default, and unavailable defaults preserve access state without data', async () => {
-  for (const viewer of [guest, expired, subscriber]) {
+  for (const viewer of [guest, expired, user]) {
     let received;
     const handler = createBestSlipsHandler({ now: () => at, access: async () => viewer,
       browse: async (_viewer, query) => { received = query; return result([]); } });
@@ -99,7 +99,7 @@ test('API filters without a date use the viewer default, and unavailable default
 
 test('API re-reads an implicit default after a subscription change so date, entitlement and selections agree', async () => {
   for (const suffix of ['', '?status=won']) {
-    for (const [initial, final] of [[subscriber, expired], [guest, subscriber]]) {
+    for (const [initial, final] of [[user, expired], [guest, user]]) {
       let checks = 0;
       const days = [];
       const read = createPublishedBestSlipsService({ providerOdds: true, now: () => at,
@@ -120,7 +120,7 @@ test('API re-reads an implicit default after a subscription change so date, enti
 
 test('a second access change during the fallback read returns no slip data', async () => {
   let checks = 0;
-  const handler = createBestSlipsHandler({ now: () => at, access: async () => [subscriber, expired, subscriber][checks++],
+  const handler = createBestSlipsHandler({ now: () => at, access: async () => [user, expired, user][checks++],
     browse: async (_viewer, query) => ({ ...result([publication(yesterday)]), browse: {
       query, total: 1, pageSize: 50, hasMore: false, nextCursor: null, from: yesterday, to: yesterday,
     } }) });
@@ -145,5 +145,5 @@ test('mixed early-lost slips release only proved complete original selections an
     assert.deepEqual(gateBestSlips(safe, viewer), safe, 'the page and HTTP final projection is idempotent');
   }
   assert.equal(JSON.stringify(input), raw);
-  assert.deepEqual(gateBestSlips(input, subscriber).slips[0].slip, view.slip);
+  assert.deepEqual(gateBestSlips(input, user).slips[0].slip, view.slip);
 });

@@ -29,7 +29,7 @@ export function failure(cause: unknown): { error: RefreshError } {
 export const publicRefreshApi = createApi({ reducerPath: "publicRefresh", baseQuery: fakeBaseQuery<RefreshError>(),
   keepUnusedDataFor: 5, endpoints: () => ({}) });
 
-/** Unsubscribe this consumer without aborting another subscriber's shared request. */
+/** Unsubscribe this consumer without aborting a request another consumer is using. */
 export async function consumeRefresh<T>(request: { unwrap(): Promise<T>; unsubscribe(): void }, signal: AbortSignal): Promise<T> {
   let canceled: () => void = () => {};
   try {

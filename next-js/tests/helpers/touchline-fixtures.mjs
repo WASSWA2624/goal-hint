@@ -7,7 +7,7 @@ import { storedMatchDetailResponseSchema } from "../../src/domain/match-detail.t
 import { sampleMatchObservations } from "./match-event-fixtures.mjs";
 import { sampleCompetitionViews } from "./competition-fixtures.mjs";
 
-const sample = fixtureForReview(new URLSearchParams({ viewer: "subscriber" }));
+const sample = fixtureForReview(new URLSearchParams({ viewer: "user" }));
 const accepted = validateMarketSnapshot(Object.fromEntries(Object.entries({
   "match-result": { "home-win": .46, draw: .27, "away-win": .27 },
   "total-goals": { "over-2.5": .68, "under-2.5": .32 }, "both-teams-to-score": { yes: .74, no: .26 },

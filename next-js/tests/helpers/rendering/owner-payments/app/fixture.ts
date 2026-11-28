@@ -8,7 +8,7 @@ import type { AnalyticsServices } from "@/server/analytics/analytics-http";
 import type { MemberPasswordResetRequest } from "@/server/generated/prisma/client";
 import { memberTokenHash } from "@/server/members/member-sessions";
 import { fixturePaymentProof } from "./payment-proof";
-import { fixtureSubscriberDirectory, fixtureSubscriberDirectoryCount, type SubscriberDirectoryFixtureQuery } from "./subscriber-directory-query";
+import { fixtureUserDirectory, fixtureUserDirectoryCount, type UserDirectoryFixtureQuery } from "./user-directory-query";
 
 export const fixtureAdminToken = "z".repeat(43), fixtureAdminPassword = "Synthetic owner fixture password", fixtureAdminPhone = "256700000991";
 const fixtureKey = (purpose: string, value: string) => createHmac("sha256", "synthetic-owner-fixture-key").update(`${purpose}\0${value}`).digest("hex");
@@ -45,7 +45,7 @@ type FixtureNotice = { id: string; accountId: string; targetType: string; decisi
 export type FixtureState = { accounts: FixtureAccount[]; codes: FixtureCode[]; devices: FixtureDevice[];
   plans: FixturePlan[]; payments: FixturePayment[]; audits: FixtureAudit[]; counter: number; paymentsExpanded?: boolean; paymentsQueueExpanded?: boolean;
   passwordRequests: MemberPasswordResetRequest[]; movedAccountIds?: string[]; notices?: FixtureNotice[];
-  subscriberFailure?: "list" | "detail" | null };
+  userFailure?: "list" | "detail" | null };
 const fixtureGlobal = globalThis as typeof globalThis & { goalHintOwnerFixture?: FixtureState; goalHintAnalytics?: Promise<AnalyticsServices>;
   goalHintOwnerServices?: Map<boolean, AnalyticsServices> };
 
@@ -107,7 +107,7 @@ export function loadNoticesFixture() {
   state.notices = [{ id: "00000000-0000-4000-8000-000000000500", accountId, targetType: "payment", decision: "rejected", targetId: paymentId, status: "failed",
     attemptId: "00000000-0000-4000-8000-000000000501", createdAt: new Date("2026-10-23T09:00:00Z"), startedAt: attempted, finishedAt: attempted }];
 }
-/** Opt-in review data leaves the original subscriber/audit acceptance baseline unchanged. */
+/** Opt-in review data leaves the original user/audit acceptance baseline unchanged. */
 export function loadPaymentsFixture() {
   const state = fixtureState();
   if (state.paymentsExpanded) return;
@@ -192,7 +192,7 @@ export function recordFixtureAudit(action: string, id: string, targetType = "mem
   const state = fixtureState();state.audits.push({ id: BigInt(++state.counter), at: new Date(), actor: "synthetic-owner",
     action, accountId: id, targetType, targetId, details: {} });
 }
-export function searchSubscribers(value: string): readonly OwnerAccount[] {
+export function searchUsers(value: string): readonly OwnerAccount[] {
   const phone = normalizePhone(value);
   return fixtureState().accounts.filter(row => !value || phone !== null && row.phone === phone)
     .sort((a, b) => +b.lastSignInAt - +a.lastSignInAt).map(row => ({ id: row.id, phone: row.phone,
@@ -209,7 +209,7 @@ export function fixtureCodes(search = "", status = "all"): readonly OwnerCode[] 
 /** Redacted fixture diagnostics for harness assertions: no tokens, password hashes or temporary passwords exist here. */
 export function fixtureSnapshot() {
   const state = fixtureState();
-  return { accounts: state.accounts.map(row => ({ ...searchSubscribers("").find(account => account.id === row.id)!,
+  return { accounts: state.accounts.map(row => ({ ...searchUsers("").find(account => account.id === row.id)!,
     ownerNote: row.ownerNote, blockedReason: row.blockedReason,
     devices: state.devices.filter(device => device.accountId === row.id && device.unlocked).length })),
     codes: fixtureCodes(), payments: state.payments.map(row => ({ id: row.id, accountId: row.accountId, payerPhone: row.payerPhone, status: row.status })),
@@ -275,7 +275,7 @@ function planRows(rows: FixturePlan[], query: PlanQuery = {}) {
       : (!where.id.in || where.id.in.includes(row.id)) && row.id !== where.id.not)))
     .sort((a, b) => a.sortOrder - b.sortOrder || +a.createdAt - +b.createdAt || a.id.localeCompare(b.id));
 }
-function createClient(emptySubscribers: boolean) {
+function createClient(emptyUsers: boolean) {
   const state = fixtureState(), phoneFor = (id: string) => state.accounts.find(row => row.id === id)?.phone ?? null;
   const recoveryAccount = (id: string) => {
     const row = state.accounts.find(item => item.id === id);
@@ -352,19 +352,19 @@ function createClient(emptySubscribers: boolean) {
     paymentReviewEvent: { findMany: async () => [] },
     // No fixture account holds credit; the wallet columns read as a new account's.
     memberAccount: { findUnique: async (query: { where: { id: string }; select?: { ownerNote?: boolean } }) => {
-      if (state.subscriberFailure === "detail" && query.select?.ownerNote) throw new Error("Synthetic subscriber detail failure.");
+      if (state.userFailure === "detail" && query.select?.ownerNote) throw new Error("Synthetic user detail failure.");
       const row = recoveryAccount(query.where.id);
       return row ? { creditUgx: 0, autoRenew: false, autoRenewPlan: null, ...row } : null;
     },
       aggregate: async () => ({ _sum: { creditUgx: null } }),
-      count: async (query: SubscriberDirectoryFixtureQuery = {}) => {
-        if (state.subscriberFailure === "list") throw new Error("Synthetic subscriber list failure.");
-        return emptySubscribers ? 0 : fixtureSubscriberDirectoryCount(state, query.where);
+      count: async (query: UserDirectoryFixtureQuery = {}) => {
+        if (state.userFailure === "list") throw new Error("Synthetic user list failure.");
+        return emptyUsers ? 0 : fixtureUserDirectoryCount(state, query.where);
       },
-      findMany: async (query: AccountQuery | SubscriberDirectoryFixtureQuery = {}) => {
-        if ("skip" in query && typeof query.take === "number") return emptySubscribers ? [] : fixtureSubscriberDirectory(state, query);
+      findMany: async (query: AccountQuery | UserDirectoryFixtureQuery = {}) => {
+        if ("skip" in query && typeof query.take === "number") return emptyUsers ? [] : fixtureUserDirectory(state, query);
         const where = query.where as AccountQuery["where"];
-        const rows = emptySubscribers ? [] : [...state.accounts].sort((a, b) => +b.lastSignInAt - +a.lastSignInAt);
+        const rows = emptyUsers ? [] : [...state.accounts].sort((a, b) => +b.lastSignInAt - +a.lastSignInAt);
         if (typeof where?.phone === "string") return rows.filter(row => row.phone === where.phone);
         const phones = where?.phone?.in;
         return phones ? rows.filter(row => row.phone !== null && phones.includes(row.phone)) : rows;
@@ -394,23 +394,23 @@ function createClient(emptySubscribers: boolean) {
     subscriptionSettings: { findUnique: async () => settings, findUniqueOrThrow: async () => settings },
   };
 }
-export function seed({ emptySubscribers = false }: { emptySubscribers?: boolean } = {}) {
+export function seed({ emptyUsers = false }: { emptyUsers?: boolean } = {}) {
   const registered = fixtureGlobal.goalHintOwnerServices ??= new Map();
-  let services = registered.get(emptySubscribers);
+  let services = registered.get(emptyUsers);
   if (!services) {
     let queue = Promise.resolve<unknown>(undefined);
     services = { config: { production: false, key: fixtureKey, cookies: { session: "synthetic-owner", exclude: "synthetic-owner-exclude", secure: false } },
-      database: { query: async (run: (client: unknown) => unknown) => run(createClient(emptySubscribers)),
+      database: { query: async (run: (client: unknown) => unknown) => run(createClient(emptyUsers)),
         transaction(run: (client: unknown) => unknown) {
           const result = queue.then(async () => {
             const before = structuredClone(fixtureState());
-            try { return await run(createClient(emptySubscribers)); }
+            try { return await run(createClient(emptyUsers)); }
             catch (error) { fixtureGlobal.goalHintOwnerFixture = before;throw error; }
           });
           queue = result.catch(() => undefined);return result;
         } },
       auth: null } as unknown as AnalyticsServices;
-    registered.set(emptySubscribers, services);
+    registered.set(emptyUsers, services);
   }
   fixtureGlobal.goalHintAnalytics = Promise.resolve(services);
   return services;

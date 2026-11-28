@@ -4,7 +4,7 @@ import { isMarketSelection, marketSelections, marketSources, type AcceptedMarket
 import { publicPolicy } from "./public-policy.ts";
 import { forecastConfidence, type RecommendationDecision } from "./recommendation.ts";
 
-/** Subscriber forecast projection: private bookmaker, price, receipt and eligibility audits never leave the server. */
+/** Premium forecast projection: private bookmaker, price, receipt and eligibility audits never leave the server. */
 export const publicRecommendationSchema = z.strictObject({ status: z.enum(["selected", "no-qualified-recommendation"]),
   selected: z.strictObject({ family: z.enum(publicPolicy.markets), selection: z.enum(Object.values(marketSelections).flat()),
     probability: z.number().gt(0).lt(1), source: z.enum(marketSources),

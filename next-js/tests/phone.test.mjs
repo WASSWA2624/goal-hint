@@ -6,7 +6,7 @@ import {
 } from "../src/domain/phone.ts";
 import { phoneInputIssue, validMobilePhone } from "../src/domain/phone-mobile.ts";
 
-// Every number here is invented; none belongs to the owner or a subscriber.
+// Every number here is invented; none belongs to the owner or a user.
 const ugandan = "256772123456";
 
 test("phone input validation agrees with normalization, distinguishes empty optional fields, and bounds pastes", () => {

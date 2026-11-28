@@ -79,8 +79,8 @@ export const Card = styled.section`
   ${desktopContentPadding(true)}
 `;
 
-/** A subscriber drawer keeps the established row height and rule, with one plain line. */
-export const SubscriberRow = styled(Card)`min-block-size: var(--gh-size-11_5); align-content: center;`;
+/** A premium drawer keeps the established row height and rule, with one plain line. */
+export const PremiumRow = styled(Card)`min-block-size: var(--gh-size-11_5); align-content: center;`;
 
 const HeadRow = styled.div`
   display: flex;

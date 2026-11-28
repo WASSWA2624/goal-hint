@@ -5,7 +5,7 @@
 ## Scope
 
 Apply the approved desktop list/detail workspace to Payments, Codes,
-Subscribers, Password requests, Plans, and Audit through reusable shared
+Users, Password requests, Plans, and Audit through reusable shared
 components. Preserve Payments' approved presentation, real business actions,
 mobile workflows, private access, and one-time password safeguards.
 
@@ -16,7 +16,7 @@ mobile workflows, private access, and one-time password safeguards.
   `record-workspace.tsx`; migrate Payments to these same components.
 - Move access records and plan editing into selectable desktop list/detail
   workspaces, including create modes and real form-associated footer actions.
-- Align the subscriber directory and account tabs with the same workspace;
+- Align the user directory and account tabs with the same workspace;
   show only the current account action's relevant footer controls.
 - Provide a selectable desktop password-request queue, retaining the original
   mobile panels and temporary passwords exclusively in parent component memory.
@@ -34,9 +34,9 @@ mobile workflows, private access, and one-time password safeguards.
 - Full application TypeScript check and targeted ESLint passed.
 - 62 targeted tests passed: record navigation/classification, admin routes and
   services, payment review/order/queues, sidebar preferences, Audit privacy, and
-  subscriber deletion guards.
+  user deletion guards.
 - A fresh production owner fixture build and the complete owner acceptance
-  suite passed, including private routes, payment decisions, subscriber and
+  suite passed, including private routes, payment decisions, user and
   password operations, Settings, Audit, and stateful Plans mutations/guards.
 - Browser checks passed for all six desktop screens at 1024×768, 1280×800,
   1440×900 and 1920×1080, in both themes with expanded/collapsed sidebars
@@ -44,14 +44,14 @@ mobile workflows, private access, and one-time password safeguards.
   page errors were found.
 - All six mobile screens passed checks at 390×844 with no horizontal overflow
   or duplicate IDs. Existing queue/back navigation, Codes grant drawer and inline
-  actions, subscriber directory/back links, per-request password forms, inline
+  actions, user directory/back links, per-request password forms, inline
   plan editing, and native Audit disclosures remained usable.
 - Browser interactions verified independent list/details scrolling and fixed
   actions, payment approval and filtering, Codes grant/extend/revoke, Plans
-  create/edit/cancel/reorder/activation, subscriber tabs and note submission,
+  create/edit/cancel/reorder/activation, user tabs and note submission,
   password confirmation/reveal/Done across a viewport change, and Audit
   selection/search/CSV export. Mutations used synthetic fixture data only.
-- Review fixes were verified against the final production fixture: subscriber
+- Review fixes were verified against the final production fixture: user
   account/removal/credit contexts are mutually exclusive, mobile add-cancel
   returns focus to a visible back link, and sidebar keyboard/pointer resizing
   and persisted collapse remain functional.

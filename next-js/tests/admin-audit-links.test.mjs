@@ -6,7 +6,7 @@ const accountId = "11111111-1111-4111-8111-111111111111";
 const targetId = "22222222-2222-4222-8222-222222222222";
 const event = (overrides = {}) => ({ id: "1", at: "2026-10-29T09:00:00Z", actor: "owner", action: "payment_approved", accountId, targetType: "payment", targetId, ...overrides });
 
-test("payment events open the exact report before considering its subscriber", () => {
+test("payment events open the exact report before considering its user", () => {
   assert.deepEqual(auditEventLink(event()), { href: `/admin/payments?paymentId=${targetId}#${targetId}`, label: "View payment" });
   assert.deepEqual(auditEventLink(event({ accountId: null })), auditEventLink(event()));
 });
@@ -18,11 +18,11 @@ test("plan records open that plan, while deletion and reorder open the plan dire
   assert.equal(auditEventLink(event({ targetType: "plan", targetId: "missing", action: "plan_updated" })), null);
 });
 
-test("account and access events select their subscriber, including historical member targets", () => {
+test("account and access events select their user, including historical member targets", () => {
   for (const targetType of ["member", "member-session", "access-code"]) {
-    assert.deepEqual(auditEventLink(event({ targetType })), { href: `/admin/subscribers?accountId=${accountId}`, label: "View subscriber" });
+    assert.deepEqual(auditEventLink(event({ targetType })), { href: `/admin/users?accountId=${accountId}`, label: "View user" });
   }
-  assert.deepEqual(auditEventLink(event({ accountId: null, targetType: "member" })), { href: `/admin/subscribers?accountId=${targetId}`, label: "View subscriber" });
+  assert.deepEqual(auditEventLink(event({ accountId: null, targetType: "member" })), { href: `/admin/users?accountId=${targetId}`, label: "View user" });
 });
 
 test("settings open settings and unsupported or invalid identifiers never become record links", () => {

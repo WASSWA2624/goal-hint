@@ -167,7 +167,7 @@ The early runtime, database and domain work exists to support the specification'
 | [053 Score-distribution markets](053-score-distribution-markets.md) | Every goal-based provider market derived from AI full-time and half-time score distributions. |
 | [054 Market-implied markets](054-market-implied-markets.md) | Corners, cards and other non-goal markets from de-margined odds, with settlement. |
 | [055 On-device picks, alerts and profile](055-on-device-picks.md) | My Picks, the notifications bell and on-device Profile preferences; the avatar is the account entry. |
-| [056 Leagues and tips pages](056-leagues-and-tips-pages.md) | League directory and daily top-picks sections, subscriber-only for unfinished fixtures. |
+| [056 Leagues and tips pages](056-leagues-and-tips-pages.md) | League directory and daily top-picks sections, premium-only for unfinished fixtures. |
 
 **Gate:** the owner-approved specification edits (version 1.8) precede behaviour changes. Templates fix layout only; theme tokens and real data supply branding and content. Prompts 052–054 stay within the API-Football budget in section 14; no market is shown before its settlement rule is tested. Version 1.9 paid access also applies: 053–054 keep the family-total invariant tied to `publicPolicy.markets`, and 055–056 depend on 061–062, so run them after those prompts.
 
@@ -183,7 +183,7 @@ The early runtime, database and domain work exists to support the specification'
 | [062 Gated UI, transitions and entry points](062-gated-ui-entry-points.md) | Designed gated card, verdict, drawers, filters, banner, account icons and tier-aware refresh. |
 | [063 Get access page and payment submissions](063-get-access-payments.md) | The single Get access page, SMS auto-fill, screenshot upload and payment reports. |
 | [064 Owner payments queue and codes](064-admin-payments-codes.md) | One-tap approval with automatic checks, the code ready panel and code management. |
-| [065 Overview, subscribers, audit and purge](065-admin-subscribers-audit.md) | Owner overview, subscriber tools, the audit page and the members purge. |
+| [065 Overview, users, audit and purge](065-admin-users-audit.md) | Owner overview, user tools, the audit page and the members purge. |
 | [066 Legal, help, policy copy and analytics](066-paywall-legal-copy.md) | Privacy, terms, help and contact copy, analytics goals and documentation. |
 | [067 Paid access launch readiness](067-paywall-launch-readiness.md) | Host checks, the switch-on checklist and read-only production checks. |
 

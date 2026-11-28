@@ -3,8 +3,8 @@
 ## Scope
 
 - Show total odds and whole-slip win probability in Best Slips headers for every
-  visitor while retaining subscriber access for matches and selections.
-- Replace the subscriber-only paragraph with one action: Log in to access for
+  visitor while retaining premium access for matches and selections.
+- Replace the premium-only paragraph with one action: Log in to access for
   signed-out visitors, Subscribe for members without access, or the matches for
   entitled members.
 - Preserve login/sign-up switching, safe return paths, collapsed summaries,

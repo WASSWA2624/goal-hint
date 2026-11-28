@@ -263,12 +263,12 @@
     ["Goals", "Total goals 2.5", ["Over", "Under"]],
     ["Btts", "Both teams score", ["Yes", "No"]]
   ];
-  const settings = { access: "Subscriber", phoneWidth: 340 };
+  const settings = { access: "User", phoneWidth: 340 };
   const states = concepts.map(() => ({ ...defaults }));
   const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   })[char]);
-  const actionLabel = () => ({ "Signed out": "Sign in", "No subscription": "Subscribe", Subscriber: "Build slips" })[settings.access];
+  const actionLabel = () => ({ "Signed out": "Sign in", "No subscription": "Subscribe", User: "Build slips" })[settings.access];
   const input = (key, label, value, options = "") =>
     '<input data-key="' + key + '" aria-label="' + escape(label) + '" value="' + escape(value) + '" ' + options + '>';
   const number = (key, label, state, min = "0.01", step = "0.01", placeholder = "Any") =>
@@ -449,7 +449,7 @@
       '<button type="button" class="sb-button" data-gallery="all" aria-pressed="false">Show all 10</button>' +
       '<span class="sb-gallery-status" data-gallery="status" aria-live="polite"></span></div>' +
       '<div class="sb-gallery-controls"><label class="sb-field"><span>Account state</span><select data-gallery="access">' +
-      ['Subscriber', 'Signed out', 'No subscription'].map((value) => '<option>' + value + '</option>').join("") +
+      ['User', 'Signed out', 'No subscription'].map((value) => '<option>' + value + '</option>').join("") +
       '</select></label><label class="sb-field"><span>Mobile width</span><select data-gallery="width">' +
       [320, 340, 360, 390, 430].map((value) => '<option value="' + value + '"' + (value === settings.phoneWidth ? ' selected' : '') + '>' + value + ' px</option>').join("") +
       '</select></label><label class="sb-field"><span>Appearance</span><select data-gallery="theme">' +
@@ -485,7 +485,7 @@
   function restore(saved) {
     const value = saved && saved.privateContent;
     if (!value) return;
-    if (["Signed out", "No subscription", "Subscriber"].includes(value.access)) settings.access = value.access;
+    if (["Signed out", "No subscription", "User"].includes(value.access)) settings.access = value.access;
     if (Number.isFinite(value.phoneWidth) && value.phoneWidth >= 320 && value.phoneWidth <= 430) settings.phoneWidth = value.phoneWidth;
     appearance();
   }
@@ -601,7 +601,7 @@
       root.querySelectorAll('[data-concept="' + index + '"] .sb-feedback').forEach((element) => { element.hidden = true; });
     }
     if (button.dataset.action === "build") {
-      if (settings.access !== "Subscriber") {
+      if (settings.access !== "User") {
         feedback(product, settings.access === "Signed out" ? "Preview: opens Sign in, with access to Sign up." : "Preview: opens subscription options.");
       } else {
         const error = validate(product, state);
@@ -623,7 +623,7 @@
   standaloneGallery();
   if (globalThis.Tweak) {
     const tweak = new Tweak({ container: root, onChange: () => { appearance(); save(); } });
-    tweak.addSelect(settings, "access", { label: "Account state", options: ["Subscriber", "Signed out", "No subscription"] });
+    tweak.addSelect(settings, "access", { label: "Account state", options: ["User", "Signed out", "No subscription"] });
     tweak.addSlider(settings, "phoneWidth", { label: "Mobile width", min: 320, max: 430, step: 10, unit: "px" });
   }
 })();

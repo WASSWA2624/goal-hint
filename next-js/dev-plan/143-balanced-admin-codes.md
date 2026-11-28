@@ -25,7 +25,7 @@ using the same reusable components and presentation as the approved sample.
   provider markup, unique identifiers, safe preview forms, and local artwork.
 - A fresh production owner build and the complete existing owner acceptance
   suite passed, including manual access grants, extensions, revocations,
-  subscriber operations, payment workflows, Plans, Settings, and Audit.
+  user operations, payment workflows, Plans, Settings, and Audit.
 - Browser checks passed for the live Codes workspace at 1024, 1280, and 1440px,
   with default, maximum, and collapsed sidebars in both themes (18 combinations).
   Fields stayed within the form, footers stayed visible, and no duplicate IDs,

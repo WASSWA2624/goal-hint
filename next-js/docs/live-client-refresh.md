@@ -7,7 +7,7 @@ feed reads; `detailApi` supplies match and section reads through the same anonym
 transport. Match pages use a cache-only store, without feed drafts or preferences.
 Their response validators load alongside the first request, preserving schema
 validation without adding a network waterfall. Both APIs use omitted credentials, no browser HTTP cache and a
-30-second deadline. RTK Query deduplicates simultaneous subscribers by canonical
+30-second deadline. RTK Query deduplicates simultaneous users by canonical
 endpoint/query identity. Canceling one consumer unsubscribes it without aborting
 another consumer's shared request. No forecast data is persisted in the browser.
 

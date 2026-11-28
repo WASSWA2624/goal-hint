@@ -7,6 +7,6 @@ import type { ReviewViewer } from "./viewer-modes";
 /** Same production page for the design gallery and the approved implementation preview. */
 export function SampleBestSlips({ viewer }: { viewer: ReviewViewer }) {
   return <PublicShell locale="en" today={reviewDay} current="best-slips" app compact>
-    <BestSlips locale="en" result={browseSamples(defaultBestSlipsQuery(viewer === "subscriber"), viewer)} signedIn={viewer !== "guest"} />
+    <BestSlips locale="en" result={browseSamples(defaultBestSlipsQuery(viewer === "user"), viewer)} signedIn={viewer !== "guest"} />
   </PublicShell>;
 }

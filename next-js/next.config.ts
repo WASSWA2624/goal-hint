@@ -64,6 +64,9 @@ const nextConfig: NextConfig = {
       { source: "/:path*", has: [{ type: "host", value: "www.goalhint.com" }],
         destination: "https://goalhint.com/:path*", permanent: true },
       { source: "/", destination: "/en/matches", permanent: true },
+      { source: "/admin/subscribers/:path*", destination: "/admin/users/:path*", permanent: true },
+      { source: "/api/admin/subscribers/:path*", destination: "/api/admin/users/:path*", permanent: true },
+      { source: "/admin-subscriber-designs", destination: "/admin-user-designs", permanent: true },
     ];
   },
   async rewrites() {

@@ -23,7 +23,7 @@ export const tabs = Object.freeze([
 ]);
 
 export const viewers = Object.freeze([
-  { id: "subscriber", name: "Subscriber" }, { id: "guest", name: "Visitor · signed out" },
+  { id: "user", name: "User" }, { id: "guest", name: "Visitor · signed out" },
   { id: "member", name: "Member · no subscription" }, { id: "referral", name: "Member · referral access" },
 ]);
 
@@ -36,6 +36,6 @@ export function reviewState(parameters) {
   const choose = (key, values, fallback) => values.some(item => item.id === parameters.get(key)) ? parameters.get(key) : fallback;
   return {
     variant: choose("variant", variants, "touchline"), tab: choose("tab", tabs, "stats"),
-    viewer: choose("viewer", viewers, "subscriber"), status: choose("status", statuses, "scheduled"),
+    viewer: choose("viewer", viewers, "user"), status: choose("status", statuses, "scheduled"),
   };
 }

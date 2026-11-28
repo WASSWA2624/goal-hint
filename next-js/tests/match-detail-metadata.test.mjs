@@ -19,12 +19,12 @@ test('search and social descriptions stay generic across full, gated, void and h
     }
   }
 });
-test('subscriber metadata line appears only in on mode for every fixture status', () => {
+test('user metadata line appears only in on mode for every fixture status', () => {
   const fixture = cardFixture({ status: 'scheduled', score: null }, 'ai', null);
-  assert.match(metadataFor(fixture, 'on').description, /Subscriber access/);
-  for (const mode of ['off', 'free']) assert.doesNotMatch(metadataFor(fixture, mode).description, /Subscriber access/);
+  assert.match(metadataFor(fixture, 'on').description, /Premium access/);
+  for (const mode of ['off', 'free']) assert.doesNotMatch(metadataFor(fixture, mode).description, /Premium access/);
   for (const status of ['finished-regulation', 'finished-extra-time', 'finished-penalties', 'canceled', 'awarded'])
-    assert.match(metadataFor({ ...fixture, status }, 'on').description, /Subscriber access/);
+    assert.match(metadataFor({ ...fixture, status }, 'on').description, /Premium access/);
 });
 test('undated, missing and failed records never borrow predictions or dates', () => {
   assert.equal(metadataFor(cardFixture({ kickoffAt: null })).description,

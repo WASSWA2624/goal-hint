@@ -11,7 +11,7 @@ import { applyFeedPageDefaults, getFeedToday, isFeedDatePreset, serializeFeedQue
 import { feedQueryHref } from "@/domain/feed-query";
 import { emptyFeedPerformanceReply, feedPerformanceApiHref, performanceFeedQuery, type FeedPerformanceSeed } from "@/domain/feed-performance-summary";
 import { synchronizeFeedStatusDates } from "@/domain/feed-controls";
-import { withoutSubscriberFeedOracle } from "@/domain/paywall";
+import { withoutPremiumFeedOracle } from "@/domain/paywall";
 import { emptyArchiveIsMissing } from "@/domain/feed-date-navigation";
 import { resolveViewerAccess } from "@/server/members/viewer-access";
 import { contentAccess } from "@/server/members/gated-reads";
@@ -72,7 +72,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeedList,
           .then((reply) => ({ href, reply }), () => ({ href, reply: null }));
       }
       result = await load(serializeFeedQuery(query, today).toString(), route.locale, at, providerOdds);
-      if (result.error === "subscription-required") redirect(feedQueryHref(withoutSubscriberFeedOracle(query), today));
+      if (result.error === "subscription-required") redirect(feedQueryHref(withoutPremiumFeedOracle(query), today));
       if (includeSummary && result.data) {
         const reply = emptyFeedPerformanceReply(query, result.data);
         if (reply) summary = Promise.resolve({ href: feedPerformanceApiHref(query, today), reply });

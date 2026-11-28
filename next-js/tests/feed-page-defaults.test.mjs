@@ -114,7 +114,7 @@ test("Reset restores today's forecasts without a recommendation filter", () => {
   assert.equal(resetFeedFilters(original).picks, "all");
   const resetCompleted = resetFeedFilters({ ...original, status: "finished" });
   assert.equal(resetCompleted.status, "all");
-  assert.equal(resetCompleted.picks, "all", "Reset returns to All, where guests cannot request subscriber predictions");
+  assert.equal(resetCompleted.picks, "all", "Reset returns to All, where guests cannot request premium predictions");
   assert.equal(resetFeedFilters(original).search, "");
   assert.equal(resetFeedFilters(original).page, 1);
   const changed = page("when=next-7-days&status=scheduled&picks=all&q=Club&league=one&country=England&market=total-goals&prob=50-90&sort=kickoff&dir=asc&timeFrom=12:00&timeTo=18:00&tz=Africa%2FKampala&page=3&pageSize=40");

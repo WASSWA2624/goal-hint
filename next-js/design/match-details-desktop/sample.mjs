@@ -69,9 +69,9 @@ const forecasts = {
 
 export function fixtureForReview(parameters = new URLSearchParams()) {
   const requested = new URLSearchParams(parameters);
-  if (!["subscriber", "guest", "member", "referral"].includes(requested.get("viewer"))) requested.set("viewer", "guest");
+  if (!["user", "guest", "member", "referral"].includes(requested.get("viewer"))) requested.set("viewer", "guest");
   const { viewer, status } = reviewState(requested);
-  const completed = isCompletedFixtureStatus(status), entitled = viewer === "subscriber" || viewer === "referral";
+  const completed = isCompletedFixtureStatus(status), entitled = viewer === "user" || viewer === "referral";
   const canView = completed || entitled, played = status === "live" || completed;
   return {
     synthetic: true, viewer, status, canView, accessReason: completed ? "completed" : entitled ? viewer : "locked",

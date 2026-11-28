@@ -40,7 +40,7 @@ commit/push main and preserve existing stashes/worktrees.
   runtime JavaScript errors. Desktop status fill/border, labelled Share and
   4.5px list gaps remain unchanged. Mobile gaps measure exactly 9px and 13.5px.
 - Chromium access matrix: 18 combinations of guest, inactive member and active
-  subscriber across Builder, Best Slips and existing shared records at 390/1440px.
+  user across Builder, Best Slips and existing shared records at 390/1440px.
   Denied controls stay visible/disabled and issue no publication request or
   dialog. Allowed controls prepare images, preserve disclosure and return focus
   on Escape. Six expanded/collapsed pointer/keyboard checks at 320/390/1440px

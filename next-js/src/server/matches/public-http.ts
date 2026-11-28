@@ -12,7 +12,7 @@ export function publicMatchFailure(error: unknown, headers: Readonly<Record<stri
   const code = failure.code, messages = createMessages("en");
   const retryAfterSeconds = code === "rate-limited" ? failure.retryAfterSeconds ?? 60 : code === "unavailable" ? 5 : null;
   const body = matchFeedErrorSchema.parse({ error: { code,
-    message: code === "subscription-required" ? "Subscriber access is required." : code === "not-found" ? "Match or prediction history was not found." : messages.text(code === "rate-limited" ? "feed.rateLimited" : code === "invalid-query" ? "feed.invalidQuery" : "feed.unavailable"),
+    message: code === "subscription-required" ? "Premium access is required." : code === "not-found" ? "Match or prediction history was not found." : messages.text(code === "rate-limited" ? "feed.rateLimited" : code === "invalid-query" ? "feed.invalidQuery" : "feed.unavailable"),
     recoverable: code === "rate-limited" || code === "unavailable", retryAfterSeconds } });
   return Response.json(body, { status: code === "subscription-required" ? 403 : code === "invalid-query" ? 400 : code === "not-found" ? 404 : code === "rate-limited" ? 429 : 503,
     headers: { ...headers, ...(retryAfterSeconds === null ? {} : { "retry-after": String(retryAfterSeconds) }) } });

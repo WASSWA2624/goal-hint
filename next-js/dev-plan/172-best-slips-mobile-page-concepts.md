@@ -24,7 +24,7 @@ individual match layouts and preserve all existing desktop and app behaviour.
 ## Verification
 
 - 140 browser layout scenarios passed: all ten designs in both themes,
-  subscribers at 320/360/390px and guest/free-member previews at 320/390px.
+  users at 320/360/390px and guest/free-member previews at 320/390px.
   No horizontal overflow, clipped text, sub-11px text or undersized touch
   targets were found. Completed-only access and stable carousel sizing passed.
 - 361 browser interaction assertions passed for result/date filtering,

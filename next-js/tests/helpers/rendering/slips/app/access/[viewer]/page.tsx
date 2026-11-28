@@ -8,8 +8,8 @@ export default async function Page({ params, searchParams }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { viewer } = await params;
-  if (!["guest", "member", "subscriber"].includes(viewer)) notFound();
-  const full = viewer === "subscriber";
+  if (!["guest", "member", "user"].includes(viewer)) notFound();
+  const full = viewer === "user";
   const route = createSlipsRoute({
     resolveAccess: async () => ({ tier: full ? "full" : "free", signedIn: viewer !== "guest", mode: "free" }),
     instant: async () => now,

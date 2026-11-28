@@ -34,7 +34,7 @@ const selections: readonly SlipSelection[] = [
   },
 ];
 
-/** Illustrative records only: the gallery never requests published or subscriber selections. */
+/** Illustrative records only: the gallery never requests published or premium selections. */
 export function compactSlipPreview(scenario: CompactSlipScenario): { slip: BuiltSlip; results?: SlipResultView["results"] } {
   const matches = scenario === "eight" ? Array.from({ length: 8 }, (_, index): SlipSelection => ({
     ...selections[index % selections.length]!, fixtureId: `preview-eight-${index}`,

@@ -36,7 +36,7 @@ class ProductionChecks(unittest.TestCase):
             paywall["gated_record"]({**safe, "status": "finished-regulation", "prices": [{"price": "2.00"}]})
 
     def test_raw_html_and_escaped_flight_leaks_fail(self):
-        paywall["gated_html"]('<p>Subscriber access</p>')
+        paywall["gated_html"]('<p>Premium access</p>')
         for source in ('{"probabilities":[]}', '{"probabilities": [ ]}', r'{\"probabilities\":[]}'):
             paywall["gated_html"](source)
         for source in ('<article data-market="match-result">', '{"probabilities":{}}', r'{\"reasons\":["private"]}'):
@@ -51,7 +51,7 @@ class ProductionChecks(unittest.TestCase):
 
     def test_feed_cards_lock_published_forecasts_and_allow_forecastless_cards(self):
         none = '<article data-fixture-id="none" data-market="match-result"><p data-prediction="none" data-outcome="unavailable"></p></article>'
-        locked = '<article data-fixture-id="published" data-status="scheduled"><p data-pick-state="subscriber"></p></article>'
+        locked = '<article data-fixture-id="published" data-status="scheduled"><p data-pick-state="locked"></p></article>'
         paywall["FeedCards"](f"<main>{locked}{none}</main>", {"published"})
         # Only a published family locks a card; a forecast without one shows no prediction, like a missing forecast.
         records = [{"fixtureId": "published", "forecast": {"gated": True, "families": ["match-result"]}},
@@ -97,7 +97,7 @@ class ProductionChecks(unittest.TestCase):
         seen = []
 
         def cards():
-            # The locked card carries no pick markup; the forecastless one shows the subscriber's no-prediction state.
+            # The locked card carries no pick markup; the forecastless one shows the user's no-prediction state.
             return (f'<main><article data-fixture-id="{record["fixtureId"]}"{state["card"]}></article>'
                     f'<article data-fixture-id="{none["fixtureId"]}" data-market="match-result">'
                     '<p data-prediction="none" data-outcome="unavailable"></p></article></main>')
@@ -121,7 +121,7 @@ class ProductionChecks(unittest.TestCase):
             elif path.startswith("/en/matches?") or path == "/en/matches":
                 return Response(200, headers, cards())
             else:
-                return Response(200, headers, "<main>Subscriber access</main>")
+                return Response(200, headers, "<main>Premium access</main>")
             return Response(200, headers, json.dumps(value))
 
         with patch.dict(paywall["verify"].__globals__, {"get": read}), redirect_stdout(io.StringIO()):

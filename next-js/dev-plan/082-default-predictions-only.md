@@ -3,7 +3,7 @@
 Select and apply Predictions only by default wherever the existing access rules
 allow that filter, including Reset, while preserving an explicit unchecked choice.
 
-1. Apply page defaults after query validation: subscribers and finished results
+1. Apply page defaults after query validation: users and finished results
    start with predictions only. Unfinished guest feeds keep the current access
    restrictions and remain usable.
 2. Preserve explicit `picks=all` in page URLs, date changes, searches and

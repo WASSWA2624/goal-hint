@@ -12,16 +12,17 @@ const modules = {
   '@/components/members/free-trial-control': exportsFor(['FreeTrialControl']),
   '@/components/ui/controls': exportsFor(['ButtonLink']),
   '@/components/ui/visually-hidden': exportsFor(['VisuallyHidden']),
-  '@/components/admin/subscribers-editor': exportsFor(['SubscribersEditor']),
+  '@/components/admin/users-editor': exportsFor(['UsersEditor']),
   '@/components/analytics/dashboard/dashboard-styles': exportsFor(['Notice']),
   '@/server/admin/admin-http': 'export const adminPageGate = async () => ({ owner: true, services: { database: {} } });',
-  '@/server/admin/subscriber-directory': 'export const readSubscriberDirectory = (...args) => globalThis.performanceDirectory(...args);',
-  '@/server/admin/subscribers': 'export const createSubscribers = () => ({ detail: id => globalThis.performanceSubscriber(id) });',
+  './user-directory.ts': 'export const readUserDirectory = (...args) => globalThis.performanceDirectory(...args);',
+  './users.ts': 'export const createUsers = () => ({ detail: id => globalThis.performanceUser(id) });',
   '@/server/admin/codes-http': 'export const uuid = value => typeof value === "string" && value.length === 36;',
   '@/server/analytics/analytics-http': 'export const getAnalyticsServices = async () => ({ database: null });',
   '@/server/members/member-http': 'export const getMemberServices = async () => { throw new Error("Inject test services"); };',
   '@/server/members/account-login-redirect': 'export const redirectToAccountLogin = () => { throw new Error("Login required"); };',
-  '@/server/members/plans': 'export const createPlansService = () => ({ list: async () => [] }); export const plansServiceFor = () => ({ list: () => globalThis.performancePlans() });',
+  '@/server/members/plans': 'export const createPlansService = () => ({ list: async () => [] });',
+  '../members/plans.ts': 'export const plansServiceFor = () => ({ list: () => globalThis.performancePlans() });',
   './public-shell': exportsFor(['PublicShell']),
 };
 registerServerRouteTestLoader({ source, modules });
@@ -96,8 +97,8 @@ test('a failed optional read settles all work and preserves the unavailable stat
   assert.doesNotMatch(JSON.stringify(tree), /private pricing failure/);
 });
 
-test('subscriber details load as soon as their identity is known without waiting for plans', async () => {
-  const { default: Page } = await import('../src/app/(owner)/admin/subscribers/page.tsx');
+test('user details load as soon as their identity is known without waiting for plans', async () => {
+  const { default: Page } = await import('../src/app/(owner)/admin/users/page.tsx');
   for (const explicit of [true, false]) {
     let finishDirectory, finishPlans;
     const directory = new Promise(resolve => { finishDirectory = resolve; });
@@ -105,7 +106,7 @@ test('subscriber details load as soon as their identity is known without waiting
     const selected = '00000000-0000-4000-8000-000000000001', reads = [];
     globalThis.performanceDirectory = () => directory;
     globalThis.performancePlans = () => offers;
-    globalThis.performanceSubscriber = async id => { reads.push(id); return { id }; };
+    globalThis.performanceUser = async id => { reads.push(id); return { id }; };
     try {
       const rendering = Page({ searchParams: Promise.resolve(explicit ? { accountId: selected } : {}) });
       await new Promise(setImmediate);
@@ -119,10 +120,10 @@ test('subscriber details load as soon as their identity is known without waiting
       assert.deepEqual(editor.props.accounts, [{ id: selected }]);
       assert.deepEqual(editor.props.initialPaging, { page: 2, pages: 3, total: 73 });
       assert.deepEqual(editor.props.plans, plans);
-      assert.equal(editor.props.selectedExplicitly, explicit);
+      assert.equal(editor.props.selectedExplicitly ?? false, explicit);
     } finally {
       finishDirectory({ accounts: [], page: 1, pages: 1, total: 0 }); finishPlans([]);
-      delete globalThis.performanceDirectory; delete globalThis.performancePlans; delete globalThis.performanceSubscriber;
+      delete globalThis.performanceDirectory; delete globalThis.performancePlans; delete globalThis.performanceUser;
     }
   }
 });

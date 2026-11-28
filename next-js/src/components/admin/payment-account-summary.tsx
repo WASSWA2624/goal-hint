@@ -70,12 +70,12 @@ export function PaymentAccountSummary({ payment, status, busy = false }: {
   payment: OwnerPayment; status: string; busy?: boolean;
 }) {
   const purchased = status === "approved" && payment.decidedAt && payment.decidedAt !== payment.submittedAt ? dateLabel(payment.decidedAt) : undefined;
-  const subscriber = payment.accountPhone ? formatInternationalPhone(payment.accountPhone) : "";
+  const user = payment.accountPhone ? formatInternationalPhone(payment.accountPhone) : "";
   return <Summary data-payment-account-summary>
     <Identity>
       <CopyValue><h2>{payment.reference}</h2><SummaryCopyButton value={payment.reference} subject="payment reference" compact disabled={busy} /></CopyValue>
-      <CopyValue><strong>{subscriber || "Erased account"}</strong>
-        {subscriber && <SummaryCopyButton value={subscriber} subject="subscriber number" compact disabled={busy} />}</CopyValue>
+      <CopyValue><strong>{user || "Erased account"}</strong>
+        {user && <SummaryCopyButton value={user} subject="user number" compact disabled={busy} />}</CopyValue>
       <SummaryStatus $status={status}>{status === "pending" ? <><span data-desktop-status>Awaiting admin approval</span><span data-mobile-status>Waiting approval</span></> : status === "remaining" ? "Part-paid"
         : checkoutLabels[status] ?? status.charAt(0).toUpperCase() + status.slice(1)}</SummaryStatus>
     </Identity>

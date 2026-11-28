@@ -41,7 +41,7 @@ worktrees and stashes; commit only this review's intended changes.
 - Coalesce checkout background reads, cancel obsolete work and bound explicit
   revalidation so paused polling can recover after a stalled request.
 - Share unchanged plain-data branches in checkout, slip and analytics snapshots.
-  Keep live-page subscribers and memoized slip cards independent of unchanged
+  Keep live-page users and memoized slip cards independent of unchanged
   report/count/summary updates without suppressing real data or access changes.
 - Keep tab scrolling separate from desktop label measurement. Use ordinary
   panel-only left/width properties so positioning does not invalidate inherited

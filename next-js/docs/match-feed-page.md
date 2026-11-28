@@ -104,7 +104,7 @@ Filters on both mobile and desktop. The shared draft holds every filter;
 Enter in search and the footer's Apply Filters submit the validated draft and
 restart pagination. Predictions
 only defaults on for full-access pages and finished results; free unfinished feeds
-keep their existing subscriber restriction. Explicit `picks=all` preserves an
+keep their existing user restriction. Explicit `picks=all` preserves an
 unchecked page choice, while Reset restores the available page default. API reads
 and offline snapshots retain their unrestricted default. Four native From date,
 To date, From time and To time inputs render once inside the filter dialog,
@@ -183,7 +183,7 @@ left and **Apply Filters** on the right. The body scrolls independently of the
 header and footer. Reset edits the draft. Apply commits a valid query and
 closes the dialog. Escape and Close restore the opening draft and opener focus.
 Backdrop clicks leave the modal open. Reset restores the configured defaults in the device zone,
-including fifty records per page. Payment, subscriber and audit search screens reuse
+including fifty records per page. Payment, user and audit search screens reuse
 this dialog chrome around their existing fields and cancellation behavior.
 Without JavaScript the same dialog fields remain inline for native GET search.
 

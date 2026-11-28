@@ -9,8 +9,8 @@ including verification, rate limits, one-device sessions, and account protection
 ## Implementation
 
 - Remove the menu entry, page, count query/context, badges, request components,
-  manual reset forms, temporary-password reveal state, and subscriber reset action.
-- Reject the former subscriber temporary-password operations; remove their service
+  manual reset forms, temporary-password reveal state, and user reset action.
+- Reject the former user temporary-password operations; remove their service
   methods, credential generator, demo state, and temporary-password login branch.
 - Keep account recovery codes, reset-only cookies, current-password checks, and
   the password-change cooldown. Stop writing admin request queue timestamps.
@@ -26,7 +26,7 @@ including verification, rate limits, one-device sessions, and account protection
 - Prisma client generation and schema validation passed; application type checking
   passed.
 - Focused authentication/admin unit tests: 84 passed before integrating the
-  concurrent Settings/Subscriber commits. Latest integrated authentication,
+  concurrent Settings/User commits. Latest integrated authentication,
   admin-route, navigation, deletion, and directory run: 75 passed, 1 failed.
   The failure is an existing source assertion requiring literal `method="post"`
   in unchanged `code-tools.tsx`; the production/preview conditional method is
@@ -40,7 +40,7 @@ including verification, rate limits, one-device sessions, and account protection
   return contracts or empty-plan assumptions; production access-code services and
   default plan seeds were not changed by this cleanup.
 - Admin and member production fixture builds passed normal TypeScript checking
-  and HTTP/API acceptance, including route/session protections and subscriber
+  and HTTP/API acceptance, including route/session protections and user
   operations.
 - Browser checks passed at desktop and mobile sizes: no Password requests menu,
   retired page returns 404, retired mutation returns 400, remaining navigation

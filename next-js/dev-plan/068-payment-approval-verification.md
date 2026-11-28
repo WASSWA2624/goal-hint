@@ -32,7 +32,7 @@ account number before approving.
   number is not verified; the owner verifies payers at approval.
 - **Forgot password (signed out):** no self-service. The view shows "Call admin to reset your password" with a
   `tel:` link to `settings.contactPhone` (and WhatsApp chat link to `whatsappPhone` if set).
-- **D1-reset (owner action):** Subscribers → account → **Set temporary password**. Generates a random 10-character
+- **D1-reset (owner action):** Users → account → **Set temporary password**. Generates a random 10-character
   temporary password (unambiguous alphabet), stores its scrypt hash, signs out all the account's sessions, audits
   `password_reset` (no secret in details) and returns the temporary password **once** in the response for the owner to
   read out on the phone call. The owner can also look up an allow-listed admin number that has no account; the action
@@ -128,7 +128,7 @@ the settings lock.
   the owner's own wallet SMS, amount received, plan). On success show a short notice "Approved · access until {end} ·
   {n} device(s) unlocked" and remove the card from the pending list on refresh. Reject keeps reasons; remove the
   "Tell them · WhatsApp/SMS" links (the member sees the reason in the app) — keep a `tel:` link to the account number.
-- "Send free trial" → "Grant free trial". "Generate a manual code" → "Grant access manually". Subscribers: heading
+- "Send free trial" → "Grant free trial". "Generate a manual code" → "Grant access manually". Users: heading
   "Access", remove Generate code/Reissue wording, add **Set temporary password**.
 - The admin page title already carries the pending count; make the 60 s poll update `document.title` so a background
   tab shows `(n) Payments`.

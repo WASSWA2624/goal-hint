@@ -249,7 +249,7 @@ def account_workspace(html):
     return match(r'<article\b[^>]*data-account-details[^>]*>([\s\S]*?)</main>', html).group(1)
 
 
-def subscriber_dashboard(origin):
+def user_dashboard(origin):
     """Focused Account sections retain real auth/renewal paths without the old text stack."""
     for state, package in [("active", "Weekly"), ("trial", "Free trial"), ("off-active", "Weekly"),
             ("queued", "Weekly"), ("free", None), ("expired", None), ("pending", None)]:
@@ -526,7 +526,7 @@ def main():
         verify_synthetic_api(server.origin)
         unified_login(server.origin)
         subscription_discovery(server.origin)
-        subscriber_dashboard(server.origin)
+        user_dashboard(server.origin)
         trial_visibility(server.origin)
         authentication_routes(server.origin)
         checkout_journey(server.origin)

@@ -4,7 +4,7 @@ import test from "node:test";
 import { paymentNoticeRules } from "../src/domain/payment-notification.ts";
 import { createNoticeHandlers } from "../src/server/admin/notices-http.ts";
 import { createPaymentNoticeAdmin } from "../src/server/admin/payment-notices.ts";
-import { createSubscribers } from "../src/server/admin/subscribers.ts";
+import { createUsers } from "../src/server/admin/users.ts";
 import { createPaymentOutboxWorker } from "../src/server/members/payment-notification-outbox.ts";
 import { createMembersPurge } from "../src/server/members/purge.ts";
 import { memberStore } from "./helpers/member-store.mjs";
@@ -76,7 +76,7 @@ test("erasure removes delivery history and intents atomically while keeping fina
   const s = setup(); s.report(); await s.enqueue();
   const otherAccountId = randomUUID();
   s.state.memberPasswordResetRequest.push({ id: randomUUID(), accountId: s.account.id }, { id: randomUUID(), accountId: otherAccountId });
-  assert.equal((await createSubscribers(s.database, s.now).action(s.account.id, "erase", null, owner)).status, "saved");
+  assert.equal((await createUsers(s.database, s.now).action(s.account.id, "erase", null, owner)).status, "saved");
   assert.equal(s.state.paymentNotificationOutbox.length, 0); assert.equal(s.state.paymentSubmission.length, 1);
   assert.deepEqual(s.state.memberPasswordResetRequest.map(row => row.accountId), [otherAccountId]);
 });

@@ -163,7 +163,7 @@ export function createPasswordRecovery({ database, config, now = Date.now, admin
     },
 
     /** Open the same pending workflow from a verified admin action, without verifying ownership or issuing a token. */
-    async openForSubscriber(accountId: string, actorId: string) {
+    async openForUser(accountId: string, actorId: string) {
       if (!isRequestId(accountId) || !isRequestId(actorId)) return missing;
       return decide(database, async tx => {
         const account = await lockMemberAccount(tx, accountId);

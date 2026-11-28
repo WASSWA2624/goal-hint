@@ -158,7 +158,7 @@ selected market is invalid. The native hidden `reuse=0` followed by the checked
 value and markets in Builder catalog order. Invalid input receives a specific
 criteria error and keeps the draft editable.
 
-When subscriber access is required, the primary action shows Sign in to build
+When premium access is required, the primary action shows Sign in to build
 slips for a signed-out viewer and opens the login form with the Slip Builder
 return path. Signed-in viewers without the required subscription see Subscribe
 to build slips; eligible viewers see Build slips. Sign up remains reachable
@@ -352,7 +352,7 @@ synthetic stored projections to exercise generation.
 
 Generation is a read-only server operation. It consumes the existing aggregate
 public search limiter once per build when odds are enabled. It performs no
-provider requests, changes no forecasts, places no bets, requires subscriber entitlement when paid mode is on and
+provider requests, changes no forecasts, places no bets, requires user entitlement when paid mode is on and
 persists no saved slips. Existing match detail links remain available in each
 table row.
 

@@ -8,7 +8,7 @@ import { RecordFooter } from "./record-workspace";
 export const ReviewFooter = styled(RecordFooter)`
   ${media.belowDesktop} { > button { flex: 1 0 auto; } }
 `;
-/** Referral decisions use the same compact list/detail geometry and controls as Payments/Subscribers. */
+/** Referral decisions use the same compact list/detail geometry and controls as Payments/Users. */
 export const ReviewForm = styled.form`
   display: grid; gap: var(--gh-spacing-3); min-inline-size: 0;
   p { margin: 0; }

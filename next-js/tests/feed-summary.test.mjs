@@ -70,10 +70,10 @@ test('missing audits and private filter oracles fail explicitly instead of produ
   const gated = createMatchFeedSummaryHandler(read, { now: () => now }, async () => ({ tier: 'free', signedIn: false, mode: 'off' }));
   const forbidden = await gated(new Request('https://example.test/api/matches/summary?when=today&picks=only'));
   assert.equal(forbidden.status, 403);
-  assert.equal(reads, 1, 'subscriber-only filters are checked before reading');
+  assert.equal(reads, 1, 'premium-only filters are checked before reading');
 });
 
-test('summary consumers share one request and a cancelled view cannot cancel another subscriber', async t => {
+test('summary consumers share one request and a cancelled view cannot cancel another user', async t => {
   const original = globalThis.fetch, calls = [], pending = [];
   globalThis.fetch = async (href, options) => { calls.push({ href, options }); return new Promise(resolve => pending.push(resolve)); };
   const store = makeStore({ today, query: query(), data: null });

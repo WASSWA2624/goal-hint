@@ -1,8 +1,8 @@
 // Owner payment checks: hints beside a report, never proof. Approval sends nothing (068); access reaches the account's devices.
 export type PaymentCheck = Readonly<{ tone: "good" | "warning" | "info"; text: string; summary?: string }>;
 /**
- * `received` is the owner's own amount received (null until approval); `transactionId` says the subscriber gave one.
- * `screenshotAmount` is what the subscriber's browser read from their screenshot: undefined without a screenshot, null when no
+ * `received` is the owner's own amount received (null until approval); `transactionId` says the user gave one.
+ * `screenshotAmount` is what the user's browser read from their screenshot: undefined without a screenshot, null when no
  * amount could be read. It only points the owner at the image; their wallet SMS stays the proof.
  */
 export function paymentChecks(input: { received: number | null; price: number; transactionId: boolean; approved: string | null; pending: string | null;

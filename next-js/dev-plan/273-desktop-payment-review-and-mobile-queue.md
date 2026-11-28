@@ -1,7 +1,7 @@
 # 273 — Desktop payment review and mobile queue
 
 - Lead desktop review with a plain, read-only summary of the copyable reference,
-  subscriber phone, package, submitted time, access period, and status.
+  user phone, package, submitted time, access period, and status.
   Put the copyable transaction ID, receipt, deposit, funding and days below it.
 - Keep the desktop review mounted during selection changes. Reset receipt
   drafts per payment and disable checkout actions while the next record loads.

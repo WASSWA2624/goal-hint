@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createSubscribers } from "../src/server/admin/subscribers.ts";
+import { createUsers } from "../src/server/admin/users.ts";
 
 const now = () => Date.parse("2026-10-29T09:00:00Z");
 function fixture() {
@@ -10,7 +10,7 @@ function fixture() {
     return [{ id: 42n, at: new Date("2025-01-15T09:00:00Z"), actor: "owner", action: "payment_approved",
       accountId: null, targetType: "payment", targetId: "example" }];
   } } }) };
-  return { queries, audit: createSubscribers(database, now).audit };
+  return { queries, audit: createUsers(database, now).audit };
 }
 
 test("audit applies historical date and event filters before its bounded database read", async () => {

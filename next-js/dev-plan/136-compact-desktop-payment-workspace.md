@@ -34,7 +34,7 @@ tabs, private data handling, existing payment operations, and mobile navigation.
 - TypeScript and targeted ESLint passed. The 28 relevant admin-route,
   pending-payment, and payment-review tests passed.
 - A clean production build of the owner acceptance fixture passed its full
-  harness: all nine owner routes and private gates, navigation, subscriber,
+  harness: all nine owner routes and private gates, navigation, user,
   settings, audit, payment history/decisions, attachments, confirmation guards,
   and the new thirty-report queue checks.
 - Browser checks passed at 1024×768, 1280×800, 1440×900, and 1920×1080 in both

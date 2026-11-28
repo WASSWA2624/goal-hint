@@ -9,7 +9,7 @@ node node_modules/next/dist/bin/next dev --hostname 127.0.0.1 --port 3000
 ```
 
 The route is excluded from indexing and uses illustrative records without
-reading live or subscriber slips.
+reading live or user slips.
 
 | Option | Layout |
 | --- | --- |

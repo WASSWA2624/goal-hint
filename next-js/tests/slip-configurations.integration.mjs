@@ -6,7 +6,7 @@ import { memberTokenHash } from "../src/server/members/member-sessions.ts";
 import { defaultSlipCriteria, serializeSlipCriteria } from "../src/domain/slip-builder.ts";
 import { paidDatabase } from "./helpers/paid-database.mjs";
 import { MysqlServerUnavailableError } from "./helpers/mysql-instance.mjs";
-import { createSubscribers } from "../src/server/admin/subscribers.ts";
+import { createUsers } from "../src/server/admin/users.ts";
 
 test("isolated MySQL enforces configuration concurrency, nullable-default uniqueness, persistence and account cascade", { timeout: 180_000 }, async t => {
   let f;
@@ -33,6 +33,6 @@ test("isolated MySQL enforces configuration concurrency, nullable-default unique
   await f.database.query(tx => tx.memberAccount.create({ data: { id: accountId, phone, passwordHash: "test-hash", phoneVerifiedAt: at, createdAt: at, lastSignInAt: at } }));
   await f.database.query(tx => tx.memberSession.create({ data: { accountId, tokenHash, createdAt: at, lastSeenAt: at, authenticatedAt: at, expiresAt: new Date(+at + 86_400_000) } }));
   assert.equal((await restart().mutate(member, { action: "create", name: "Erase me", parameters, isDefault: true })).status, "saved");
-  assert.equal((await createSubscribers(f.database, () => +at, f.config).action(accountId, "erase", undefined, "owner")).status, "saved");
+  assert.equal((await createUsers(f.database, () => +at, f.config).action(accountId, "erase", undefined, "owner")).status, "saved");
   assert.equal(await f.database.query(tx => tx.slipConfiguration.count({ where: { accountId } })), 0);
 });

@@ -273,7 +273,7 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-33 Quality qualification and measured commitments | **Evidence required** | Accumulate real prospective samples under the frozen protocol; prove market/source/horizon quality and coverage, calibrated-claim eligibility, full-slate cost/capacity and cadence/latency targets. Simulated load is not elapsed shadow observation or unapproved paid-call authority. §§8, 14–15; prompt 047. | Unassigned; user evidence/commitment decision required | `GOAL_HINT_QUALITY_QUALIFICATION_REF`, `GOAL_HINT_SHADOW_PROTOCOL_REF`; Deferred: qualification report and approved measurement-supported commitments | **047**, with protocol choices fixed **014** |
 | OP-34 Release decision and signoff | **Unresolved / evidence required** | Assign production release authority and record actual go/no-go evidence tied to build/configuration. All required rights/account/budget/quality/recovery/monitoring/legal gates must pass; an environment reference cannot substitute for missing evidence or owner approval. §§14–15; prompt 048. | Unassigned; user decision/evidence required | `GOAL_HINT_RELEASE_APPROVAL_REF`, `GOAL_HINT_QUALITY_QUALIFICATION_REF`, `GOAL_HINT_OPERATION_SCOPE=production`; Deferred: release owner and readiness report | **048** |
 | OP-35 Domain and production operation | **Evidence required** | Verify authorized domain registration/DNS/HTTPS/canonical redirects, current payable/account/budget state, deployment access and approved release/rollback/observation ownership. No purchase, deployment, production URL or successful scheduler run is established by the specification. §§12, 14–15; prompt 049. | Unassigned; user decision/evidence required | Public canonical origin remains fixed; server production scope/release references; Deferred: authorized domain/DNS/deployment and rollback evidence | **049** |
-| OP-36 Odds display rights and odds operation | **Owner decisions recorded 10 October 2026; display rights and trial evidence required** | Public bookmaker prices, the `odds=` filter and market-implied probabilities need recorded evidence that the API-Football/API-Sports terms permit public display of odds (and, separately, bookmaker names or logos), plus the operator jurisdiction's gambling-advertising rules (OP-27). Until then odds are imported and kept privately, `publicPolicy.features.providerOdds` stays false, the public projection stays empty and `odds=` is an unknown key. The owner accepted the technical defaults: one documented bookmaker, `proportional-v1` de-margin per complete group, `DECIMAL(10,4)` with half-up hundredths, a 1.01–1000.00 range with a "20.00+" top stop, 12-hour freshness with write-time staleness and a frozen closing price, and normalized-only retention to kickoff + 30 days. Still open: the counted odds trial (needs the plan upgrade), the bookmaker id it selects, confirmation that the private-use reference covers odds history, and the rights evidence. No betting, bet slips, affiliate or bookmaker links are ever in scope. §§1, 6, 11, 14–15; prompt 052. **Paid access (19 October 2026):** when `providerOdds` is on, bookmaker prices, the `odds=` filter and market-implied probabilities are subscriber-only for unfinished fixtures; free viewers get `subscription-required` for `odds=`. | Owner (decisions recorded); evidence required | `GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF` (`football-odds-rights`), `GOAL_HINT_ODDS_IMPORT_ENABLED`, `GOAL_HINT_ODDS_BOOKMAKER_ID`, `publicPolicy.features.providerOdds` | **052**; gating **061** |
+| OP-36 Odds display rights and odds operation | **Owner decisions recorded 10 October 2026; display rights and trial evidence required** | Public bookmaker prices, the `odds=` filter and market-implied probabilities need recorded evidence that the API-Football/API-Sports terms permit public display of odds (and, separately, bookmaker names or logos), plus the operator jurisdiction's gambling-advertising rules (OP-27). Until then odds are imported and kept privately, `publicPolicy.features.providerOdds` stays false, the public projection stays empty and `odds=` is an unknown key. The owner accepted the technical defaults: one documented bookmaker, `proportional-v1` de-margin per complete group, `DECIMAL(10,4)` with half-up hundredths, a 1.01–1000.00 range with a "20.00+" top stop, 12-hour freshness with write-time staleness and a frozen closing price, and normalized-only retention to kickoff + 30 days. Still open: the counted odds trial (needs the plan upgrade), the bookmaker id it selects, confirmation that the private-use reference covers odds history, and the rights evidence. No betting, bet slips, affiliate or bookmaker links are ever in scope. §§1, 6, 11, 14–15; prompt 052. **Paid access (19 October 2026):** when `providerOdds` is on, bookmaker prices, the `odds=` filter and market-implied probabilities are premium-only for unfinished fixtures; free viewers get `subscription-required` for `odds=`. | Owner (decisions recorded); evidence required | `GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF` (`football-odds-rights`), `GOAL_HINT_ODDS_IMPORT_ENABLED`, `GOAL_HINT_ODDS_BOOKMAKER_ID`, `publicPolicy.features.providerOdds` | **052**; gating **061** |
 | OP-37 Paid-access scope and free/paid split | **Owner confirmed 20 October 2026** | All screens, fixtures, scores, factual insights and aggregate performance remain public. Every fixture requires current entitlement for predictions, odds and prediction analysis/history, including finished/canceled/awarded matches. Best Slips is home: only total odds, calibrated joint probability and match count are public; selections stay private. Account/Get access remain visible. `off` closes payments/trials/code activation but allows phone sign-in and retains prediction gates; existing valid periods continue until expiry. Supersedes earlier off/test bypasses and final-fixture exceptions. | Owner | paywall.ts; best-slips.ts; member guards; terms | Follow-up to 061/066/067 |
 | OP-38 Plans, prices and payment channels | **Plans decided 19 October 2026; payment channels pending** | Plans (owner, 19 October 2026): Daily, 24 hours from activation, UGX 1,000; Weekly, 7 days, UGX 5,000; Monthly, 30 days, UGX 20,000. Every plan gives full access to every feature and section; plans differ only in length and price, so there are no feature tiers. A day is 24 hours from activation (payment confirmation), never a calendar day or midnight EAT. Free trial (owner, 19 October 2026): a new number (no code ever) can ask once for 2 days (48 hours) free; the owner sends it as a `trial` code, which starts when sent and is never revenue. Access runs from payment confirmation (the owner's approval, or the owner creating a manual or number-change code), or from the end of the current period, to the expiry time; code entry only unlocks a device, and a code entered late gets no extra time. Payments are whole UGX to the owner's Ugandan MTN MoMo and Airtel Money numbers; accounts accept any country code as canonical digits (`256` numbers must be `2567` + 8 digits). Received 19 October 2026: the MTN MoMo number `256783230321`, which is also the contact (calls) and WhatsApp number; the owner enters it in Settings. Still needed: the MTN registered name; an Airtel Money number and name if Airtel is offered (until then the Airtel card stays hidden); the typical review time and any extra payment note; whether each network's send-money menu accepts `256…` or needs `07…` (the copy format); the tested menu shortcuts; and at least three real anonymized SMS samples per network (payer "sent" and owner "received") plus anonymized screenshot samples. Plan §12. **058 (19 October 2026):** the Plans and Settings pages are built; the owner enters the plans, numbers, names and shortcuts there (nothing is seeded). Owner accepted leaving `networkPrefixes` empty and choosing the receiving network manually; prefix lists are not an activation requirement. Owner requested appropriate drafted SMS samples; six explicitly synthetic fixtures are supplied, while real message/screenshot verification remains pending. 058 retains its independent build/database/restore and payment-channel blockers. | Owner | Dashboard plans and settings (058); `networkForPrefix` (058); `tests/fixtures/payment-sms/` (063) | **058**; SMS fixtures **063**, blocker at **067** |
 | OP-39 Refunds, extensions, reversals and consumer duties | **Unresolved; blocks paid switch-on** | Decide the refund, extension, reversal and outage-compensation policy, including what happens when a payment was approved for the wrong account, and confirm Electronic Transactions Act 2011 disclosure and cooling-off duties. The app has no in-app refunds; the owner's tools are Extend, Reverse (`network-reversal`, `wrong-account`) and manual codes. Until resolved, the privacy and terms notices carry the `payments` and `refunds` blockers, so `on` stays refused. Plan §§5.3, 7, 12. | Owner; legal review required | Terms copy and `termsNotice` / `privacyNotice` blockers (066) | Owner tools **060/064**; copy **066** |
@@ -2424,8 +2424,8 @@ No live polling or later feature is activated. See
 - Initial SSR is the single handoff into the feed's loaded-prefix state or the
   detail's applicable snapshot. The request-owned Redux store adds a concrete
   RTK Query API for existing feed/detail GETs. No Server Component reads Redux.
-  Endpoint keys normalize pinned dates/query/page; overlapping subscribers share
-  a request, and one consumer's cancellation does not abort other subscribers.
+  Endpoint keys normalize pinned dates/query/page; overlapping users share
+  a request, and one consumer's cancellation does not abort other users.
 - Active visible views use a serial 20-second loop, quiet historical/final views
   60 seconds. Hidden/offline views pause; visibility, reconnect and persisted
   browser-cache restoration resume safely. Initial pageshow does not duplicate
@@ -3570,8 +3570,8 @@ and specification v1.9. Phase 0 records the change; it adds no application code.
 - **Pending prompts:** 053–054 tie the family-total invariant (and the gated
   `families` list) to `publicPolicy.markets`; per-market performance stays
   aggregate-only. 055 reads My Picks through the gated reads, ignores
-  subscriber-only Profile defaults for free viewers and makes the avatar the
-  account entry. 056 makes Tips subscriber-only for unfinished fixtures, never a
+  premium-only Profile defaults for free viewers and makes the avatar the
+  account entry. 056 makes Tips premium-only for unfinished fixtures, never a
   probability-ordered list for free viewers. 055–056 now depend on 061–062.
 - **Design choices carried by 057–067** (plan section 3):
   - The phone number identifies; the access code is the secret. Phones are
@@ -3789,7 +3789,7 @@ no other OP row changes state.
 - **Settings: one row behind a cache.** `current()` keeps a value for 30 s.
   After a failed read it serves the last good value and retries after 5 s. With
   no good value it reports `unavailable`, and `accessMode` resolves that to
-  `free`, so a settings outage never opens subscriber content. There is one
+  `free`, so a settings outage never opens user content. There is one
   service per database runtime per process, kept across development reloads. A
   generation counter stops a read that started before a save from replacing the
   saved value. The owner's page reads uncached (`overview`).
@@ -3980,11 +3980,11 @@ no other OP row changes state.
   existence in policy order. Detail history is an explicit gated variant, odds
   are omitted and selected-pick prices are empty. Consumers narrow the full
   snapshot through a lightweight helper so initial client code still avoids Zod.
-- Reject parsed subscriber oracle filters before any raw read. Free page requests
+- Reject parsed user oracle filters before any raw read. Free page requests
   redirect to the same feed with only those filters reset; APIs return private,
   nonrecoverable 403 JSON. Free oracle validation recognizes odds even while
   provider odds rights remain disabled; full/off requests keep that rights check.
-- Generic metadata is the same for both tiers, with a subscriber line only in on
+- Generic metadata is the same for both tiers, with a user line only in on
   mode for unfinished fixtures. Family existence keeps legitimate pages indexable.
 - Access changes cannot append full and gated feed pages together. They refresh
   and remount the feed; detail permission withdrawal wins over observation-clock
@@ -3992,7 +3992,7 @@ no other OP row changes state.
   the page/store when access changes. Shared transport includes same-origin
   cookies and consumers refresh after subscription-required responses.
 - Preserve existing chrome and full-content assertions. This prompt uses one
-  reusable neutral subscriber notice; the designed access UI belongs to 062.
+  reusable neutral user notice; the designed access UI belongs to 062.
   The leak fixture's fake resolver and header exist only under tests. It mounts
   real factories, inspects raw flight scripts, and uses the production private
   route headers. Next flight requests include the protocol's empty `_rsc` key;
@@ -4013,7 +4013,7 @@ no other OP row changes state.
   plans service. Only price and duration reach the client; missing plans produce
   no price claim. Both access buttons always render and preserve the match return.
 - Large buttons and native radio segments share the existing theme, borders and
-  focus treatment. Subscriber cards retain the existing tile layout and a star,
+  focus treatment. User cards retain the existing tile layout and a star,
   with no premium attributes or tooltip. Only the gated tile's narrow spacing
   changes to keep its compact height at 320 px.
 - Use the established changed signal for feed tier mismatches and refresh for it
@@ -4024,7 +4024,7 @@ no other OP row changes state.
   is explicitly synthetic until the production Get access page arrives in 063;
   no fake plan or payment number is committed to application settings or copy.
 
-- The gated tile uses a subscriber state, preserving the policy-order family
+- The gated tile uses a user state, preserving the policy-order family
   caption that the existing no-pick CSS hides. It exposes no prediction values.
   Browser measurements confirm 75.5/74.3 px at 320/375 px and native 48 px radio
   keyboard selection. The 660-response scan and complete serial unit suite pass.
@@ -4095,13 +4095,13 @@ The pending-count metadata is itself owner guarded, so signed-out metadata does
 not disclose the queue size. No schema, env key, dependency or setting changed.
 
 
-### 065 — subscriber operations, accounting and retention (20 October 2026)
+### 065 — user operations, accounting and retention (20 October 2026)
 
 Overview uses the existing Kampala calendar bounds for EAT weeks and months.
 Revenue sums approved non-reversed submissions (report and owner) plus original
 manual-code money. Active paid access follows replacement-code links, including
 reissue and number change, to a paid origin; a trial alone never counts as paid.
-Subscriber details reuse 064 code tools and 060 verified number transfers.
+User details reuse 064 code tools and 060 verified number transfers.
 Notes stay private and only their length is audited. Block/unblock reasons are
 audited and reject phone/code-shaped text using the existing audit validator.
 Erasure clears account and code notes, sessions, screenshots, payer numbers and
@@ -4119,9 +4119,9 @@ codes and audits are retained pending OP-26. Tests run only on owned isolated
 databases; no developer/production purge or deployment was performed.
 
 
-### 066 — policy copy and subscriber documentation (20 October 2026)
+### 066 — policy copy and user documentation (20 October 2026)
 
-Reused the information shell and existing help/contact patterns. Shared metadata and footer are mode-independent and 18+. Privacy describes essential member sessions, local SMS/drafts, stored reports/images, keyed-hash security records, scheduled deletion, backup/Meta/phone copies and erasure limits. Terms describe offers, personal account-bound access, trials/periods/renewals, device limits, weak phone login and verified number changes. OP-37 narrows original-content reuse for unfinished-fixture subscriber material. Contact stays static and release-ready.
+Reused the information shell and existing help/contact patterns. Shared metadata and footer are mode-independent and 18+. Privacy describes essential member sessions, local SMS/drafts, stored reports/images, keyed-hash security records, scheduled deletion, backup/Meta/phone copies and erasure limits. Terms describe offers, personal account-bound access, trials/periods/renewals, device limits, weak phone login and verified number changes. OP-37 narrows original-content reuse for unfinished-fixture premium material. Contact stays static and release-ready.
 
 No new OP-26/27/39 legal, retention, refund, hosting or licensing facts were supplied. The owner explicitly accepted keeping notices as drafts and paid access off. Privacy/terms retain null effective dates, updated technical review dates and payments/refunds/data-protection blockers; terms also list jurisdiction and paid-provider rights. The draft does not select a refund rule, lawful basis, governing-law clause or licensing exemption. Existing operator/contact facts remain as recorded.
 
@@ -4136,13 +4136,13 @@ The operator runbook now follows rollout order: local off-mode checks; an explic
 
 Section 12 inputs are reconciled individually in subscriptions.md. Supplied plans/trial, MTN/contact/WhatsApp and original operator facts are retained. Empty prefixes/manual network selection and synthetic SMS drafting are accepted owner decisions. Missing real message/image/physical-device evidence is not replaced with synthetic proof. No new legal/refund/hosting/licensing, paid-provider rights or activation approval has been supplied; the owner explicitly retained draft notices and mode off. OP-26/27/31/32/34/37/38/39/40 and source/quality/odds gates remain as listed.
 
-The final regression exposed the old feed assertion forbidding the Picks only control added by 062. It now positively verifies both enabled full-access controls, while the nine-viewer leak suite still verifies disabled subscriber filters for free access. Feed rendering reuses genuine, previously captured MySQL projections and rebuilds current route factories. The older SEO capture used obsolete pagination defaults; fresh MySQL projections restore the existing pagination assertions without relaxing them. A previously unused member-test session result now asserts successful verification, clearing the full-lint warning without changing application behavior. All required local checks and both local production verifiers pass; pending real-message, physical-device, host and owner acceptance keeps 067 Partial.
+The final regression exposed the old feed assertion forbidding the Picks only control added by 062. It now positively verifies both enabled full-access controls, while the nine-viewer leak suite still verifies disabled user filters for free access. Feed rendering reuses genuine, previously captured MySQL projections and rebuilds current route factories. The older SEO capture used obsolete pagination defaults; fresh MySQL projections restore the existing pagination assertions without relaxing them. A previously unused member-test session result now asserts successful verification, clearing the full-lint warning without changing application behavior. All required local checks and both local production verifiers pass; pending real-message, physical-device, host and owner acceptance keeps 067 Partial.
 
 ## 20 October 2026 — authorized local repair and access clarification
 
 The owner authorized non-destructive drift/restore repair. The two new forward migrations preserve existing data and all 29 historical migration rows. The exact legacy migration/checksum is allowlisted only after adoption; rolled-back attempts and LF/CRLF checksums remain intact. Ten isolated MySQL backup/restore checks pass across 93 tables. This supersedes the historical 058 local drift/trigger failure; production capability evidence and hosted recovery decisions remain unresolved.
 
-Best Slips now owns home, with public summaries and subscriber-only selections, reusing the stored-cohort builder. No approved calibrated joint model exists and public odds rights remain disabled, so real daily slips cannot yet be published (OP-15/17/36). See best-slips.md. Paid access stays off and no deployment occurred.
+Best Slips now owns home, with public summaries and premium-only selections, reusing the stored-cohort builder. No approved calibrated joint model exists and public odds rights remain disabled, so real daily slips cannot yet be published (OP-15/17/36). See best-slips.md. Paid access stays off and no deployment occurred.
 
 
 **Later owner instruction, 20 October:** nothing should remain closed locally. The confirmed receiving-wallet name was saved privately; local test mode is open, with the existing daily plan preserved and approved Weekly/Monthly plans added through the plans service. Settings/mode changes are audited. No existing data was deleted. Production activation/deployment did not occur; release/legal notices remain drafts.

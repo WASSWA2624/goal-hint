@@ -8,7 +8,7 @@ test("match review serves ten designs and eight independently addressable sectio
   assert.equal(variants.length, 10); assert.equal(new Set(variants.map(item => item.id)).size, 10);
   assert.equal(tabs.length, 8); assert.equal(new Set(tabs.map(item => item.id)).size, 8);
   assert.deepEqual(reviewState(new URLSearchParams("variant=bad&tab=bad&status=bad&viewer=bad")),
-    { variant: "touchline", tab: "stats", viewer: "subscriber", status: "scheduled" });
+    { variant: "touchline", tab: "stats", viewer: "user", status: "scheduled" });
   const selected = { variant: "dugout", tab: "lineups", viewer: "referral", status: "live" };
   assert.deepEqual(reviewState(new URLSearchParams(selected)), selected);
 });
@@ -21,7 +21,7 @@ test("HTTP preview withholds predictive data for every locked viewer/status pair
     const response = await fetch(`${origin}/api/fixture?viewer=${viewer.id}&status=${status.id}`);
     assert.equal(response.status, 200); assert.equal(response.headers.get("cache-control"), "no-store");
     const fixture = await response.json();
-    const allowed = status.id === "finished-regulation" || ["subscriber", "referral"].includes(viewer.id);
+    const allowed = status.id === "finished-regulation" || ["user", "referral"].includes(viewer.id);
     assert.equal(fixture.canView, allowed, `${viewer.id}/${status.id}`);
     if (!allowed) {
       assert.equal(fixture.forecasts, null);

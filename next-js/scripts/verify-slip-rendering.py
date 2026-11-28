@@ -449,7 +449,7 @@ def verify_builder_access(origin, directory):
     for viewer, label, destination in [
         ("guest", "Unlock slip builder", "/en/account"),
         ("member", "Unlock slip builder", "/en/subscribe"),
-        ("subscriber", "Build slips", None),
+        ("user", "Build slips", None),
     ]:
         path = f"/access/{viewer}"
         response = request(origin, path)
@@ -543,7 +543,7 @@ def verify_best_slips(origin, directory):
         statuses = [node.text for node in document.nodes(attr="role") if node.attrs["role"] == "status" and "data-best-slips-access" not in node.attrs]
         assert bool(statuses) == (scenario == "limited"), "A valid smaller cohort needs no arbitrary minimum-count warning"
         assert "Fewer than ten" not in document.text, "The removed ten-slip restriction is absent from displayed copy"
-        assert "The matches and selections in this slip are for subscribers." not in document.text, "Locked slips omit the removed explanatory sentence"
+        assert "The matches and selections in this slip are for users with access." not in document.text, "Locked slips omit the removed explanatory sentence"
         print(f"PASS Best Slips SSR: {scenario} ({count} slips with visible Share controls)", flush=True)
 
 

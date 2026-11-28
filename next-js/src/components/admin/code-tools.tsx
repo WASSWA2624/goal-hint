@@ -32,7 +32,7 @@ import { NetworkChoice } from "./network-choice";
 import { balancedCodePresentation, codePresentation } from "./code-presentation-styles";
 
 type CodeRequest = typeof postAdmin;
-type CodeActionOptions = Readonly<{ request: CodeRequest; localOnly: true }>;
+type CodeActionOptions = Readonly<{ request: CodeRequest; localOnly?: boolean }>;
 /** Keep the access decision visible alongside the separate payment notification outcome. */
 export function grantNotice(body: AdminReply["body"]): string | null {
   const credit = typeof body.creditAddedUgx === "number" && typeof body.balanceUgx === "number"
@@ -93,13 +93,13 @@ export function PlanField({ plans, value, allowCustom = true, showPrice = true, 
     {plans.map(p => <option key={p.id} value={p.id}>{p.name}{showPrice ? ` · UGX ${p.priceUgx.toLocaleString("en-UG")}` : ` · ${p.durationDays} days`}{p.active ? "" : " · inactive"}</option>)}</select></FieldBlock>;
 }
 /**
- * One grant form for the Codes side panel, the add-subscriber drawer, the subscriber detail (`fixedPhone`) and payment
+ * One grant form for the Codes side panel, the add-premium drawer, the user detail (`fixedPhone`) and payment
  * recovery (`withoutTransaction`). Custom days only counts when the plan is "Custom days", so it is disabled otherwise.
  */
 export function ManualCodeForm({ plans, action, phone = "", accountId, amount = 0, note = "", compact = false, fixedPhone = false, withoutTransaction = false, onStart, onSaved, formId, externalActions = false }: { plans: readonly SubscriptionPlanView[]; action: CodeAction; phone?: string; accountId?: string; amount?: number; note?: string; compact?: boolean; fixedPhone?: boolean; withoutTransaction?: boolean; onStart?: () => void; onSaved?: () => void; formId?: string; externalActions?: boolean }) {
   const reasonId = useId();
   const [selectedPlan, setSelectedPlan] = useState(plans[0]?.id ?? "");
-  const path = accountId ? `/api/admin/subscribers/${accountId}` : "/api/admin/codes";
+  const path = accountId ? `/api/admin/users/${accountId}` : "/api/admin/codes";
   async function submit(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const f = new FormData(e.currentTarget); const planId = String(f.get("planId") ?? ""), network = String(f.get("network") ?? ""), transactionId = String(f.get("transactionId") ?? "").trim();
     if (action.busy) return;
     onStart?.();
@@ -157,7 +157,7 @@ const GrantButton = styled(ActionButton)<{ $inline: boolean }>`
   inline-size: 100%;
   ${({ $inline }) => $inline && css`${media.desktop} { inline-size: auto; justify-self: start; }`}
 `;
-/** One set of access-period actions for Codes and subscriber access history. */
+/** One set of access-period actions for Codes and premium access history. */
 export function CodeActions({ code, action, onRevoked }: { code: OwnerCode; action: CodeAction; compact?: boolean; onRevoked?: () => void }) {
   const [operation, setOperation] = useState<"extend" | "revoke" | null>(null), id = useId();
   const locked = action.busy || code.status === "revoked";
@@ -286,7 +286,7 @@ export function CodesEditor({ initialCodes, plans, preview }: { initialCodes: re
 function CodeFacts({ code, preview }: { code: OwnerCode; preview: boolean }) {
   const phone = code.phone ? `+${formatPhone(code.phone)}` : "Erased account";
   return <Facts data-code-facts>
-    <div><dt>Subscriber</dt><dd>{preview ? phone : <Link href={`/admin/subscribers?accountId=${code.accountId}`} prefetch={false}>{phone}</Link>}</dd></div>
+    <div><dt>User</dt><dd>{preview ? phone : <Link href={`/admin/users?accountId=${code.accountId}`} prefetch={false}>{phone}</Link>}</dd></div>
     <div><dt>Plan</dt><dd>{code.planName}</dd></div>
     <div><dt>Starts</dt><dd>{formatPeriodEnd(new Date(code.startsAt))}</dd></div>
     <div><dt>Ends</dt><dd>{formatPeriodEnd(new Date(code.endsAt))}</dd></div>

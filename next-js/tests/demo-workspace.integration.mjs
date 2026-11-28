@@ -5,7 +5,7 @@ import { getDatabase, disconnectDatabase } from "../src/server/database/client.t
 import { demoId } from "../src/server/demo/forecast.ts";
 import { seedDemoWorkspace } from "../src/server/demo/workspace-seed.ts";
 import { seedDemoMember } from "../src/server/demo/member-seed.ts";
-import { createSubscribers } from "../src/server/admin/subscribers.ts";
+import { createUsers } from "../src/server/admin/users.ts";
 import { createPaymentReview } from "../src/server/admin/payment-review.ts";
 import { createAnalyticsReporter } from "../src/server/analytics/analytics-report.ts";
 import { getAnalyticsServices, verifyAdminSession } from "../src/server/analytics/analytics-http.ts";
@@ -44,7 +44,7 @@ test("isolated demo keeps owner screens and analytics available without fabricat
   await seedDemoMember(database, nowMs);
   await seedDemoWorkspace(database, nowMs);
   assert.deepEqual(await counts(), seeded, "restarting does not duplicate visits or financial records");
-  const subscribers = createSubscribers(database), overview = await subscribers.overview();
+  const users = createUsers(database), overview = await users.overview();
   assert.ok(overview.pending >= 0); assert.ok(overview.active >= 0); assert.ok(overview.monthRevenue >= 0);
   const review = createPaymentReview(database);
   for (const tab of ["pending", "approved", "rejected", "superseded"]) assert.ok(Array.isArray((await review.list(tab)).payments));

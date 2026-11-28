@@ -14,7 +14,7 @@ approved implementation.
 - Put each banner immediately below the same desktop header with a thin divider
   and no gap; support 1024, 1280 and 1440px desktop canvases.
 - Centralize sample action labels and illustrative pricing. Guests receive Sign
-  in / Sign up actions, members receive Subscribe, and subscribers receive access
+  in / Sign up actions, members receive Subscribe, and users receive access
   confirmation and a relevant account or prediction action.
 - Provide all thirty previews, design/state filters, light/dark previews, and a
   local shortlist that never applies a design or changes an account.

@@ -47,5 +47,5 @@
 - Windows MySQL bootstrap exceeded the original 90-second migration budget before
   assertions ran. The expanded acceptance now allows a bounded 180-second schema
   bootstrap inside its 360-second test deadline; the final run passed in 177 seconds.
-- The low-level historical API, subscriber access and provider policy gates remain
+- The low-level historical API, premium access and provider policy gates remain
   unchanged. No provider requests or real account mutations were used for checks.

@@ -145,7 +145,7 @@ and Monthly packages, both configured receiving wallets, support contact and
 environment-managed administrator login. An application-role transaction
 verified registration, duplicate-number handling, admin recovery, one-use
 temporary passwords, forced password change, JPEG proof upload, manual approval,
-subscriber access and saved-slip grants/cascade. It was rolled back and checked
+premium access and saved-slip grants/cascade. It was rolled back and checked
 to retain no test accounts, payments, sessions or access periods. Audit sequence
 numbers can have harmless gaps after rolled-back inserts. The running local
 Account, Subscribe and Admin pages returned HTTP 200 without storage errors.

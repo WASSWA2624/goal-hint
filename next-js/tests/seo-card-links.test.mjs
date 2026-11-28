@@ -82,26 +82,26 @@ const pickState = (html) => html.match(/data-pick-state="([a-z]+)"/u)?.[1];
 test("locked cards retain the canonical match as their return destination for guest and member access links", () => {
   const locked = gateFixture(upcoming("card-gated"), anonymous);
   assert.equal(locked.forecast.gated, true);
-  const { cards: [guest, signedIn, subscriber] } = render({ cards: [
+  const { cards: [guest, signedIn, user] } = render({ cards: [
     { fixture: locked, gated: true, analysisSlug: slug }, { fixture: gateFixture(upcoming("card-gated"), member), gated: true, signedIn: true, analysisSlug: slug },
     { fixture: upcoming("card-gated"), analysisSlug: slug }] });
   const path = `/en/matches/card-gated/${slug}`, returnTo = encodeURIComponent(path);
   const guestHref = `/en/account?view=register&return=${returnTo}&checkout=1`, memberHref = `/en/subscribe?return=${returnTo}&checkout=1`;
   assert.deepEqual(anchors(guest), [guestHref, guestHref]);
   assert.deepEqual(anchors(signedIn), [memberHref, memberHref]);
-  assert.deepEqual(anchors(subscriber), [path]);
+  assert.deepEqual(anchors(user), [path]);
   // Locked cards keep the public chance placeholder without private selections, prices or meters.
   for (const html of [guest, signedIn]) {
-    assert.equal(pickState(html), "subscriber");
+    assert.equal(pickState(html), "locked");
     assert.doesNotMatch(html, prediction);
     assert.deepEqual(cardPick(html), []);
-    assert.match(html, /data-subscriber-notice="true"[^>]*>Unlock predictions</u);
+    assert.match(html, /data-premium-notice="true"[^>]*>Unlock predictions</u);
     assert.match(html, /data-unlock-button="true"/u);
     assert.match(html, /data-public-probability/u);
   }
   assert.match(guest, /<span>Unlock predictions<\/span>/u);
   assert.match(signedIn, /<span>Unlock predictions<\/span>/u);
-  assert.match(subscriber, /data-pick-selection=/u);
+  assert.match(user, /data-pick-selection=/u);
 });
 
 test("an unfinished card without a published forecast shows why, not a lock", () => {
@@ -109,30 +109,30 @@ test("an unfinished card without a published forecast shows why, not a lock", ()
   // The free payload already says no forecast was published: gating keeps null and never hides a forecast as null.
   assert.equal(gated.forecast, null);
   assert.equal(gateFixture(upcoming("card-some"), anonymous).forecast.gated, true);
-  const { cards: [guest, subscriber] } = render({ cards: [{ fixture: gated, gated: true, analysisSlug: slug }, { fixture: stored, analysisSlug: slug }] });
+  const { cards: [guest, user] } = render({ cards: [{ fixture: gated, gated: true, analysisSlug: slug }, { fixture: stored, analysisSlug: slug }] });
   assert.equal(pickState(guest), "none");
   assert.doesNotMatch(guest, /Locked prediction|Locked market|Subscribe to see the prediction|data-public-probability/u);
   assert.match(guest, /<b data-mobile-only="">No prediction<\/b>/u);
   assert.match(guest, /Too early/u);
   assert.deepEqual(cardPick(guest), ["data-market=match-result", "data-prediction=none", "data-outcome=unavailable"]);
   assert.deepEqual(anchors(guest), [`/en/matches/card-none/${slug}`]);
-  // Free and subscriber viewers get the same card: nothing beyond the subscriber's own no-prediction view.
-  assert.equal(guest, subscriber);
+  // Free and entitled viewers get the same no-prediction card.
+  assert.equal(guest, user);
 });
 
-test("a market filter outside the published families shows the subscriber's no-prediction card, not a lock", () => {
+test("a market filter outside the published families shows the user's no-prediction card, not a lock", () => {
   const stored = upcoming("card-filtered");
   stored.forecast.markets = stored.forecast.markets.filter((item) => item.market.family !== "both-teams-to-score");
   const gated = gateFixture(stored, anonymous), markets = ["both-teams-to-score"];
   // The gated families already tell a free viewer the filtered market was never published.
   assert.equal(gated.forecast.families.includes("both-teams-to-score"), false);
-  const { cards: [guest, subscriber, unfiltered] } = render({ cards: [{ fixture: gated, gated: true, analysisSlug: slug, markets },
+  const { cards: [guest, user, unfiltered] } = render({ cards: [{ fixture: gated, gated: true, analysisSlug: slug, markets },
     { fixture: stored, analysisSlug: slug, markets }, { fixture: gated, gated: true, analysisSlug: slug }] });
   assert.equal(pickState(guest), "none");
   assert.doesNotMatch(guest, /Locked prediction|Subscribe to see the prediction|data-public-probability/u);
   assert.match(guest, /data-no-pick="market"/u);
-  assert.equal(guest, subscriber);
-  assert.equal(pickState(unfiltered), "subscriber");
+  assert.equal(guest, user);
+  assert.equal(pickState(unfiltered), "locked");
   assert.doesNotMatch(unfiltered, prediction);
 });
 
@@ -141,12 +141,12 @@ test("a delivered forecast stays locked for free viewers, and completed matches 
   const { cards: [whole, finished, canceled] } = render({ cards: [{ fixture: upcoming("card-whole"), gated: true, analysisSlug: slug },
     { fixture: gateFixture(cardFixture({ fixtureId: "card-final" }), anonymous), gated: true, analysisSlug: slug },
     { fixture: gateFixture(scenarios.canceled.feed.records[0], anonymous), gated: true, analysisSlug: slug }] });
-  assert.equal(pickState(whole), "subscriber");
+  assert.equal(pickState(whole), "locked");
   assert.doesNotMatch(whole, prediction);
-  assert.match(whole, /data-subscriber-notice="true"[^>]*>Unlock predictions</u);
+  assert.match(whole, /data-premium-notice="true"[^>]*>Unlock predictions</u);
   assert.equal(pickState(finished), "settled");
   assert.match(finished, /data-pick-selection=""[^>]*title="Home or draw"[^>]*>1X</u);
-  assert.notEqual(pickState(canceled), "subscriber");
+  assert.notEqual(pickState(canceled), "locked");
   assert.match(canceled, /data-pick-selection=/u);
 });
 
@@ -156,15 +156,15 @@ test("published probabilities are visible without promoting them to a recommende
   stored.fixture.forecast.recommendation = recommendation;
   stored.snapshot.recommendation = recommendation;
   const detail = matchDetailResponseSchema.parse(gateDetailResponse(stored, full));
-  const { cards: [subscriber, guest], details: [rendered] } = render({ cards: [
+  const { cards: [user, guest], details: [rendered] } = render({ cards: [
     { fixture: detail.fixture, analysisSlug: slug },
     { fixture: gateFixture(stored.fixture, anonymous), gated: true, analysisSlug: slug },
   ], details: [detail] });
-  assert.match(subscriber, /data-forecast-source=/u);
-  assert.doesNotMatch(subscriber, /No recommended pick/u);
-  assert.match(subscriber, /data-pick-selection=/u);
-  assert.match(subscriber, /data-probability-meter=/u);
-  assert.equal(pickState(guest), "subscriber");
+  assert.match(user, /data-forecast-source=/u);
+  assert.doesNotMatch(user, /No recommended pick/u);
+  assert.match(user, /data-pick-selection=/u);
+  assert.match(user, /data-probability-meter=/u);
+  assert.equal(pickState(guest), "locked");
   assert.doesNotMatch(guest, /No recommended pick/u);
   assert.doesNotMatch(rendered.verdict, /No recommended pick/u);
   assert.doesNotMatch(rendered.verdict, /data-featured-pick="none"/u);
@@ -180,12 +180,12 @@ test("an unpublished fixture card omits bookmaker odds and predictions", () => {
     prices: { state: "available", markets: [{ family: "match-result", selections: [
       { selection: "home-win", price: "2.15" }, { selection: "draw", price: "3.25" }, { selection: "away-win", price: "4.1" },
     ] }] } };
-  const { cards: [subscriber, guest] } = render({ cards: [
+  const { cards: [user, guest] } = render({ cards: [
     { fixture, analysisSlug: slug },
     { fixture: gateFixture(fixture, anonymous), gated: true, analysisSlug: slug },
   ] });
-  assert.doesNotMatch(subscriber, /data-standalone-market|2\.15|4\.10/u);
-  assert.doesNotMatch(subscriber, /data-pick-selection|data-probability-meter/u);
+  assert.doesNotMatch(user, /data-standalone-market|2\.15|4\.10/u);
+  assert.doesNotMatch(user, /data-pick-selection|data-probability-meter/u);
   assert.doesNotMatch(guest, /data-standalone-market|2\.15/u);
 });
 
@@ -211,7 +211,7 @@ test("the match page locks the verdict, markets and analysis only over a publish
   assert.equal(published.snapshot.gated, true);
   assert.equal(none.snapshot, null);
   assert.deepEqual(none.history, { gated: true });
-  const { details: [locked, guest, subscriber] } = render({ details: [published, none, gate(scenarios["prior-cycle"].detail, full)] });
+  const { details: [locked, guest, user] } = render({ details: [published, none, gate(scenarios["prior-cycle"].detail, full)] });
   assert.match(locked.verdict, /data-match-access-required="true"/u);
   for (const html of Object.values(locked)) {
     assert.match(html, /data-unlock-link="true"/u);
@@ -226,9 +226,9 @@ test("the match page locks the verdict, markets and analysis only over a publish
   assert.match(guest.markets, /0 of 4 published/u);
   assert.match(guest.analysis, /No prediction analysis is available for this cycle\./u);
   for (const html of Object.values(guest)) {
-    assert.doesNotMatch(html, /Subscribe|locked\.|for subscribers|data-public-probability|return=/u);
+    assert.doesNotMatch(html, /Subscribe|locked\.|for users with access|data-public-probability|return=/u);
     assert.doesNotMatch(html, /SENTINEL-|61\.7|62%/u);
   }
-  // A free viewer reads exactly the subscriber's no-prediction sections.
-  assert.deepEqual(guest, subscriber);
+  // A free viewer reads exactly the user's no-prediction sections.
+  assert.deepEqual(guest, user);
 });

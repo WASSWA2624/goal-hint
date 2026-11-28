@@ -13,7 +13,7 @@ the header. Preserve the approved desktop presentation and all unrelated work.
 - Use current server-provided offer prices and the shared authentication catalog.
   Associate the price with access, never with account creation.
 - Show both authentication actions to signed-out visitors, a subscription action
-  to members without access, and access confirmation to active subscribers.
+  to members without access, and access confirmation to active users.
   Retain appropriate actions for pending payments and expired access; suppress
   unresolved status and duplicate account-page messaging.
 - Use a compact single row, square controls, a thin header divider and no gap.

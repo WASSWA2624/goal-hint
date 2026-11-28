@@ -3,7 +3,7 @@
 ## Scope
 
 Prepare ten mobile concepts for selection, each showing signed-out visitors,
-signed-in members without a subscription, and active subscribers. Keep the
+signed-in members without a subscription, and active users. Keep the
 approved desktop banner and current live mobile banner unchanged. All mobile
 sample messages and actions must fit one physical row, including at 320px.
 
@@ -25,7 +25,7 @@ sample messages and actions must fit one physical row, including at 320px.
 - Application type checking and targeted ESLint passed. Python verifier syntax
   and whitespace checks passed.
 - The isolated production build and rendering verification passed: ten designs,
-  thirty account-state previews, correct actions, no active-subscriber sales
+  thirty account-state previews, correct actions, no active-user sales
   pricing, header adjacency, unique identifiers, shared branding, indexing
   protection and no account-session cookie.
 - Final browser checks on the app passed all 240 combinations of thirty samples,

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID,createHash } from "node:crypto";
 import test from "node:test";
-import {createSubscribers,revenueBounds,subscriberDeviceId} from "../src/server/admin/subscribers.ts";
-import { createSubscriberHandlers } from "../src/server/admin/subscribers-http.ts";
+import {createUsers,revenueBounds,userDeviceId} from "../src/server/admin/users.ts";
+import { createUserHandlers } from "../src/server/admin/users-http.ts";
 import {createMembersPurge} from "../src/server/members/purge.ts";
 import {createAccessCodes,newReference,newSalt,hashCode,generateCode} from "../src/server/members/access-codes.ts";
 import {createAuthenticatedTestSessions as createMemberSessions} from "./helpers/member-fixtures.mjs";
@@ -16,10 +16,10 @@ import {jpeg} from "./helpers/payment-fixtures.mjs";
 import {silentPaymentNotifications} from "./helpers/payment-notification-fixtures.mjs";
 
 const DAY=86400000,HOUR=3600000;
-test("subscriber management, accounting and retention on restricted MySQL",{timeout:180000},async t=>{
+test("user management, accounting and retention on restricted MySQL",{timeout:180000},async t=>{
  const f=await paidDatabase();t.after(()=>f.close());const{database:db,config}=f;
  const base=Date.parse("2026-11-11T21:30:00Z");let clock=base,n=1000;const now=()=>clock;
- const codes=createAccessCodes({database:db,config,now,notifications:silentPaymentNotifications}),sessions=createMemberSessions({database:db,config,now}),payments=createPayments({database:db,config,now}),review=createPaymentReview(db,now,{notifications:silentPaymentNotifications}),members=createSubscribers(db,now,config),purge=createMembersPurge(db,now);
+ const codes=createAccessCodes({database:db,config,now,notifications:silentPaymentNotifications}),sessions=createMemberSessions({database:db,config,now}),payments=createPayments({database:db,config,now}),review=createPaymentReview(db,now,{notifications:silentPaymentNotifications}),members=createUsers(db,now,config),purge=createMembersPurge(db,now);
  const planId=randomUUID();await db.query(tx=>tx.subscriptionSettings.create({data:{id:1,paywallMode:"on",mtnEnabled:true,mtnNumber:"256700000901",mtnName:"TEST",airtelEnabled:true,airtelNumber:"256700000902",airtelName:"TEST",paymentNumbersChangedAt:new Date(base),updatedAt:new Date(base),updatedBy:"owner"}}));await db.query(tx=>tx.subscriptionPlan.create({data:{id:planId,name:"Weekly",durationDays:7,priceUgx:5000,active:true,sortOrder:0,createdAt:new Date(base),updatedAt:new Date(base)}}));
  async function member(){const r=await sessions.signIn(`25670000${++n}`,"unknown");return sessions.verify(r.token);}
  async function manual(who,amount=3000){const r=await codes.manual({phone:who.phone,planId,amountReceivedUgx:amount,note:"Synthetic code"},"owner");assert.equal(r.status,"created");return r.grant;}
@@ -30,7 +30,7 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
   const a=await member(),p=await report(a,"FORMREVENUE");await codes.approvePayment(p.id,fields("FORMREVENUE"),"owner");
   const b=await member();assert.equal((await codes.manual({phone:b.phone,planId,network:"airtel",transactionRef:"OWNERREVENUE",amountReceivedUgx:7000,note:"Synthetic owner wallet"},"owner")).status,"created");
   const c=await member(),r=await manual(c);
-  // Seed a historical reissue: issuing subscriber codes is retired, but its accounting history remains supported.
+  // Seed a historical reissue: issuing user codes is retired, but its accounting history remains supported.
   await db.transaction(async tx=>{const original=await tx.accessCode.findUniqueOrThrow({where:{id:r.id}}),salt=newSalt(),id=randomUUID();
    await tx.accessCode.create({data:{...original,id,reference:newReference().slice(2),codeSalt:salt,codeHash:hashCode(salt,generateCode()),source:"reissue",amountReceivedUgx:null}});
    await tx.accessCode.update({where:{id:r.id},data:{revokedAt:new Date(clock),revokedReason:"reissued",replacedById:id}});});
@@ -79,12 +79,12 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
   assert.notEqual(selectedId, selected.token);
   assert.notEqual(selectedId, memberTokenHash(selected.token));
 
-  const handler = createSubscriberHandlers().POST;
+  const handler = createUserHandlers().POST;
   const post = body => handler({ services: { database: db, config }, owner: { username: "owner" },
-    request: new Request(`http://synthetic.local/api/admin/subscribers/${accountId}`, { method: "POST",
+    request: new Request(`http://synthetic.local/api/admin/users/${accountId}`, { method: "POST",
       headers: { "content-type": "application/json" }, body: JSON.stringify(body) }) });
   assert.equal((await post({ action: "sign-out-selected", value: [] })).status, 400);
-  for (const outsideSelection of [otherId, subscriberDeviceId(restrictedHash), subscriberDeviceId(expiredHash), memberTokenHash(selected.token)]) {
+  for (const outsideSelection of [otherId, userDeviceId(restrictedHash), userDeviceId(expiredHash), memberTokenHash(selected.token)]) {
     assert.equal((await post({ action: "sign-out-selected", value: [selectedId, outsideSelection] })).status, 409);
     assert.ok(await sessions.verify(selected.token));
   }
@@ -146,10 +146,10 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
   const address="198.51.100.51";await db.transaction(tx=>takeMemberLimit(tx,config,{purpose:"synthetic-hour",value:address,maximum:10,windowMs:HOUR},new Date(base)));
   const row=await db.query(tx=>tx.rateLimitBucket.findUniqueOrThrow({where:{key:config.key("member-synthetic-hour",address)}}));assert.equal(+row.lockedUntil,Math.floor(base/HOUR)*HOUR+HOUR);assert.ok(!JSON.stringify(row).includes(address));
  });
- await t.test("subscriber HTTP requires explicit verification and confirmation, keeps searches in bodies and returns access without code delivery",async subtest=>{
+ await t.test("user HTTP requires explicit verification and confirmation, keeps searches in bodies and returns access without code delivery",async subtest=>{
   const previousClock=clock; subtest.after(()=>{ clock=previousClock; }); clock=Date.now();
-  const who=await member();await manual(who);const handler=createSubscriberHandlers().POST;
-  const context=(path,body)=>({services:{database:db,config:{...config,production:false}},owner:{username:"owner"},request:new Request(`http://synthetic.local/api/admin/subscribers${path}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)})});
+  const who=await member();await manual(who);const handler=createUserHandlers().POST;
+  const context=(path,body)=>({services:{database:db,config:{...config,production:false}},owner:{username:"owner"},request:new Request(`http://synthetic.local/api/admin/users${path}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)})});
   const searched=await handler(context("",{search:who.phone}));assert.equal(searched.status,200);assert.equal((await searched.json()).accounts[0].id,who.accountId);
   const newPhone=`25670000${++n}`;for(const invalid of [{action:"change-number",newPhone,confirmed:true},{action:"change-number",newPhone,verifiedBy:"old-number",confirmed:false},{action:"erase",confirmed:false}])assert.equal((await handler(context(`/${who.accountId}`,invalid))).status,400);
   const changed=await handler(context(`/${who.accountId}`,{action:"change-number",newPhone,verifiedBy:"payment-details",confirmed:true}));assert.equal(changed.status,201);const result=await changed.json();assert.equal(result.status,"granted");assert.ok(Number.isFinite(Date.parse(result.endsAt)));assert.equal(result.delivery,undefined);assert.doesNotMatch(JSON.stringify(result),/codeHash|codeSalt|#code=/);
@@ -170,10 +170,10 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
  });
 });
 
-test("permanent subscriber deletion on restricted MySQL", {timeout:180000}, async t => {
+test("permanent user deletion on restricted MySQL", {timeout:180000}, async t => {
  const f=await paidDatabase();t.after(()=>f.close());const{database:db,config,root}=f;
  const at=new Date("2026-10-23T10:00:00Z"),now=()=>+at,hash=value=>createHash("sha256").update(value).digest("hex");
- const members=createSubscribers(db,now,config),planId=randomUUID();let reference=0;
+ const members=createUsers(db,now,config),planId=randomUUID();let reference=0;
  await db.query(tx=>tx.subscriptionPlan.create({data:{id:planId,name:"Shared weekly plan",durationDays:7,priceUgx:5000,active:true,sortOrder:0,createdAt:at,updatedAt:at}}));
  await db.query(tx=>tx.subscriptionSettings.create({data:{id:1,paywallMode:"on",updatedAt:at,updatedBy:"owner"}}));
  async function account(phone,extra={}) {return db.query(tx=>tx.memberAccount.create({data:{id:randomUUID(),phone,passwordHash:"synthetic-password-hash",phoneVerifiedAt:at,passwordChangedAt:at,ownerNote:"Synthetic private note",createdAt:at,lastSignInAt:at,...extra}}));}
@@ -187,7 +187,7 @@ test("permanent subscriber deletion on restricted MySQL", {timeout:180000}, asyn
  });}
  await t.test("removes every owned record and historical identity while preserving other accounts and shared data",async()=>{
   const who=await account("256700004001"),other=await account("256700004002"),oldPhone="256700004003";
-  const token="d".repeat(43),tokenHash=hash(token),historicalHash=hash("historical subscriber device");
+  const token="d".repeat(43),tokenHash=hash(token),historicalHash=hash("historical user device");
   const ownPayment=await payment(who,{submittedSessionHash:historicalHash}),closedPayment=await payment(who);
   const screenshot=jpeg();for(const p of [ownPayment,closedPayment])await db.query(tx=>tx.paymentScreenshot.create({data:{submissionId:p.id,width:1,height:1,bytes:screenshot.length,data:screenshot}}));
   const ownCode=await code(who),ownCycle=await code(who,{replacedById:ownCode.id});
@@ -197,7 +197,7 @@ test("permanent subscriber deletion on restricted MySQL", {timeout:180000}, asyn
   const otherCode=await code(other),otherPayment=await payment(other,{payerPhone:oldPhone,submittedSessionHash:tokenHash});
   await db.query(tx=>tx.paymentScreenshot.create({data:{submissionId:otherPayment.id,width:1,height:1,bytes:screenshot.length,data:screenshot}}));
   await db.query(tx=>tx.memberSession.create({data:{tokenHash,accountId:who.id,createdAt:at,lastSeenAt:at,expiresAt:new Date(+at+DAY),authenticatedAt:at,codeEnteredAt:at,accessCodeId:ownCode.id}}));
-  const otherSession=await db.query(tx=>tx.memberSession.create({data:{tokenHash:hash("other subscriber device"),accountId:other.id,createdAt:at,lastSeenAt:at,expiresAt:new Date(+at+DAY),authenticatedAt:at,codeEnteredAt:at,accessCodeId:otherCode.id}}));
+  const otherSession=await db.query(tx=>tx.memberSession.create({data:{tokenHash:hash("other user device"),accountId:other.id,createdAt:at,lastSeenAt:at,expiresAt:new Date(+at+DAY),authenticatedAt:at,codeEnteredAt:at,accessCodeId:otherCode.id}}));
   await verification(who);await verification(who,oldPhone);const unbound=await verification({id:null,phone:oldPhone});
   const otherVerification=await verification(other);
   const ownedAudit=await audit({accountId:who.id,targetId:who.id}),targetAudit=await audit({targetType:"payment",targetId:ownPayment.id}),actorAudit=await audit({actor:`member-admin:${who.id}`});

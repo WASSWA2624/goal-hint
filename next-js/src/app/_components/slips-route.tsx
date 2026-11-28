@@ -92,7 +92,7 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       // A criteria change or browser history navigation resets uncontrolled inputs to this server-owned draft.
       const key = `${Object.keys(query).length ? "draft" : "defaults"}|${serializeSlipCriteria(criteria)}|${JSON.stringify(initialInputs)}|${initialTimeZone ?? ""}|${initialMarkets?.join(",") ?? ""}|${JSON.stringify(initialOutcomes)}|${initialReuse}|${error?.code ?? ""}|${jointEstimates}|${configurationId ?? ""}`;
       return <PublicShell showAccount locale={locale} today={today} current="slips" app compact>
-        <SlipBuilder subscriberOnly={access.tier === "free"} signedIn={access.signedIn} showAccount key={key} locale={locale} today={today} criteria={criteria} result={result}
+        <SlipBuilder premiumOnly={access.tier === "free"} signedIn={access.signedIn} showAccount key={key} locale={locale} today={today} criteria={criteria} result={result}
           providerOdds={publicOddsEnabled()}
           error={error} initialInputs={initialInputs} {...(initialTimeZone ? { initialTimeZone } : {})}
           initialOutcomes={initialOutcomes} initialReuse={initialReuse} jointEstimates={jointEstimates}

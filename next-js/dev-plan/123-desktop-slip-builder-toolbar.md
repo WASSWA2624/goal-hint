@@ -14,7 +14,7 @@ the approved mobile UI, shared criteria defaults, validation and access routing.
 - Put labelled Date, Time, Markets and Selection summaries alongside Reset
   and the primary action on the next row. Shade Reset using the filter palette.
 - Reuse responsive action labels and fixed desktop dimensions for the toolbar
-  and subscriber notice: Sign in to build slips, Subscribe to build slips, or
+  and user notice: Sign in to build slips, Subscribe to build slips, or
   Build slips. Keep login/subscription destinations and the return path.
 - Preserve the mobile markup's visual order, labels, sizing and summary copy.
 
@@ -44,4 +44,4 @@ the approved mobile UI, shared criteria defaults, validation and access routing.
   remain in ignored output directories.
 - The full nine-viewer paywall rendering suite was not run. Its updated
   assertions were syntax-checked, while the complete Slip Builder rendering
-  suite exercised guest, member and subscriber states through the real route.
+  suite exercised guest, member and user states through the real route.

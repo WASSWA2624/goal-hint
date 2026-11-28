@@ -41,5 +41,5 @@ with square controls, validated phone entry, and clear form requirements.
   into the future updates its status and inclusion in the Active filter.
 - A fresh production owner fixture and its complete acceptance suite passed:
   all owner routes and six record workspaces, manual grants and leading-zero
-  phone normalization, subscriber operations, Plans, Settings, Audit, and
+  phone normalization, user operations, Plans, Settings, Audit, and
   payment decisions and private attachments.

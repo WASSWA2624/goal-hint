@@ -3,7 +3,7 @@
 - Align square detail headers and footers across the record workspaces in both
   themes. Use the shared section surface, separator, and control insets.
 - Apply the same bands to both Payments review workflows and give the desktop
-  actions clearance below. Align the Subscriber identity with the pane edge and
+  actions clearance below. Align the User identity with the pane edge and
   fill the Codes Revoke action with the shared danger styling.
 - Put Audit CSV export beside Advanced filters and reserve the list footer for
   pagination. Use the fixed viewport for Settings so the divider and save

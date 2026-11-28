@@ -146,9 +146,9 @@ export const teamStackStyles = css`
   }
   [data-stack-result] [data-match-status] { inline-size: 100%; min-block-size: var(--gh-size-5); font-size: var(--gh-font-caption); }
   [data-stack-result] [data-status-clock] { white-space: normal; }
-  [data-pick-state="subscriber"] [data-ledger-field="odds"] { display: none; }
-  [data-pick-state="subscriber"] [data-ledger-field="market"] { display: none; }
-  [data-pick-state="subscriber"] [data-ledger-field="prediction"] { grid-column: 1 / -1; justify-self: end; font-size: var(--gh-font-caption); }
+  [data-pick-state="locked"] [data-ledger-field="odds"] { display: none; }
+  [data-pick-state="locked"] [data-ledger-field="market"] { display: none; }
+  [data-pick-state="locked"] [data-ledger-field="prediction"] { grid-column: 1 / -1; justify-self: end; font-size: var(--gh-font-caption); }
   [data-pick-state="none"] [data-ledger-field="prediction"] { grid-column: 1 / -1; }
   [data-pick-state="none"] [data-ledger-field="prediction"] [data-pick-value] { color: ${({ theme }) => theme.color.mutedText}; font-size: var(--gh-font-caption); }
   [data-pick-state="none"] [data-ledger-field="prediction"][data-no-pick] > [data-pick-value] { display: none; }

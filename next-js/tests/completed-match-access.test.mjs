@@ -39,7 +39,7 @@ test('public SQL restricts the full cohort, counts, ranked picks and search befo
   for (const status of completedFixtureStatuses) assert.ok(searchSql.values.includes(status), 'search catalog excludes unfinished fixture identities too');
 });
 
-test('raw caches and pagination versions distinguish completed public cohorts from subscriber cohorts', async () => {
+test('raw caches and pagination versions distinguish completed public cohorts from premium cohorts', async () => {
   const query = parseFeedQuery({ date: today }, { today }), range = resolveFeedDates(query, today);
   const tx = { publicCacheTag: { findMany: async () => [] } };
   const member = await storedFeedVersions(tx, query, today, range, [39], false);
@@ -135,7 +135,7 @@ test('unfinished match insights have no public section API bypass, including aft
     readInsights: async () => { expired = true; return fixture.insights; }, readStatus: async () => 'live',
   }).insights(fixture.detail.fixture.fixtureId), (error) => error.code === 'subscription-required');
   const member = await createGatedReads({ resolveAccess: async () => full, readInsights: async () => fixture.insights,
-    readStatus: async () => { assert.fail('subscribers do not need a completed fixture'); },
+    readStatus: async () => { assert.fail('users do not need a completed fixture'); },
   }).insights(fixture.detail.fixture.fixtureId);
   assert.deepEqual(member.sections, fixture.insights.sections);
 });

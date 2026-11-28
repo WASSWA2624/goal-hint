@@ -20,10 +20,10 @@ matches are all completed. A previous date alone never grants access.
 - Apply completion gates to shared-slip tokens and direct match detail/history
   APIs. Withhold unfinished forecasts, probabilities, prices and live data.
 - Show one subscription notice for unfinished direct matches and explain the
-  completed-only rule above public slips. Keep subscriber access unchanged.
+  completed-only rule above public slips. Keep premium access unchanged.
 - Use terminal completion for public card authorization as well as server
   gates, including cancelled fixtures; keep played-score finality separate.
-- Keep confirmed defaults: Today for subscribers, Yesterday for public viewers.
+- Keep confirmed defaults: Today for users with access, Yesterday for public viewers.
   Fully completed results may be public today; unfinished old matches remain
   restricted. No database migration is required.
 

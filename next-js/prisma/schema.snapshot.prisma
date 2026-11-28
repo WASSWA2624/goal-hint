@@ -2171,8 +2171,8 @@ model SubscriptionPlan {
   autoRenewers MemberAccount[]     @relation("AutoRenewPlan")
 }
 
-// A subscriber's payment report (`report`), or a mobile-money payment the owner recorded with a manual code (`owner`: no
-// image, session or terms). Claims are what the subscriber says; the approved columns hold the owner's final values. Plan
+// A user's payment report (`report`), or a mobile-money payment the owner recorded with a manual code (`owner`: no
+// image, session or terms). Claims are what the user says; the approved columns hold the owner's final values. Plan
 // name, days and price are snapshots. payerPhone and rejectText are personal data that erasure clears; amounts and
 // transaction IDs stay for accounting. approvedTxnKey (`network:txnKey`) is set only at approval and kept after reversal,
 // so one payment is approved at most once; the unique key allows any number of NULLs. purpose `topup` is a credit top-up:
@@ -2433,7 +2433,7 @@ model AccountMove {
 
 // The owner's paid-access settings: a single row, id = 1, and a missing row means these defaults (paywallMode off). The
 // numbers are the owner's own payment, contact and WhatsApp numbers (canonical digits) with registered names, entered on
-// the dashboard; never a subscriber's.
+// the dashboard; never a user's.
 model SubscriptionSettings {
   communityVisible        Boolean @default(true)
   communityLinks          Json?
@@ -2536,7 +2536,7 @@ model RateLimitBucket {
   lockedUntil     DateTime? @db.DateTime(3)
 }
 
-// Owner actions and sign-ins. Never a subscriber phone, a full code or an image in details. accountId has no foreign key,
+// Owner actions and sign-ins. Never a user phone, a full code or an image in details. accountId has no foreign key,
 // so rows outlive a purged account. Operational, not tamper-proof: the application role writes it.
 model OwnerAuditEvent {
   id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt

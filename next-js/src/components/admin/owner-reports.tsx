@@ -36,7 +36,7 @@ export function OverviewReport({ report }: { report: Report }) {
   const metrics: Metric[] = [
     { label: "Pending payments", value: value.pending, icon: CardIcon, href: "/admin/payments", attention: !!value.pending },
     { label: "Upload alerts this week", value: value.busy, icon: ImageIcon, href: report.uploadAlertsHref, attention: !!value.busy },
-    { label: "Active paid subscribers", value: value.active, icon: UserIcon },
+    { label: "Users with active paid access", value: value.active, icon: UserIcon },
     { label: "Revenue this week", value: formatUgx(value.weekRevenue), icon: ChartIcon },
     { label: "Revenue this month", value: formatUgx(value.monthRevenue), icon: CalendarIcon },
     { label: "Trials this week", value: value.trials, icon: UserPlusIcon },

@@ -20,7 +20,7 @@ export type NetworkPrefixTable = Readonly<Record<MobileNetwork, readonly string[
 
 /**
  * Empty until the owner confirms each network's prefixes in full (OP-38, plan section 12). Until then no number
- * pre-picks a network; the subscriber and the owner always choose it themselves.
+ * pre-picks a network; the user and the owner always choose it themselves.
  */
 export const networkPrefixes: NetworkPrefixTable = Object.freeze({ mtn: Object.freeze([]), airtel: Object.freeze([]) });
 

@@ -149,7 +149,7 @@ function FeedSurfaceContent({ query, today, result: initial, access, controls, p
   const refresh = useCallback(() => { router.refresh(); }, [router]);
   const recovery = useFeedRecovery({ initial, query, today, access, suspended: transitionPending, recheckAccess: refresh });
   const { result, cancel: cancelRecovery } = recovery;
-  const subscriberOnly = access.tier === "free";
+  const premiumOnly = access.tier === "free";
   const [navigation, setNavigation] = useState<{ href: string; overdue?: true } | null>(null);
   useEffect(() => {
     if (!transitionPending || !navigation || navigation.overdue) return;
@@ -167,7 +167,7 @@ function FeedSurfaceContent({ query, today, result: initial, access, controls, p
   const [observation, setObservation] = useState<FeedObservation | null>(null);
   if (result.data && previous?.data !== result.data) setPrevious({ query, today, data: result.data });
   const visible = result.data ? { query, today, data: result.data } : result.error === "subscription-required" ? null : previous;
-  const markets = usePublishedFeedMarkets(subscriberOnly || visible?.data.access.tier !== "full");
+  const markets = usePublishedFeedMarkets(premiumOnly || visible?.data.access.tier !== "full");
   const messages = createMessages(query.locale);
   const href = feedQueryHref(query, today), leagues = result.data?.leagues ?? previous?.data.leagues ?? noLeagues;
   const failed = result.error !== null;
@@ -215,7 +215,7 @@ function FeedSurfaceContent({ query, today, result: initial, access, controls, p
     : displayed ? searchAnnouncement(displayed.data, displayed.query) : messages.text("feed.state.data-unavailable"));
   return <FeedStack $gap="sm" data-matches-feed>
     <StableFeedHeader query={query} today={today} showAccount={showAccount} />
-    <LoadingTheme><FeedFilters scope={`${href}:${today}`} subscriberOnly={subscriberOnly} providerOdds={providerOdds} query={query} today={today}
+    <LoadingTheme><FeedFilters scope={`${href}:${today}`} premiumOnly={premiumOnly} providerOdds={providerOdds} query={query} today={today}
       dateQuery={displayed?.query ?? query} dateToday={displayed?.today ?? today} leagues={leagues} onApply={apply} pending={pending} {...markets}
       searchText={text} onSearchChange={onSearchChange} onSearchSubmit={onSearchSubmit}
       performance={displayed && performanceData && <PerformanceSection data-feed-performance-section>

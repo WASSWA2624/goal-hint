@@ -20,7 +20,7 @@ test("rotating oversized slip observations keep unpolled and newer server seeds 
   assert.equal(visible.find(({ fixtureId }) => fixtureId === "3"), third);
 });
 
-test("unchanged slip polls retain the context snapshot and skip redundant subscriber updates", () => {
+test("unchanged slip polls retain the context snapshot and skip redundant user updates", () => {
   const store = createSlipMatchObservationStore("cohort");
   let notifications = 0;
   const unsubscribe = store.subscribe(() => notifications++);

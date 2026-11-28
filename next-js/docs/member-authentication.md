@@ -25,7 +25,7 @@ Incorrect credentials, blocked/throttled attempts and rolled-back login transact
 
 Both signed-in devices inherit the account’s active subscription and share its expiry. Administrators and normal users use the same phone-and-password login form and the same two-session policy. Token hashing, 90-day rolling server expiry, daily touch and existing expired-row maintenance remain unchanged.
 
-Admin → Subscribers → Log out devices revokes selected active sessions for that subscriber. The all-devices action also remains available. Protected pages and APIs check the current stored session.
+Admin → Users → Log out devices revokes selected active sessions for that user. The all-devices action also remains available. Protected pages and APIs check the current stored session.
 
 ## Legacy account verification
 

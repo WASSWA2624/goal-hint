@@ -176,7 +176,7 @@ export function AuditReport({ rows, actions, action, period = "all", startDate =
               <Fact label="Category" value={auditCategoryLabel(auditCategory(selected.action))} />
               <Fact label="Event reference" value={selected.id} />
               {selectedReference && selectedReference !== selected.accountId && <Fact label="Record reference" value={selectedReference} />}
-              {selected.accountId && <Fact label="Subscriber reference" value={selected.accountId} />}
+              {selected.accountId && <Fact label="User reference" value={selected.accountId} />}
             </EventFacts></RecordBody>
           </> : <EmptyPanel><DocumentIcon /><strong>Select an audit event</strong></EmptyPanel>}
         </RecordScroll>

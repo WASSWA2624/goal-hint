@@ -34,7 +34,7 @@ operations, real warnings/checks, independent scroll regions, and mobile flow.
 - TypeScript, targeted ESLint, and 39 relevant unit tests passed across sorting,
   sidebar state, payment review/counts, and private admin routes.
 - A clean production fixture build and the full owner acceptance harness passed:
-  nine owner routes, private gates, navigation, subscriber/settings/audit flows,
+  nine owner routes, private gates, navigation, user/settings/audit flows,
   real payment services over synthetic reports, history, and private attachments.
 - Browser checks passed at 1024×768, 1280×800, 1440×900, and 1920×1080 in both
   themes, expanded and collapsed (sixteen combinations). Required fields align

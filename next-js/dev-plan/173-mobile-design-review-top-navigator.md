@@ -8,7 +8,7 @@ design navigator at the top. Preserve the reviewed concepts and app behaviour.
 ## Implementation
 
 - Add a standalone review shell with sticky Previous/Next buttons, a named
-  ten-design picker, theme selection and subscriber/member/guest previews.
+  ten-design picker, theme selection and user/member/guest previews.
 - Reuse the existing concept fragment without copying its data or layouts.
   The browser shell supplies navigation; the chat retains its native carousel.
 - Preserve local controls while switching designs. Store the active design,

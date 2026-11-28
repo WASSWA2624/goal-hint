@@ -42,7 +42,7 @@ export default async function FixturePage({ params }: { params: Promise<{ scenar
       {scenarios.map((value) => <a key={value} href={`/${value}`}>{value}{" "}</a>)}
     </nav>
     <section data-desktop-acceptance={scenario}>
-      {best ? <BestSlips result={!revoked && (scenario === "best-full" || scenario === "best-auto") ? fullResult : publicResult} locale="en" signedIn={scenario === "best-locked-member" || scenario === "best-auto"} /> : builder ? <SlipBuilder locale="en" today={today} subscriberOnly={revoked} signedIn={automatic}
+      {best ? <BestSlips result={!revoked && (scenario === "best-full" || scenario === "best-auto") ? fullResult : publicResult} locale="en" signedIn={scenario === "best-locked-member" || scenario === "best-auto"} /> : builder ? <SlipBuilder locale="en" today={today} premiumOnly={revoked} signedIn={automatic}
         criteria={{ ...defaultSlipCriteria(today), slips: 2 }} result={revoked ? null : { state: "generated", asOf: Date.parse("2026-10-28T17:00:00Z"), examined: shownSlip.selections.length,
           searchLimited: false, partialCoverage: false, retryAfterSeconds: null, matchStates: shownStates,
           data: { slips: [0, 1].map((index) => ({ ...shownSlip, id: `desktop-builder-${index}` })), qualifyingMatches: shownSlip.selections.length,

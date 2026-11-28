@@ -3,6 +3,6 @@ import { CardIcon, ChartIcon, GiftIcon, GridIcon, KeyIcon, LayersIcon, ListIcon,
 import type { AdminSection } from "@/domain/admin-navigation";
 
 export const adminSectionIcons: Record<AdminSection, ComponentType<IconProps>> = {
-  overview: GridIcon, payments: CardIcon, codes: TicketIcon, subscribers: UserIcon, referrals: GiftIcon,
+  overview: GridIcon, payments: CardIcon, codes: TicketIcon, users: UserIcon, referrals: GiftIcon,
   "password-requests": KeyIcon, plans: LayersIcon, settings: SlidersIcon, audit: ListIcon, analytics: ChartIcon,
 };

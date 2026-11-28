@@ -85,7 +85,7 @@ test("live polling pauses when hidden, resumes once and never overlaps requests"
   assert.equal(getLiveVisitorsSnapshot(), 3);
 });
 
-test("live pages retain unchanged branches while report clocks and subscriber notifications remain fresh", async t => {
+test("live pages retain unchanged branches while report clocks and user notifications remain fresh", async t => {
   const view = browserFor(t);
   const snapshots = [];
   view.subscribe(() => snapshots.push(getLiveReportSnapshot()));

@@ -54,7 +54,7 @@
           <select id="review-appearance"><option value="system">Match device</option><option value="light">Light</option><option value="dark">Dark</option></select>
         </label>
         <label class="review-field">Preview as
-          <select id="review-viewer"><option value="subscriber">Subscriber</option><option value="member">Free member</option><option value="guest">Guest</option></select>
+          <select id="review-viewer"><option value="user">User</option><option value="member">Free member</option><option value="guest">Guest</option></select>
         </label>
       </nav>
     </div>
@@ -76,7 +76,7 @@
       let active = Math.max(0,designs.findIndex(design => slug(design) === query.get("design")));
       designs.forEach((design,index) => picker.add(new Option(`${String(index + 1).padStart(2,"0")} · ${design.dataset.variant}`,String(index))));
       if (["system","light","dark"].includes(query.get("appearance"))) appearance.value = query.get("appearance");
-      if (["subscriber","member","guest"].includes(query.get("viewer"))) viewer.value = query.get("viewer");
+      if (["user","member","guest"].includes(query.get("viewer"))) viewer.value = query.get("viewer");
       function updateUrl() {
         const url = new URL(location.href);
         url.searchParams.set("design",slug(designs[active]));

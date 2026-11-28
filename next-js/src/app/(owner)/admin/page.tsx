@@ -6,7 +6,7 @@ import { redirectToAccountLogin } from "@/server/members/account-login-redirect"
 import { FootballCoverageReport, OverviewLoading, OverviewReport } from "@/components/admin/owner-reports";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
-import { createSubscribers, revenueBounds } from "@/server/admin/subscribers";
+import { createUsers, revenueBounds } from "@/server/admin/users";
 import { createPaymentNoticeAdmin } from "@/server/admin/payment-notices";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { adminPageGate } from "@/server/admin/admin-http";
@@ -35,7 +35,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 async function OverviewMetrics({ database }: { database: DatabaseRuntime }) {
   const now = await getShellInstant();
   const [value, noticeCount] = await Promise.all([
-    createSubscribers(database, () => now).overview().catch(() => null),
+    createUsers(database, () => now).overview().catch(() => null),
     createPaymentNoticeAdmin(database, () => now).attentionCount().catch(() => null),
   ]);
   if (!value) return <Notice $tone="error">Member storage is unavailable.</Notice>;

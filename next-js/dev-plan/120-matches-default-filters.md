@@ -1,4 +1,4 @@
-# Matches defaults and subscriber banner removal
+# Matches defaults and user banner removal
 
 ## Scope
 
@@ -6,7 +6,7 @@
   empty search and no league, country, time, probability or odds constraints.
 - Keep the existing access rules: Predictions only defaults to checked for full
   access and public Completed lists; it remains unavailable for other free lists.
-- Remove the separate Predictions are for subscribers / Sign up feed banner.
+- Remove the separate Predictions are for users with access / Sign up feed banner.
 - Preserve slip headers and match rows.
 
 ## Implementation
@@ -16,7 +16,7 @@
 - Preserve explicit URL choices, including Last 30 days and kickoff sorting.
   Keep public API defaults and dated archive dates/order unchanged.
 - Remove the banner component and both responsive usages; keep prediction access,
-  locked cards and subscriber-only controls unchanged.
+  locked cards and premium-only controls unchanged.
 - Update current help/documentation and existing navigation/reset assertions.
   Cover page defaults, actual route reads, time zones, explicit choices and access.
 

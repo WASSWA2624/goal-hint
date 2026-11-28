@@ -91,7 +91,7 @@ const descriptions: Readonly<Record<string, ActionDescription>> = Object.freeze(
 
 const targetLabels: Readonly<Record<string, string>> = Object.freeze({
   "owner-session": "Administrator session", settings: "Settings", plan: "Plan", "access-code": "Access period",
-  member: "Subscriber", "member-session": "Device", device: "Device", payment: "Payment",
+  member: "User", "member-session": "Device", device: "Device", payment: "Payment",
   "member-verification": "Verification", "saved-slip": "Saved slip", "password-request": "Password request",
 });
 const opaqueIdentity = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32,}|[A-Za-z0-9_-]{43})$/iu;
@@ -129,7 +129,7 @@ export function auditActorLabel(actor: string): string {
   const value = actor.trim();
   if (/^(?:member-admin(?::|$)|admin$|administrator$|owner$)/iu.test(value)) return "Administrator";
   if (/^system(?::|$)/iu.test(value)) return "System";
-  if (/^member(?::|$)/iu.test(value)) return "Subscriber";
+  if (/^member(?::|$)/iu.test(value)) return "User";
   if (value === "deleted-admin") return "Former administrator";
   if (/^(?:unverified|anonymous)$/iu.test(value)) return "Unverified visitor";
   return !value || opaqueIdentity.test(value) ? "Unknown actor" : value;

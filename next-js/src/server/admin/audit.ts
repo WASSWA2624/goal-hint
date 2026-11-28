@@ -7,7 +7,7 @@ import type { Prisma } from "../generated/prisma/client.ts";
 
 /**
  * The owner audit trail (OwnerAuditEvent): owner sign-ins and every owner change. Operational, not tamper-proof: the
- * application role writes it. Details never hold a subscriber phone, a full access code or an image; phone numbers may
+ * application role writes it. Details never hold a user phone, a full access code or an image; phone numbers may
  * appear only under an owner settings field name (the owner's own numbers, shortcuts and notes). The Audit page comes in 065.
  * `code_reissued` is no longer written (068 removed reissue); it stays so earlier rows remain filterable.
  */

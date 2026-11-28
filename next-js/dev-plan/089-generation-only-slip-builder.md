@@ -46,5 +46,5 @@
   remained running after the other workers finished. The stalled run was stopped;
   the database CLI test passed in isolation in 24.4 seconds. This is not a claim
   that the entire repository suite passed.
-- Production subscriber and public-odds policy gates remain in force. The MySQL
+- Production user and public-odds policy gates remain in force. The MySQL
   and browser generation checks used approved isolated development/demo data.

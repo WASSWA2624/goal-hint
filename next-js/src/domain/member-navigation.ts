@@ -34,7 +34,7 @@ export function memberReturnPath(value: unknown): string | null {
   return review ?? subscriptionReturnPath(value);
 }
 
-/** A subscription journey can return only to public or subscriber features. */
+/** A subscription journey can return only to public or premium features. */
 export function subscriptionReturnPath(value: unknown): string | null {
   return typeof value === "string" && value.length <= 512 && !/\s/u.test(value) &&
     (["/en", memberHomePath, "/en/best-slips", "/en/slips"].includes(value) || /^\/en\/best-slips\/\d{4}-\d{2}-\d{2}\/[1-9]\d{0,2}$/u.test(value) || sharedSlipReturnPath(value) || matchReturnPath(value)) ? value : null;

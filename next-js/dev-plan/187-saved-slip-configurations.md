@@ -1,6 +1,6 @@
 # 187 — Saved Slip Builder configurations
 
-Add account-owned configurations to the existing builder and subscriber account
+Add account-owned configurations to the existing builder and user account
 page. Reuse strict criteria parsing and serialization, member authorization and
 shared UI controls. Permit management even when subscription access has expired.
 
@@ -29,7 +29,7 @@ Record actual results and deployment limitations before committing/pushing main.
   strict TypeScript checking, route generation and the offline asset manifest.
 - The final focused run passed **233 tests**, with **one explicit skip** for
   the new real-MySQL integration test. Two migration/checksum tests passed.
-  An earlier broader run also attempted two existing subscriber MySQL tests;
+  An earlier broader run also attempted two existing user MySQL tests;
   those failed to start because a genuine MySQL test-server binary is absent.
   No database test was redirected to an installed service or live database.
 - Isolated production rendering passed builder/account SSR, authenticated

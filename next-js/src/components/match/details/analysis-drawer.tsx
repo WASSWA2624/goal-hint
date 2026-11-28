@@ -4,9 +4,9 @@ import { memo, useState } from "react";
 import { detailAnalysis } from "@/domain/detail-presentation";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import { fullDetailSnapshot } from "@/domain/detail-snapshot";
-import { SubscriberNotice } from "@/components/members/subscriber-notice";
+import { PremiumNotice } from "@/components/members/premium-notice";
 import { ReasonIcon } from "./details-icons";
-import { Card, CardHeader, SubscriberRow, Note, Panel, useStableDetails, type Messages } from "./details-ui";
+import { Card, CardHeader, PremiumRow, Note, Panel, useStableDetails, type Messages } from "./details-ui";
 import { Explanation } from "./markets-card";
 import { useOpenByDefault } from "./use-match-view";
 
@@ -25,7 +25,7 @@ export const AnalysisDrawer = memo(function AnalysisDrawer() {
   const byDefault = useOpenByDefault();
   const [choice, setChoice] = useState<boolean | null>(null);
   const open = choice ?? byDefault;
-  if ("gated" in data.history && data.snapshot) return <SubscriberRow><SubscriberNotice kind="analysis" signedIn={data.access.signedIn} returnTo={data.route.path} /></SubscriberRow>;
+  if ("gated" in data.history && data.snapshot) return <PremiumRow><PremiumNotice kind="analysis" signedIn={data.access.signedIn} returnTo={data.route.path} /></PremiumRow>;
   return <Card data-section="analysis" data-open={open || undefined} data-open-by-default={(choice === null && byDefault) || undefined}
     aria-labelledby="section-analysis-title">
     <CardHeader icon={<ReasonIcon />} title={messages.text("details.why")} meta={summary(messages, data)} open={open} controls="section-analysis"

@@ -48,4 +48,4 @@ The kickoff timestamp and the observed provider phase are separate. `result-sync
 | 08 Publication and settlement | Reuse `publicFixtureScope`, `feedSql`, `readFootballCoverage`, the result stores and settlement. Keep fixture visibility, forecast availability, source clock and outcome independent. |
 | 09 Validation and rollout | Existing adapter/replay, SQL backend, feed/settlement, worker and renderer suites. Use the isolated staging VPS activation path, verified migration state and the authorized promotion of the exact tested package. |
 
-Backend phases keep the public routes, subscriber checks and user interface contracts intact.
+Backend phases keep the public routes, user checks and user interface contracts intact.

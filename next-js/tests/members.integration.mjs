@@ -277,7 +277,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.deepEqual((await database.query((client) => client.ownerAuditEvent.findUniqueOrThrow({ where: { id: event.id } }))).details, { reference: "C-0000", days: 2 });
     });
 
-    await t.test("subscriber dashboard reads safe own-account snapshots through the application role", async () => {
+    await t.test("user dashboard reads safe own-account snapshots through the application role", async () => {
       const config = { production: false, key: (purpose, value) => sha256(`${purpose}:${value}`) };
       const sessions = createMemberSessions({ database, config, now: () => +now });
       const signedIn = await sessions.signIn("256700000451", "unknown");
@@ -471,7 +471,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
 
       await ownerSignInAudit(async () => ({ database }), "admin", { now })({ action: "sign-in", username: "owner" });
       assert.equal((await audits("owner_signed_in")).length, 1);
-      // No audit row holds a subscriber's number, a payer's number or an access code.
+      // No audit row holds a user's number, a payer's number or an access code.
       const memberNumbers = (await app.query("SELECT phone FROM MemberAccount WHERE phone IS NOT NULL UNION SELECT payerPhone FROM PaymentSubmission WHERE payerPhone IS NOT NULL"))
         .map(({ phone }) => phone);
       assert.ok(memberNumbers.length > 10);

@@ -28,7 +28,7 @@ async function Screen({ screen, input, performance }: { screen: PreviewScreen; i
   if (screen === "best-slips") return <PublicShell locale="en" today={today} current="best-slips" app compact>
     <BestSlips result={await previewBestSlips(viewer, parseBestSlipsQuery(input, today))} locale="en" signedIn />
   </PublicShell>;
-  if (screen === "matches") return <MatchFeedPage {...previewFeed(input)} showAccount subscriberOnly={false} />;
+  if (screen === "matches") return <MatchFeedPage {...previewFeed(input)} showAccount premiumOnly={false} />;
   if (screen === "slip-builder") {
     let draft = criteria;
     try { if (input.build === "1") draft = parseSlipCriteria(input, today); } catch { /* Keep the review editable. */ }

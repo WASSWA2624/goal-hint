@@ -42,7 +42,7 @@ The other concepts remain available for future comparison.
 
 The gallery includes fictional status queues, normalized search, provider
 filtering, sorting, editable confirmation fields, wallet SMS entry, an evidence
-preview, and illustrative subscriber details. Approving or rejecting operates
+preview, and illustrative user details. Approving or rejecting operates
 on the in-memory sample queue and advances to another report. Reloading resets
 sample records and drafts. Only shortlist and theme preferences persist.
 
@@ -51,7 +51,7 @@ No private records are loaded and no payment APIs are called. The page is marked
 visitors see a desktop preview notice.
 
 The live desktop pane starts with a plain, read-only summary of the payment
-reference, subscriber, package, dates, days, and status. Transaction details
+reference, user, package, dates, days, and status. Transaction details
 contain the provider, copyable transaction ID, receipt fields, and screenshot
 preview. The footer separates rejection on the left from approval on the
 right. Rejection opens a dialog over the pane with selectable reasons, an

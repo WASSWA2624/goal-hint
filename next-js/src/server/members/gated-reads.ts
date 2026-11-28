@@ -5,7 +5,7 @@ import { matchDetailResponseSchema } from "../../domain/match-detail.ts";
 import { matchFeedResponseSchema } from "../../domain/match-feed.ts";
 import { matchInsightsSchema } from "../../domain/match-insights.ts";
 import { isCompletedFixtureStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
-import { gateDetailResponse, gateFeedResponse, gateInsights, usesSubscriberFeedOracle } from "../../domain/paywall.ts";
+import { gateDetailResponse, gateFeedResponse, gateInsights, usesPremiumFeedOracle } from "../../domain/paywall.ts";
 import { MatchFeedError } from "../matches/feed-error.ts";
 import { parseMatchFeedQuery } from "../matches/feed-service.ts";
 import { readPublicMatchDetail } from "../matches/public-detail.ts";
@@ -38,10 +38,10 @@ export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed
       const at = clock?.now() ?? utcInstantFromEpochMilliseconds(Date.now());
       const query = parseMatchFeedQuery(parameters, getReportingDate(at), { ...context,
         ...(access.tier === "free" ? { providerOdds: true } : {}), asOf: at });
-      if (access.tier === "free" && usesSubscriberFeedOracle(query)) throw new MatchFeedError("subscription-required");
+      if (access.tier === "free" && usesPremiumFeedOracle(query)) throw new MatchFeedError("subscription-required");
       const response = await readFeed(parameters, { ...context, completedOnly: false }, clock ?? { now: () => at });
       access = await contentAccess(recheckAccess);
-      if (access.tier === "free" && usesSubscriberFeedOracle(query)) throw new MatchFeedError("subscription-required");
+      if (access.tier === "free" && usesPremiumFeedOracle(query)) throw new MatchFeedError("subscription-required");
       const result = gateFeedResponse(response, access);
       try { return access.tier === "free" ? matchFeedResponseSchema.parse(result) : result; }
       catch { throw new MatchFeedError("unavailable"); }

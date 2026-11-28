@@ -3,7 +3,7 @@ import "server-only";
 import { getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
 import type { FeedParameters } from "../../domain/feed-query.ts";
 import { feedPerformanceReplySchema } from "../../domain/feed-performance-summary.ts";
-import { usesSubscriberFeedOracle } from "../../domain/paywall.ts";
+import { usesPremiumFeedOracle } from "../../domain/paywall.ts";
 import { contentAccess, type AccessResolver } from "../members/gated-reads.ts";
 import { resolveViewerAccessFresh } from "../members/viewer-access.ts";
 import { MatchFeedError } from "./feed-error.ts";
@@ -20,11 +20,11 @@ export function createGatedFeedSummary(source: FeedSummarySource = readPublicMat
     const at = clock.now(), initialAccess = await contentAccess(resolveAccess);
     const query = parseMatchFeedQuery(parameters, getReportingDate(at), { asOf: at,
       ...(initialAccess.tier === "free" ? { providerOdds: true } : {}) });
-    if (initialAccess.tier === "free" && usesSubscriberFeedOracle(query)) throw new MatchFeedError("subscription-required");
+    if (initialAccess.tier === "free" && usesPremiumFeedOracle(query)) throw new MatchFeedError("subscription-required");
     const data = await source(parameters, { completedOnly: false }, { now: () => at });
     if (!data.performance) throw new MatchFeedError("unavailable");
     const access = await contentAccess(resolveAccess);
-    if (access.tier === "free" && usesSubscriberFeedOracle(query)) throw new MatchFeedError("subscription-required");
+    if (access.tier === "free" && usesPremiumFeedOracle(query)) throw new MatchFeedError("subscription-required");
     return feedPerformanceReplySchema.parse({ performance: data.performance, paginationVersion: data.paginationVersion,
       asOf: data.asOf, access: { tier: access.tier, signedIn: access.signedIn } });
   };

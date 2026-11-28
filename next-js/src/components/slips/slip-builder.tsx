@@ -14,7 +14,7 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { getDateInTimeZone } from "@/domain/device-calendar";
 import { slipsHref } from "@/domain/navigation";
-import { subscriberHref } from "@/domain/subscriber-navigation";
+import { subscriptionHref } from "@/domain/subscription-navigation";
 import { publicPolicy } from "@/domain/public-policy";
 import { fullDayKickoffTime } from "@/domain/kickoff-time";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipInputFields,
@@ -103,7 +103,7 @@ type Props = Readonly<{
   locale: string; today: ReportingDate; criteria: SlipCriteria; result: SlipBuildPageResult | null;
   error?: SlipCriteriaIssue | null; initialInputs?: SlipInputs; initialTimeZone?: string; initialMarkets?: readonly SlipMarketFamily[];
   initialOutcomes?: SlipCriteria["outcomes"];
-  initialReuse?: boolean; showAccount?: boolean; subscriberOnly?: boolean; signedIn?: boolean;
+  initialReuse?: boolean; showAccount?: boolean; premiumOnly?: boolean; signedIn?: boolean;
   jointEstimates?: boolean;
   providerOdds?: boolean;
   configurationId?: string | null; applyDefault?: boolean;
@@ -111,7 +111,7 @@ type Props = Readonly<{
 
 /** The native GET form and enhanced navigation use the same strict criteria parser. */
 export function SlipBuilder({ locale, today, criteria, result: receivedResult, error: initialError = null, initialInputs = {}, initialTimeZone, initialMarkets,
-  initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false, jointEstimates = false, configurationId = null,
+  initialOutcomes, initialReuse, showAccount = false, premiumOnly = false, signedIn = false, jointEstimates = false, configurationId = null,
   applyDefault = false, providerOdds = publicPolicy.features.providerOdds }: Props) {
   const messages = createMessages(locale), router = useRouter(), prefix = useId();
   const [clearedResult, setClearedResult] = useState<SlipBuildPageResult | null>(null);
@@ -437,7 +437,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
               </BuilderFilters>
             </div>
             <div data-criteria-actions data-toolbar-group="actions">
-              {subscriberOnly ? <BuildLink data-slip-access-action href={subscriberHref(signedIn, action, "login")} prefetch={false}>
+              {premiumOnly ? <BuildLink data-slip-access-action href={subscriptionHref(signedIn, action, "login")} prefetch={false}>
                 <LockIcon /><SlipBuildActionLabel locale={locale} restricted />
               </BuildLink> : <BuildButton data-slip-access-action type="submit" disabled={pending}>
                 <SlipIcon /><SlipBuildActionLabel locale={locale} restricted={false} />
@@ -451,7 +451,7 @@ export function SlipBuilder({ locale, today, criteria, result: receivedResult, e
       {generated && <BuilderFeedback role="status" data-slip-build-feedback><p>{messages.plural(
         data.slips.length < criteria.slips ? "slips.generatedFewer" : "slips.generatedCount", data.slips.length,
         { requested: messages.number(criteria.slips) })}</p></BuilderFeedback>}
-      {subscriberOnly || pending && !generated ? null : generated ? <>
+      {premiumOnly || pending && !generated ? null : generated ? <>
         <SlipMatchRefreshProvider slips={shownSlips} enabled={!pending} onAccessRevoked={recheckAccess} accessFallback={accessRequired}
           {...(result.matchStates ? { initialStates: result.matchStates } : {})}>
         <SlipList data-slip-list>{shownSlips.map((slip, index) => {

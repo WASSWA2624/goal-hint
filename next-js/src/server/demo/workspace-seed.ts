@@ -11,7 +11,7 @@ import { assertDemoDatabase } from "./member.ts";
 const dayMs = 86_400_000;
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 
-/** Synthetic football and analytics remain available without generating financial or subscriber examples. */
+/** Synthetic football and analytics remain available without generating financial or user examples. */
 export async function seedDemoWorkspace(database: DatabaseRuntime, nowMs = Date.now()): Promise<void> {
   assertDemoDatabase();
   const [identity] = await database.query((tx) => tx.$queryRaw<{ name: string }[]>`SELECT DATABASE() AS name`);

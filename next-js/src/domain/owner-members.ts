@@ -23,7 +23,7 @@ export type OwnerNotice = Readonly<{ id: string; accountId: string; phone: strin
 export type OwnerOverview = Readonly<{ pending: number; active: number; weekRevenue: number; monthRevenue: number; trials: number; busy: number;
   creditHeld: number; creditOwed: number }>;
 export type OwnerAccount = Readonly<{ id: string; phone: string | null; status: string; lastSignInAt: string }>;
-export type OwnerSubscriber = Readonly<{ id: string; phone: string | null; blockedAt: string | null; blockedReason: string | null; ownerNote: string | null; erasedAt: string | null; lastSignInAt: string;
+export type OwnerUser = Readonly<{ id: string; phone: string | null; blockedAt: string | null; blockedReason: string | null; ownerNote: string | null; erasedAt: string | null; lastSignInAt: string;
   codes: readonly OwnerCode[]; submissions: readonly Readonly<{ id: string; reference: string; status: string; purpose: "plan" | "topup"; planName: string; claimedAmountUgx: number;
     amountReceivedUgx: number | null; submittedAt: string }>[];
   devices: readonly Readonly<{ id: string; createdAt: string; lastSeenAt: string; expiresAt: string }>[];

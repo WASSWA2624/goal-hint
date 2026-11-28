@@ -5,7 +5,7 @@ import Link from "@/components/navigation/navigation-link";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { ButtonLink } from "@/components/ui/controls";
 import { LockIcon } from "@/components/ui/icons";
-import { subscriberHref } from "@/domain/subscriber-navigation";
+import { subscriptionHref } from "@/domain/subscription-navigation";
 import { createMessages } from "@/i18n/messages";
 
 type UnlockLabelKey = "paywall.unlockPredictions" | "paywall.unlockSlip" | "paywall.unlockSlipBuilder";
@@ -28,7 +28,7 @@ export function UnlockLink({ locale = "en", signedIn = false, returnTo = "/en", 
   locale?: string; signedIn?: boolean; returnTo?: string; guestView?: "login" | "register"; stretch?: boolean; overlay?: boolean; label?: UnlockLabelKey;
 }) {
   const text = createMessages(locale).text(label);
-  return <Action href={subscriberHref(signedIn, returnTo, guestView)} prefetch={false} $stretch={stretch} $overlay={overlay} data-unlock-link>
+  return <Action href={subscriptionHref(signedIn, returnTo, guestView)} prefetch={false} $stretch={stretch} $overlay={overlay} data-unlock-link>
     {overlay ? <VisuallyHidden>{text}</VisuallyHidden> : <Label><LockIcon aria-hidden="true" />{text}</Label>}
   </Action>;
 }
@@ -69,7 +69,7 @@ export function UnlockButton({ locale = "en", signedIn = false, returnTo = "/en"
   locale?: string; signedIn?: boolean; returnTo?: string; guestView?: "login" | "register"; compact?: boolean; label?: UnlockLabelKey; cardTitle?: string;
 }) {
   const text = createMessages(locale).text(label);
-  return <AccessButton href={subscriberHref(signedIn, returnTo, guestView)} prefetch={false} variant="secondary" $embedded={compact}
+  return <AccessButton href={subscriptionHref(signedIn, returnTo, guestView)} prefetch={false} variant="secondary" $embedded={compact}
     data-unlock-button data-unlock-card={cardTitle ? "" : undefined} aria-label={cardTitle ? `${text}: ${cardTitle}` : undefined}>
     <LockIcon aria-hidden="true" /><span>{text}</span>
   </AccessButton>;

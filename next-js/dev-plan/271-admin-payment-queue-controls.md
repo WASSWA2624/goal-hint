@@ -22,5 +22,5 @@
   submission. Touch checks covered All, Reset, Back, and shared control heights.
 - Focused unit tests and disposable MySQL checkout and review suites passed.
   TypeScript and the theme contract also passed.
-- The broader owner fixture stopped at an outdated Subscribers markup assertion.
+- The broader owner fixture stopped at an outdated Users markup assertion.
   Its legacy Payments API fixture also expects a response without pagination.

@@ -57,7 +57,7 @@ the default match feed, titled
 pagination number; match titles include the teams, known kickoff's EAT date and
 Goal Hint suffix, and say "prediction" only when the page is indexable (a
 published forecast). Descriptions add the competition and describe the anonymous
-view: predictions are for subscribers. Dates distinguish repeat fixtures between the same clubs without
+view: predictions are for users with access. Dates distinguish repeat fixtures between the same clubs without
 inventing a kickoff when none is stored. The 404 page has its own title and
 social tags, with no canonical. Existing
 named first-party favicon, touch icon and 1200 × 630 social PNG assets are reused.
@@ -75,7 +75,7 @@ redirect permanently to `/en/matches` with their query parameters preserved.
 Every feed and archive card links its canonical match page for every viewer;
 locked panels on the match page offer sign-up. Only an unfinished fixture with a
 published forecast in an eligible family renders locked; a fixture without one
-shows the no-prediction reason subscribers see. Match pages link their EAT-day
+shows the no-prediction reason users see. Match pages link their EAT-day
 archive from the banner date (the BreadcrumbList's middle level), and Team Form,
 Head to Head and last-result rows are links to those matches that still open the
 in-page panel on a plain click.
@@ -228,7 +228,7 @@ then be checked against the actual operator, audience and processing arrangement
   and logo display; this records the owner's statement, not independent contract
   verification. [API-Football's terms](https://www.api-football.com/terms) place
   responsibility for necessary publication/visual-asset permissions on the user.
-  The owner permits reuse of Goal Hint's original material except unfinished-fixture subscriber material (OP-37); this
+  The owner permits reuse of Goal Hint's original material except unfinished-fixture premium material (OP-37); this
   does not relicense provider data, logos or other third-party material.
 - **Publication/release:** Planned launch/effective date: **1 November 2026**.
   This is a future target, not a claim that incomplete notices are effective.

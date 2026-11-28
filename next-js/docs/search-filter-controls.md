@@ -11,9 +11,9 @@ metrics, floating-label primitives, focus styles and theme tokens. The search
 action and input use the field’s inner grid track, overriding the standalone
 control minimum so their bounds stay inside the field on every screen size.
 
-Matches, admin payments/codes/subscribers/audit/plans/referral lookup, market
+Matches, admin payments/codes/users/audit/plans/referral lookup, market
 search and league/country/phone-country option search use this component.
-Matches, payment, subscriber and audit advanced filters reuse
+Matches, payment, user and audit advanced filters reuse
 `AdvancedFilterDialog`, with a sliders icon and compact header and footer.
 Reset Filters sits on the left and Apply Filters on the right. Close and Escape
 cancel the draft. Backdrop clicks leave the modal open.

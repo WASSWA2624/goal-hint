@@ -5,7 +5,7 @@
 - Apply approved design 01 to Best slips and slip-builder results through their
   shared display, including saved and published history using that component.
 - Replace visible whole-slip winning probability with average match probability.
-  Preserve ranking, generation, stored snapshots and subscriber access behavior.
+  Preserve ranking, generation, stored snapshots and premium access behavior.
 - Keep compact rows readable with original full names, competition/country,
   kickoff/timezone, market/pick, odds, probability and supplied saved results.
 

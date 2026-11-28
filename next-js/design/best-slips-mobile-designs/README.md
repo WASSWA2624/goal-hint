@@ -3,7 +3,7 @@
 Ten review-only page concepts for the Best slips mobile screen. The authored
 fragment is displayed in the chat's named variant carousel; its previous/next
 controls and picker come from the visualization host. The host also provides
-light/dark/device appearance and Subscriber / Free member / Guest preview modes.
+light/dark/device appearance and User / Free member / Guest preview modes.
 
 ## Browser review
 
@@ -17,7 +17,7 @@ Open `http://127.0.0.1:4390/`. The sticky navigator at the top has Previous/Next
 arrows and a dropdown containing all ten named designs. Appearance and viewer
 selectors sit alongside it. The URL retains the selected design and settings;
 switching designs preserves each concept's local filters and disclosures.
-For example, `/?design=easy-reading&appearance=dark&viewer=subscriber` opens
+For example, `/?design=easy-reading&appearance=dark&viewer=user` opens
 Easy Reading directly. Use `--port` for another local port or omit `--serve`
 to regenerate only the ignored standalone HTML. The review shell loads pinned
 Lucide icons from a CDN and Manrope from Google Fonts; local app data is not used.

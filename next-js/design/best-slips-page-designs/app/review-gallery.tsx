@@ -37,7 +37,7 @@ export function ReviewGallery({ children, viewer }: { children: ReactNode; viewe
         <Button variant="secondary" aria-label="Next design" disabled={index === designs.length - 1} onClick={() => choose(index + 1)}>→</Button>
         <SelectInput label="Viewer" aria-label="Review viewer" value={viewer} onChange={(event) => {
           const url = new URL(window.location.href);
-          if (event.target.value === "subscriber") url.searchParams.delete("viewer");
+          if (event.target.value === "user") url.searchParams.delete("viewer");
           else url.searchParams.set("viewer", event.target.value);
           window.location.assign(url);
         }}>{viewerModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.name}</option>)}</SelectInput>

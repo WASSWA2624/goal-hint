@@ -44,7 +44,7 @@ function browserFor(t, visibility = "visible") {
   };
 }
 
-test("admin count requests are private, shared across headers and absent without subscribers", async (t) => {
+test("admin count requests are private, shared across headers and absent without users", async (t) => {
   const view = browserFor(t);
   assert.equal(getPendingPaymentsSnapshot(), null);
   assert.equal(getServerPendingPaymentsSnapshot(), null);

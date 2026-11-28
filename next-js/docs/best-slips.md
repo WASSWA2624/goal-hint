@@ -7,7 +7,7 @@ and [daily publications](daily-slip-publications.md) for the current behavior.
 the editable builder. Old feed-query bookmarks redirect to Matches. Public
 previews use the selected responsive slip layout and show the rank, match count,
 total odds and average match probability to every visitor. Guests and members
-without a valid subscription start on yesterday's publication; subscribers
+without a valid subscription start on yesterday's publication; users
 start on today's. Public viewers see only slips whose original selections all
 have verified completed results and whose fixtures are canonically completed.
 This applies regardless of publication day: yesterday's unfinished slips remain
@@ -48,7 +48,7 @@ or Saved result; it does not invent elapsed minutes or a final score. The existi
 desktop match-details batch updates entitled observations every 20 seconds while
 visible and online, without rebuilding the slips. Cohort/statistics refresh
 every 60 seconds on entitled watched desktop lists; public history and mobile
-page refresh remain at 20 seconds. Public history never starts subscriber-only
+page refresh remain at 20 seconds. Public history never starts premium-only
 observation polling.
 
 The daily Kampala cohort targets 4.50–5.50 combined odds and up to 100 distinct
@@ -208,7 +208,7 @@ between an access prompt and the first slip. Its prompt also has compact local
 padding and internal gaps; shared page, builder and mobile spacing is preserved.
 Past periods include today; future periods start tomorrow. Custom bounds are
 inclusive and limited to 366 days. Reset restores Today and All slips for
-subscribers, or Yesterday and All slips for visitors and expired members. Dates
+users, or Yesterday and All slips for visitors and expired members. Dates
 and outcomes combine; editing or canceling dates preserves the result choice.
 Future periods honestly remain empty until a publication exists.
 

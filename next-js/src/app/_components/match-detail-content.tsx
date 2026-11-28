@@ -3,7 +3,7 @@ import { TextLink } from "@/components/ui/controls";
 import { LocalTime } from "@/components/ui/local-time";
 import type { UtcInstant } from "@/domain/calendar";
 import type { StoredDetailSnapshot as DetailSnapshot, MatchDetailResponse } from "@/domain/match-detail";
-import { SubscriberNotice } from "@/components/members/subscriber-notice";
+import { PremiumNotice } from "@/components/members/premium-notice";
 import type { MarketFamily, MarketSelection } from "@/domain/markets";
 import { publicPolicy } from "@/domain/public-policy";
 import { PredictionOutcome } from "@/components/match/prediction-outcome";
@@ -126,7 +126,7 @@ function RevisionAnalysis({ snapshot, analysis, locale, scope = "detail-" }: {
 export function HistorySnapshot({ data, locale }: { data: MatchDetailResponse; locale: string }) {
   const snapshot = data.snapshot;
   if (!snapshot) return null;
-  if ("gated" in snapshot) return <SubscriberNotice locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} />;
+  if ("gated" in snapshot) return <PremiumNotice locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} />;
   const analysis = detailAnalysis(snapshot.analysis), scope = `history-${snapshot.revisionId}-`;
   return <Stack data-history-snapshot={snapshot.revisionId}>
     <DetailMarketGrid>

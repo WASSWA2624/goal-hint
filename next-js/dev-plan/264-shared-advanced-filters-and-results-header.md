@@ -5,7 +5,7 @@
 - Reuse the existing searchable checklist, date/status coordination and native
   dialog, with a branded Advanced Filters header and Reset Filters / Apply
   Filters footer. Reset remains a draft edit and dismissal restores the draft.
-- Reuse the dialog chrome on payment, subscriber and audit search screens;
+- Reuse the dialog chrome on payment, user and audit search screens;
   remove redundant external reset actions.
 - Remove the gray search-panel treatment and use shared theme/spacing/control
   tokens. Verify light/dark themes, fine/coarse controls and narrow layouts.

@@ -3,7 +3,7 @@
 ## Scope
 
 Unify slip headers and give visitors yesterday's results while reserving today's
-and future predictions for valid subscribers.
+and future predictions for valid users.
 
 ## Implementation
 
@@ -14,13 +14,13 @@ and future predictions for valid subscribers.
   saved/history timestamps too, removing duplicate date/status headings.
 - Spell out Average match probability on desktop. Preserve original selections
   and use matching original-cycle observations for header outcomes.
-- Start active subscribers on Today/All slips and guests or expired members on
+- Start active users on Today/All slips and guests or expired members on
   Yesterday/All slips. Toolbar and custom-dialog Reset respect those defaults.
 - Release historical publications publicly. Gate current/future selections in
   SSR and API, recheck access after reads, and re-read implicit defaults after an
   access change. Preserve explicit range filters and safe aggregate previews.
 - Present one registration/subscription prompt per locked list, including empty
-  future periods. Disable subscriber-only observation polling for public history;
+  future periods. Disable premium-only observation polling for public history;
   retain the regular page refresh.
 
 ## Verification
@@ -35,7 +35,7 @@ and future predictions for valid subscribers.
   JavaScript page exceptions. Desktop 1024/1440px and mobile 320/390px layouts
   keep the exact title/date/rank order and one date/status per header. Status
   badges are 72px wide, with at least 4.90:1 text contrast in both themes.
-- Browser coverage includes visitor/member/subscriber defaults, Reset/custom
+- Browser coverage includes visitor/member/user defaults, Reset/custom
   dates, keyboard disclosure/Share/focus behavior, and expiry with the server
   refresh deliberately held. Failed requests, switching to mobile, retry,
   reload and renewal never restore protected current/future selections.

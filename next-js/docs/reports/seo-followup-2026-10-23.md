@@ -26,7 +26,7 @@ remain unverified. No production performance or ranking improvement is claimed.
 
 | Area | Before | After |
 | --- | --- | --- |
-| Mobile original analysis | The server rendered stored analysis, but phone hydration removed the collapsed panel's children. Reasons, risk and citations then required interaction to appear in the DOM. | The existing hidden accordion retains its children, so available stored content remains in the document when collapsed. Subscriber access controls still apply before rendering. |
+| Mobile original analysis | The server rendered stored analysis, but phone hydration removed the collapsed panel's children. Reasons, risk and citations then required interaction to appear in the DOM. | The existing hidden accordion retains its children, so available stored content remains in the document when collapsed. Premium access controls still apply before rendering. |
 | Shared detail sections | Collapsing unmounted the section subtree, including available stored previews and publication history. | The reusable `SectionCard` hides the existing panel. Insight requests still depend on the selected section; retaining markup does not enable closed-section requests. |
 | Keyboard collapse | Focus restoration assumed collapsed descendants had been removed. | Collapsing also restores focus when the active element belongs to the retained hidden panel. |
 | Production metadata/content checks | Correct canonical and robots tags could let an HTML shell with no title or main heading pass. | Verification requires one nonempty document title and one server-rendered main heading; JavaScript strings and inert templates do not supply them. SVG titles remain valid without counting as document titles. |

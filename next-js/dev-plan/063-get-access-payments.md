@@ -4,7 +4,7 @@
 
 **Depends on:** [058-subscription-data-model.md](058-subscription-data-model.md), [059-phone-sign-in.md](059-phone-sign-in.md), [060-access-codes-periods.md](060-access-codes-periods.md) (the code box uses code entry).
 
-**Source:** [App specification](../../app-write-up.md), sections 1, 2 and 13 (version 1.9 paid access); [monetization plan](../../prompts/monetization.md), sections 2 (subscriber journey), 3 (payment report, transaction ID, screenshots, auto-fill), 5.3 (throttles), 5.4, 5.7, 5.8, 6 (Get access page, Safety tips, controls), 8 (063) and 9.
+**Source:** [App specification](../../app-write-up.md), sections 1, 2 and 13 (version 1.9 paid access); [monetization plan](../../prompts/monetization.md), sections 2 (user journey), 3 (payment report, transaction ID, screenshots, auto-fill), 5.3 (throttles), 5.4, 5.7, 5.8, 6 (Get access page, Safety tips, controls), 8 (063) and 9.
 
 ## Prompt
 

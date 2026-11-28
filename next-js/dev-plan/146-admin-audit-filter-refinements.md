@@ -8,7 +8,7 @@
 - Apply event and date criteria before the existing newest-100 database limit, retaining bounded reads and CSV export of all matching loaded entries.
 - Show Audit at the left of the content header and retain Export CSV at the right.
 - Add First and Last pagination controls without changing the result scrollbar.
-- Resolve event actions to the correct payment, plan, subscriber or settings destination.
+- Resolve event actions to the correct payment, plan, user or settings destination.
 
 ## Verification
 

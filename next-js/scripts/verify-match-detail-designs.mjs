@@ -36,7 +36,7 @@ export async function verifyMatchDetailDesigns(page, { origin = "http://127.0.0.
   try {
     if (phase === "layouts") {
       for (const variant of variants.filter(item => variantIds.includes(item.id))) {
-        await open({ variant: variant.id, tab: "stats", viewer: "subscriber", status: "scheduled" });
+        await open({ variant: variant.id, tab: "stats", viewer: "user", status: "scheduled" });
         for (const tab of tabs) {
           await page.locator(`[data-tab="${tab.id}"]`).click();
           await page.locator(`[data-active-tab="${tab.id}"]`).waitFor();
@@ -50,7 +50,7 @@ export async function verifyMatchDetailDesigns(page, { origin = "http://127.0.0.
       for (const variant of variants.filter(item => variantIds.includes(item.id))) for (const viewer of viewers) for (const status of statuses) {
         await open({ variant: variant.id, tab: "markets", viewer: viewer.id, status: status.id });
         const context = `${variant.id}/${viewer.id}/${status.id}`;
-        const allowed = ["subscriber", "referral"].includes(viewer.id) || status.id === "finished-regulation";
+        const allowed = ["user", "referral"].includes(viewer.id) || status.id === "finished-regulation";
         check(await page.locator("[data-featured]").count() === (allowed ? 1 : 0), `${context}: featured access`);
         check(await page.locator(".markets-table").count() === (allowed ? 1 : 0), `${context}: market access`);
         const payload = await page.evaluate(async () => (await fetch(`/api/fixture${location.search}`)).json());
@@ -72,7 +72,7 @@ export async function verifyMatchDetailDesigns(page, { origin = "http://127.0.0.
       }
     }
     if (phase === "interactions") {
-      await open({ variant: "touchline", tab: "lineups", viewer: "subscriber", status: "scheduled" });
+      await open({ variant: "touchline", tab: "lineups", viewer: "user", status: "scheduled" });
       check(await page.locator(".pitch-player").count() === 22, "lineups: 22 positioned players");
       check(await page.locator(".substitute").count() === 8, "lineups: substitutes");
       for (const mode of ["age", "rating", "number"]) {

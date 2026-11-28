@@ -7,7 +7,7 @@
   banner-specific tests and rendering fixtures/scripts.
 - Preserve account navigation, subscriptions, payments and access checks.
 - Share the light theme's white field fill across dialog bodies, sheets,
-  subscriber reviews, sharing drawers and phone country pickers. Preserve
+  user reviews, sharing drawers and phone country pickers. Preserve
   current dark dialog fills and distinct dialog header/footer areas.
 - Verify headers/content on phone and desktop, run relevant checks, and push main.
 

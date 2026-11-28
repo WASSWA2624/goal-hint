@@ -299,7 +299,7 @@ function browser(t, { saved = null, dark = false, blocked = false, writeBlocked 
   return { values, events, mediaEvents, media };
 }
 
-test("toggling persists, notifies subscribers and synchronizes other tabs", (t) => {
+test("toggling persists, notifies users and synchronizes other tabs", (t) => {
   const state = browser(t, { saved: "light", dark: true });
   let notifications = 0;
   const unsubscribe = subscribeThemePreference(() => { notifications += 1; });

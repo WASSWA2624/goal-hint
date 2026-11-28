@@ -486,4 +486,4 @@ Check Admin Overview for counts at each stage of today's fixture coverage and fo
 
 ## Paid access (066)
 
-No deployment or activation is authorized by prompts 057–067. Overlay inventory includes `prisma/mariadb/20261019142209_subscriptions.sql` alongside analytics and existing goal-market/manifest overlays. Stop app and worker writes for verified DDL; check all nine InnoDB tables, checks/FKs and narrow grants before restarting. Preserve paid mode off and complete host checks plus OP-40 approval. See [subscriber operations](../subscriptions.md).
+No deployment or activation is authorized by prompts 057–067. Overlay inventory includes `prisma/mariadb/20261019142209_subscriptions.sql` alongside analytics and existing goal-market/manifest overlays. Stop app and worker writes for verified DDL; check all nine InnoDB tables, checks/FKs and narrow grants before restarting. Preserve paid mode off and complete host checks plus OP-40 approval. See [user operations](../subscriptions.md).

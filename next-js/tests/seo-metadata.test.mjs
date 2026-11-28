@@ -136,8 +136,8 @@ test('feed, archive, home and default descriptions describe what anonymous visit
   descriptions.push(messages.text('metadata.description'));
   for (const description of descriptions) {
     assert.doesNotMatch(description, /\bpicks?\b|auditable|revision history|original forecast sources|estimated probabilities|available analysis/iu, description);
-    assert.match(description, /subscribers/u, description);
+    assert.match(description, /users/u, description);
   }
-  assert.equal(descriptions[2], 'Football matches, kickoff times, scores and results for Thursday, October 8, 2026 in East Africa Time, with Goal Hint predictions for subscribers.');
+  assert.equal(descriptions[2], 'Football matches, kickoff times, scores and results for Thursday, October 8, 2026 in East Africa Time, with Goal Hint predictions for users with access.');
   assert.match(descriptions[0], /East Africa Time/u);
 });

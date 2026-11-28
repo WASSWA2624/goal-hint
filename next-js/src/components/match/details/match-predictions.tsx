@@ -3,7 +3,7 @@
 import { memo } from "react";
 import styled from "styled-components";
 import { UnlockPanel } from "@/components/members/prediction-unlock";
-import { ChevronRightIcon, SubscriberIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, StarIcon } from "@/components/ui/icons";
 import { SectionHeading } from "@/components/ui/layout";
 import { bookmakerOddsSource, detailRecordNotices } from "@/domain/detail-presentation";
 import { fullDetailSnapshot } from "@/domain/detail-snapshot";
@@ -151,7 +151,7 @@ export const MatchPredictions = memo(function MatchPredictions() {
       {featured ? <>
         <Featured data-featured-pick={featured.key} data-verdict={featured.family}>
           <div>
-            <FeatureLabel><SubscriberIcon />{messages.text(replay ? "touchline.retrospective" : "touchline.featured")}</FeatureLabel>
+            <FeatureLabel><StarIcon />{messages.text(replay ? "touchline.retrospective" : "touchline.featured")}</FeatureLabel>
             <h3><PickLabel pick={featured} featured /></h3>
             <FeaturedPickStatus pick={featured.forecast} description={featuredPickStatusText(featured.forecast, messages)} />
           </div>

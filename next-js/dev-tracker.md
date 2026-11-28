@@ -75,7 +75,7 @@
 | ☑ Completed   | [062-gated-ui-entry-points.md](dev-plan/062-gated-ui-entry-points.md)           | —                                                                                                   |
 | ◐ Partial | [063-get-access-payments.md](dev-plan/063-get-access-payments.md)               | Real SMS/screenshot and physical phone verification (OP-38/067)                                     |
 | ☑ Completed | [064-admin-payments-codes.md](dev-plan/064-admin-payments-codes.md)             | — |
-| ☑ Completed | [065-admin-subscribers-audit.md](dev-plan/065-admin-subscribers-audit.md)       | — |
+| ☑ Completed | [065-admin-users-audit.md](dev-plan/065-admin-users-audit.md)       | — |
 | ◐ Partial | [066-paywall-legal-copy.md](dev-plan/066-paywall-legal-copy.md)                 | Legal/privacy/refund facts remain pending (OP-26/27/39); draft notices; local test flows open                              |
 | ◐ Partial | [067-paywall-launch-readiness.md](dev-plan/067-paywall-launch-readiness.md)     | Real samples, phone/host/legal evidence and activation approval pending                              |
 | — Unassessed | [068-payment-approval-verification.md](dev-plan/068-payment-approval-verification.md) | No completion status was recorded; review implementation and acceptance evidence before assigning one. |
@@ -134,7 +134,7 @@
 
 - **064 (19 October 2026):** ☑ Completed: owner review, guarded screenshots, code delivery and code tools. Admin (28), payments (29, real MySQL), production rendering, type/lint and 375 px WhatsApp/return/reload checks pass.
 
-- **065 (20 October 2026):** ☑ Completed: overview/accounting, subscriber operations, audit and hourly retention. Member (50), final focused MySQL (7), admin (29), production rendering, type/lint and 375 px checks pass.
+- **065 (20 October 2026):** ☑ Completed: overview/accounting, user operations, audit and hourly retention. Member (50), final focused MySQL (7), admin (29), production rendering, type/lint and 375 px checks pass.
 
 - **066 (20 October 2026):** ◐ Partial: mode-independent copy, owner runbook and name-only analytics implemented; units/type/lint/build and all four production HTML checks pass. Owner chose draft notices/off pending OP-26/27/39 facts.
 
@@ -144,7 +144,7 @@
 
 Owner-authorized forward migrations resolve the previously recorded developer drift and backup restore failure. All 29 historical migration rows and 91 durable tables were preserved; db:verify passes. The 93-table base/PITR backup suite passes 10 checks without skips. The old 058 failure notes above are historical; production database capability evidence remains unresolved.
 
-Best Slips is now home, with public summaries and subscriber-only selections; Matches, Live, Results and Slip Builder remain available. Current production generation is unavailable pending a qualified joint model and public odds rights (OP-15/17/36). Account/Get access are visible, phone sign-in works while closed, and all fixture predictions/odds are gated. Nothing was deployed and paid access stays off.
+Best Slips is now home, with public summaries and premium-only selections; Matches, Live, Results and Slip Builder remain available. Current production generation is unavailable pending a qualified joint model and public odds rights (OP-15/17/36). Account/Get access are visible, phone sign-in works while closed, and all fixture predictions/odds are gated. Nothing was deployed and paid access stays off.
 
 
 **Later owner instruction, 20 October:** nothing should remain closed locally. The confirmed receiving-wallet name was saved privately; local test mode is open, with the existing daily plan preserved and approved Weekly/Monthly plans added through the plans service. Settings/mode changes are audited. No existing data was deleted. Production activation/deployment did not occur; release/legal notices remain drafts.
@@ -175,7 +175,7 @@ Source integration is complete; deployment is separate.
 
 **Completed:** submitted searches, instant list filters and option pickers reuse
 SearchBar, with faint inset action fills and accessible hover/press/focus states.
-Adjacent payment/subscriber/audit filter dialogs support Apply, Cancel and Reset
+Adjacent payment/user/audit filter dialogs support Apply, Cancel and Reset
 on both layouts. PerformanceSummary uses shared outcome definitions, cached
 streamed-count normalization and container-responsive cards; report timestamps
 follow the same presentation.

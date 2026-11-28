@@ -31,7 +31,7 @@ test("new action names remain readable and opaque actors do not become primary l
   assert.equal(auditTargetLabel("customRecord"), "Custom record");
   assert.equal(auditActorLabel(`member-admin:${accountId}`), "Administrator");
   assert.equal(auditActorLabel("system:payment-sms"), "System");
-  assert.equal(auditActorLabel("member"), "Subscriber");
+  assert.equal(auditActorLabel("member"), "User");
   assert.equal(auditActorLabel("unverified"), "Unverified visitor");
   assert.equal(auditActorLabel(accountId), "Unknown actor");
   assert.equal(auditActorLabel("a".repeat(64)), "Unknown actor");

@@ -2,7 +2,7 @@
 
 - Follow Payments for compact rows, separate desktop scroll panes, dedicated
   mobile details, and actions outside the detail scroll area.
-- Use the same list and detail structure for Codes, Subscribers, Referral
+- Use the same list and detail structure for Codes, Users, Referral
   review, Plans, and Audit. Restore list context on mobile Back. Keep
   create actions near search, related-record links with their details, and
   paging and CSV export with the list.

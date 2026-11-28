@@ -33,7 +33,7 @@ match contents unchanged. Remove the result-button container's white fill.
   status, slip-card, subscription-state and theme unit tests passed.
 - The production-component acceptance app built successfully, including real
   Best Slips, shared Slip Builder cards and the consolidated status bar.
-- 197 desktop assertions passed across guest/member/subscriber views, both
+- 197 desktop assertions passed across guest/member/user views, both
   themes and 1440/1280/1024px: full-height rails in both native disclosure states,
   square corners, transparent result groups, larger typography, 4.5px list gaps,
   no overlapping columns or page overflow, and header contrast at least 6:1.

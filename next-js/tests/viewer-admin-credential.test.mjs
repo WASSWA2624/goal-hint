@@ -34,7 +34,7 @@ test('admin content access requires the current environment credential, even for
     delete process.env.GOAL_HINT_ADMIN_PASSWORD;
     assert.equal((await read()).tier, 'free');
     row.phone = '256700000778';
-    assert.equal((await read()).tier, 'full', 'ordinary approved subscribers do not need the admin credential');
+    assert.equal((await read()).tier, 'full', 'ordinary approved users do not need the admin credential');
   } finally {
     if (originalPhones === undefined) delete process.env.GOAL_HINT_ADMIN_PHONES; else process.env.GOAL_HINT_ADMIN_PHONES = originalPhones;
     if (originalHash === undefined) delete process.env.GOAL_HINT_ADMIN_PASSWORD_HASH; else process.env.GOAL_HINT_ADMIN_PASSWORD_HASH = originalHash;

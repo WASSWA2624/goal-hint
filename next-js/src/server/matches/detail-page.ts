@@ -56,7 +56,7 @@ export function matchDetailMetadata(result: DetailPageResult, locale = "en", var
   const description = date ? messages.text(competition ? "detail.competitionMetadataDescription" : "detail.datedMetadataDescription",
     { match: title.slice(0, 240), date: messages.reportingDate(date), competition })
     : messages.text("detail.metadataDescription", { match: title.slice(0, 240) });
-  const preview = mode === "on" ? `${description} ${messages.text("detail.subscriberMetadataDescription")}` : description;
+  const preview = mode === "on" ? `${description} ${messages.text("detail.premiumMetadataDescription")}` : description;
   return pageMetadata({ title: pageTitle, description: preview, path: data.route.path,
     index: policy.index && !variant && indexable });
 }

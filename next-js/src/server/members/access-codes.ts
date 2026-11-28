@@ -323,6 +323,7 @@ export function createAccessCodes({ database, now = Date.now, config, notificati
         || (!!input.network !== !!input.transactionRef) || input.transactionRef && !input.planId) return invalid();
       const batch = "accountId" in input && input.requestId ? { accountId: input.accountId, requestId: input.requestId } : null;
       // Bind a retry without copying the private note into the audit.
+      // Keep the original namespace so in-flight retries still match stored grant fingerprints.
       const fingerprint = batch ? config?.key?.("subscriber-bulk-grant",
         JSON.stringify([batch.accountId, batch.requestId, input.planId ?? null, input.durationDays ?? null, note])) : null;
       if (batch && (!fingerprint || input.amountReceivedUgx !== 0 || input.network || input.transactionRef)) return invalid();

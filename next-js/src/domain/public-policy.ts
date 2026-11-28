@@ -4,7 +4,7 @@ import { isDevelopmentDemo, isLocalFootballDevelopment } from "./development-dem
 export const publicPolicy = Object.freeze({
   name: "Goal Hint",
   origin: "https://goalhint.com",
-  access: "free-with-subscriber-predictions",
+  access: "free-with-premium-predictions",
   locales: Object.freeze(["en"] as const),
   defaultLocale: "en",
   theme: "light",

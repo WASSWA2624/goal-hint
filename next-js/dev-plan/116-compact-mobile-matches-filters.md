@@ -32,7 +32,7 @@
   Reset filters and Apply filters at its foot. It contains no duplicate dates.
   Sorting joins its local draft and applies with Apply filters.
 - Preserve searchable league/country lists, market minimums, probability and
-  kickoff-time validation, subscriber restrictions, timezone behavior, applied
+  kickoff-time validation, user restrictions, timezone behavior, applied
   counts, focus containment, scroll locking, and responsive sheet dismissal.
 - Preserve Last 30 days, Latest first, market and Predictions-only defaults,
   URL parsing/navigation, Back restoration, and the stored feed service.

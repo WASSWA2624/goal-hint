@@ -18,21 +18,21 @@ def free_access(value):
 
 
 def gated_record(record):
-    assert record.get("prices") == [], "Subscriber prices leaked."
+    assert record.get("prices") == [], "Premium prices leaked."
     forecast = record.get("forecast")
     if forecast is not None:
-        assert forecast.get("gated") is True and set(forecast) <= FORECAST_KEYS, "Subscriber forecast leaked."
-        assert forecast.get("probabilities") == [], "Subscriber probability leaked."
+        assert forecast.get("gated") is True and set(forecast) <= FORECAST_KEYS, "Premium forecast leaked."
+        assert forecast.get("probabilities") == [], "Premium probabilities leaked."
 
 
 def gated_html(source, *, cards=False):
     tags = re.findall(r"<[a-z][^>]*>", source, flags=re.I)
-    assert not any(re.search(r'data-(?:detail-market|verdict)=|data-featured-pick="(?!none")', tag) for tag in tags), "Subscriber markup leaked."
+    assert not any(re.search(r'data-(?:detail-market|verdict)=|data-featured-pick="(?!none")', tag) for tag in tags), "Premium markup leaked."
     # The only probability transport allowed on an unfinished free forecast is an empty list.
-    assert not re.search(r'[\\]*"(?:alternatives|reasons|uncertainty)[\\]*"\s*:', source), "Subscriber flight data leaked."
-    assert not re.search(r'[\\]*"probabilities[\\]*"\s*:(?!\s*\[\s*\])', source), "Subscriber probability leaked."
+    assert not re.search(r'[\\]*"(?:alternatives|reasons|uncertainty)[\\]*"\s*:', source), "Premium flight data leaked."
+    assert not re.search(r'[\\]*"probabilities[\\]*"\s*:(?!\s*\[\s*\])', source), "Premium probabilities leaked."
     if not cards:
-        assert not re.search(r'\bdata-(?:market|prediction|outcome|pick-selection|probability-meter|pick-price|pick-odds)=', source), "Subscriber card markup leaked."
+        assert not re.search(r'\bdata-(?:market|prediction|outcome|pick-selection|probability-meter|pick-price|pick-odds)=', source), "Premium card markup leaked."
 
 
 def forecast_ids(feed):
@@ -93,7 +93,7 @@ def verify(origin):
                 assert leg["fixture"].get("forecast") is None
                 if leg["pick"] is not None: assert leg["fixture"]["status"] in COMPLETED
     best_slips = read("/en/best-slips")
-    assert "data-subscriber-panel" not in best_slips, "Unexpected access section beneath filters."
+    assert not re.search(r"data-(?:subscriber|premium)-panel", best_slips), "Unexpected access section beneath filters."
     upcoming = read("/api/matches?when=next-7-days&status=scheduled&pageSize=100", wire=True)
     free_access(upcoming)
     assert upcoming["records"], "No upcoming fixture available; gate verification is incomplete."
@@ -113,7 +113,7 @@ def verify(origin):
     assert detail["history"] == {"gated": True} and "odds" not in detail
     snapshot = detail.get("snapshot")
     assert snapshot and snapshot.get("gated") is True and set(snapshot) <= SNAPSHOT_KEYS
-    assert snapshot.get("probabilities") == [], "Subscriber snapshot probability leaked."
+    assert snapshot.get("probabilities") == [], "Premium snapshot probabilities leaked."
     # The detail's canonical path survives a team rename between the feed and detail reads.
     path = detail["route"]["path"]
     assert re.fullmatch(rf"/en/matches/{re.escape(fixture_id)}/[a-z0-9]+(?:-[a-z0-9]+)*", path)

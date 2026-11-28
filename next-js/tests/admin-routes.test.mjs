@@ -82,7 +82,7 @@ test("account verification, recovery and trial activation use their protected me
 });
 
 test("the scan sees the admin shell, sign-in and sign-out, and the Plans and Settings pages and routes", () => {
-  for (const page of ["src/app/(owner)/admin/page.tsx", "src/app/(owner)/admin/plans/page.tsx", "src/app/(owner)/admin/settings/page.tsx", "src/app/(owner)/admin/payments/page.tsx", "src/app/(owner)/admin/codes/page.tsx", "src/app/(owner)/admin/subscribers/page.tsx", "src/app/(owner)/admin/audit/page.tsx"]) assert.ok(pages.includes(page), pages.join());
+  for (const page of ["src/app/(owner)/admin/page.tsx", "src/app/(owner)/admin/plans/page.tsx", "src/app/(owner)/admin/settings/page.tsx", "src/app/(owner)/admin/payments/page.tsx", "src/app/(owner)/admin/codes/page.tsx", "src/app/(owner)/admin/users/page.tsx", "src/app/(owner)/admin/audit/page.tsx"]) assert.ok(pages.includes(page), pages.join());
   for (const route of [loginRoute, signOutRoute, plansRoute, settingsRoute]) assert.ok(routes.includes(route), routes.join());
 });
 
@@ -325,7 +325,7 @@ test("owner phone forms have POST fallbacks so disabled JavaScript cannot put ph
   const files = [
     { name: "code-tools.tsx" },
     { name: "payment-review.tsx", styles: "payment-styles.tsx", form: "ApprovalForm" },
-    { name: "subscriber-detail.tsx", styles: "subscriber-styles.tsx", form: "CompactForm" },
+    { name: "user-detail.tsx", styles: "user-styles.tsx", form: "CompactForm" },
   ];
   for(const { name, styles, form } of files){
     const file = directory + name, text = await source(file);

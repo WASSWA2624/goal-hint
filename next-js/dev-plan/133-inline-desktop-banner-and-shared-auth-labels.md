@@ -15,7 +15,7 @@ Sign in / Sign up / Sign out across application copy without changing endpoints.
   from the existing session store; reuse its polling and expiry refresh behavior.
 - Use current plan pricing from the private subscription summary, safe account
   return destinations, account actions for guests, and no repeated subscription
-  sales for active subscribers. Keep account-page duplication suppressed.
+  sales for active users. Keep account-page duplication suppressed.
 - Add canonical authentication keys and migrate forms, navigation, account,
   slip access actions, galleries, administrative copy and relevant messages.
 - Update the gallery to show the applied selection and document the behavior.

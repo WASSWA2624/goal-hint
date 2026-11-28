@@ -8,7 +8,7 @@
   and keep settings surfaces and controls square.
 - Keep the slip count, total-odds range, and matches-per-slip range visible.
   Put individual odds/probability, date/time, and markets in popup dialogs.
-- Retain the generated-slip presentation and existing subscriber access checks.
+- Retain the generated-slip presentation and existing premium access checks.
 
 ## Defaults and blank bounds
 

@@ -10,7 +10,7 @@ import { ForecastSourceLabel, ForecastValueLabel } from "@/components/match/fore
 import { predictionDescription } from "@/domain/prediction-label";
 import { bookmakerOddsSource, detailAnalysis } from "@/domain/detail-presentation";
 import { fullDetailSnapshot } from "@/domain/detail-snapshot";
-import { SubscriberNotice } from "@/components/members/subscriber-notice";
+import { PremiumNotice } from "@/components/members/premium-notice";
 import { currentFeaturedOutcome, detailMarketValue, exclusiveFamily, featuredFamily, liveStanding, marketCategoryMembers, marketOutcomes, marketRow, selectedDetailPrice, visibleMarkets } from "@/domain/match-details";
 import { forecastExpectedReturn } from "@/domain/forecast-value";
 import type { PublicExtendedMarket } from "@/domain/extended-markets";
@@ -25,7 +25,7 @@ import { media } from "@/styles/theme";
 import { MarketsIcon, ExternalIcon } from "./details-icons";
 import { DetailOutcome, familyAccent, familyIcon } from "./match-banner";
 import {
-  Card, CardHeader, SubscriberRow, ChoiceGroup, Crumbs, Facts, IconBadge, LinkButton, Note, Panel, PanelHeading, RowButton, RowList, Standing,
+  Card, CardHeader, PremiumRow, ChoiceGroup, Crumbs, Facts, IconBadge, LinkButton, Note, Panel, PanelHeading, RowButton, RowList, Standing,
   desktop, focusRing, size, useDetails, useRevealOnOpen, useStableDetails,
 } from "./details-ui";
 import { useEmbeddedSection, useReturnFocus } from "./section-card";
@@ -173,7 +173,7 @@ export function Explanation() {
   const { data, messages } = useStableDetails();
   const snapshot = fullDetailSnapshot(data);
   const analysis = snapshot ? detailAnalysis(snapshot.analysis) : null;
-  if ("gated" in data.history && data.snapshot) return <SubscriberNotice kind="markets" signedIn={data.access.signedIn} returnTo={data.route.path} />;
+  if ("gated" in data.history && data.snapshot) return <PremiumNotice kind="markets" signedIn={data.access.signedIn} returnTo={data.route.path} />;
   const cite = (urls: readonly string[]) => [...new Set(urls)].flatMap((url) => {
     const source = analysis?.sources.find((entry) => entry.url === url);
     return source ? [<a key={url} href={url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"> {source.publisher}<ExternalIcon /></a>] : [];
@@ -277,7 +277,7 @@ export const MarketsCard = memo(function MarketsCard({ embedded = false, include
   const [search, setSearch] = useMarketSearch(view.marketSearch), query = useDeferredValue(search);
   const snapshot = fullDetailSnapshot(data);
   // As on the verdict, only a published forecast is locked.
-  if ("gated" in data.history && data.snapshot) return <SubscriberRow><SubscriberNotice kind="markets" signedIn={data.access.signedIn} returnTo={data.route.path} /></SubscriberRow>;
+  if ("gated" in data.history && data.snapshot) return <PremiumRow><PremiumNotice kind="markets" signedIn={data.access.signedIn} returnTo={data.route.path} /></PremiumRow>;
   const replayMarkets = data.selection === "applicable" && data.retrospectiveMarkets?.length ? data.retrospectiveMarkets : null;
   const suppressFeatured = embedded && !includeFeatured;
   const current = suppressFeatured ? currentFeaturedOutcome(data) : null;

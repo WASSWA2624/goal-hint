@@ -329,7 +329,7 @@
     function prediction(match) {
       if (match.access !== "available") {
         const locked = match.access === "locked";
-        return `<span class="mc-empty"><strong>${locked ? "Subscriber prediction" : "Prediction unavailable"}</strong><span>${locked ? "Subscribe to view this pick" : "No published pick for this match"}</span></span>`;
+        return `<span class="mc-empty"><strong>${locked ? "User prediction" : "Prediction unavailable"}</strong><span>${locked ? "Subscribe to view this pick" : "No published pick for this match"}</span></span>`;
       }
       const result = match.result ? `<span class="mc-result" data-result="${match.result}">${match.result === "won" ? "Won" : "Lost"}</span>` : "";
       return `<span class="mc-pick"><span class="mc-market"><span class="mc-field-label">Market</span><span>${escape(match.market)}</span></span><span class="mc-selection"><span class="mc-field-label">Prediction</span><strong>${escape(match.pick)}</strong>${result}</span></span>
@@ -339,13 +339,13 @@
       const id = `mc-detail-${design}-${match.id}`;
       const kickoff = match.kickoff ? `<time class="mc-kickoff" datetime="${match.kickoff}"><span>${formatDate.format(new Date(match.kickoff))}</span><span>${formatTime.format(new Date(match.kickoff))}</span></time>` : '<span class="mc-kickoff">Kickoff TBC</span>';
       const schedule = match.kickoff ? `${formatDate.format(new Date(match.kickoff))}, ${formatTime.format(new Date(match.kickoff))} EAT` : "Kickoff unconfirmed";
-      const forecast = match.access === "available" ? `${match.market}: ${match.fullPick}. Odds ${match.odds ?? "unavailable"}. Estimated chance ${match.chance}%${match.result ? `. ${match.result}` : ""}` : match.access === "locked" ? "Subscriber prediction" : "Prediction unavailable";
+      const forecast = match.access === "available" ? `${match.market}: ${match.fullPick}. Odds ${match.odds ?? "unavailable"}. Estimated chance ${match.chance}%${match.result ? `. ${match.result}` : ""}` : match.access === "locked" ? "User prediction" : "Prediction unavailable";
       const label = `${match.home} versus ${match.away}. ${match.league}. ${schedule}. ${forecast}.${match.score ? ` ${match.phase}, score ${match.score}.` : match.status === "postponed" ? " Postponed." : ""} Show match information`;
       return `<article class="mc-entry"><button type="button" class="mc-card cursor-interaction" data-status="${match.status}" data-access="${match.access}" data-match-id="${match.id}" aria-label="${escape(label)}" aria-expanded="false" aria-controls="${id}">
         ${kickoff}<span class="mc-league">${escape(match.league)}</span><span class="mc-fixture">${team(match.home, match.homeCode)}${centre(match)}${team(match.away, match.awayCode)}</span>${prediction(match)}
         </button><div id="${id}" class="mc-detail" hidden><strong>${escape(match.home)} vs ${escape(match.away)}</strong>
         <p>${escape(match.league)} · ${match.kickoff ? `${formatDate.format(new Date(match.kickoff))}, ${formatTime.format(new Date(match.kickoff))} EAT` : "Kickoff unconfirmed"}${match.status === "postponed" ? " · Postponed" : ""}</p>
-        <p>${match.access === "available" ? `${escape(match.market)}: ${escape(match.fullPick)}. Odds: ${match.odds ?? "unavailable"}. Estimated chance: ${match.chance}%.${match.score ? ` Score: ${escape(match.score)} (${escape(match.phase)}).` : ""}` : match.access === "locked" ? "This illustrative prediction is available to subscribers." : "No prediction has been published for this illustrative match."}</p>
+        <p>${match.access === "available" ? `${escape(match.market)}: ${escape(match.fullPick)}. Odds: ${match.odds ?? "unavailable"}. Estimated chance: ${match.chance}%.${match.score ? ` Score: ${escape(match.score)} (${escape(match.phase)}).` : ""}` : match.access === "locked" ? "This illustrative prediction is available to users." : "No prediction has been published for this illustrative match."}</p>
         <p>Illustrative data${state.context === "Slips" ? " · Original slip selection" : ""} · Tap the card to close</p></div></article>`;
     }
     function render() {

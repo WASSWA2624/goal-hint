@@ -46,7 +46,7 @@ The owned test browser was closed; the development app/server remain running.
 ## 075 — Inline subscription expiry (27 October 2026)
 
 Implemented [plan 075](../dev-plan/075-inline-subscription-expiry.md). Active
-subscribers' phone, tablet and desktop bars share one sentence:
+users' phone, tablet and desktop bars share one sentence:
 `Expires on [date] at [time] (x days y hours left)`, switching to
 `(x hrs y min left)` below 24 hours. Removed the separate active heading and
 countdown badge/meta row. EAT timestamps, pending-payment/renewal notices and
@@ -232,7 +232,7 @@ the existing Android gateway adapter. Neither falls back silently or claims a de
 
 Added a private JSON administrator phone allowlist. Fresh admin logins require a phone-ownership code instead of a
 password, even for accounts that previously had a password. Current allowlisted, unblocked authenticated members receive
-full subscriber content and dashboard access; dashboard settings use this verified session without a password prompt.
+full user content and dashboard access; dashboard settings use this verified session without a password prompt.
 Removing a number removes its privilege. Normal phone changes cannot claim another configured administrator number.
 Dashboard and Account logout revoke the member session. Admin labels remain readable while audits retain opaque actors.
 Account and Subscribe omit purchase prompts for these administrators.
@@ -3331,7 +3331,7 @@ Complete. The implementation and required acceptance checks pass; tracker row
 - Added `state/refresh-api.ts` and extended the per-provider store with RTK Query
   reducer/middleware. Pagination and current-detail reads share typed anonymous
   stored-data endpoints, validation, deadlines, normalized request deduplication
-  and cancellation that preserves other subscribers.
+  and cancellation that preserves other users.
 - Added `domain/live-refresh.ts`, `fixture-reconciliation.ts`, shared browser
   lifecycle hook, refresh-status feedback and `live-match-detail.tsx`.
   Integrated the feed's loaded-prefix hook and detail SSR boundary. Current data
@@ -5014,9 +5014,9 @@ remain documented separately. Continue with 062 after committing and pushing.
 
 ## 062 — Gated UI and entry points (19 October 2026)
 
-Implemented subscriber cards, the feed banner and filters, verdict offer and both
+Implemented user cards, the feed banner and filters, verdict offer and both
 return links, plain drawer rows and slip EmptyState. Added shared AccountLink,
-UserIcon/SubscriberIcon, large buttons and native-radio SegmentedChoice. Existing
+UserIcon/StarIcon, large buttons and native-radio SegmentedChoice. Existing
 routes pass showAccount only for on mode; information pages do not resolve it.
 The cheapest active plan uses the existing plan service; absent plans expose no
 invented public price. Tier changes refresh and remount the feed. App pages use
@@ -5031,7 +5031,7 @@ across nine viewers. Parallel checks initially hit timing limits; the complete
 unit suite and card rendering pass when rerun sequentially without changed limits.
 
 Manual Browser-pane checks at 320×800 and 375×812: gated cards measure 75.5 px
-and 74.3 px respectively, show the first eligible family and subscriber line,
+and 74.3 px respectively, show the first eligible family and user line,
 open the match and have no premium attributes or horizontal overflow. Access
 buttons and both radio segments measure 48 px; native ArrowRight selects Airtel.
 The sheet disables probability bounds and Picks only and labels probability sort
@@ -5130,10 +5130,10 @@ pages fit without horizontal overflow, with the existing square chrome and a
 Commit and push 064 before starting 065.
 
 
-### 065 — overview, subscribers, audit and members purge (20 October 2026)
+### 065 — overview, users, audit and members purge (20 October 2026)
 
-Replaced the empty Overview and added Subscribers and Audit in the existing
-admin shell. New guarded subscriber routes provide POST phone search, notes,
+Replaced the empty Overview and added Users and Audit in the existing
+admin shell. New guarded user routes provide POST phone search, notes,
 block/unblock, sign out all, confirmed number change and confirmed erasure.
 The read services return explicit browser DTOs; code generation and delivery
 reuse 064. Added the shared hourly members purge, worker/CLI entry, maintenance,
@@ -5154,14 +5154,14 @@ Erasure retains amounts/IDs while clearing personal fields and images.
 fallbacks and a TypeScript-AST scan of all handwritten application updates that
 forbids ownership-key mutation after insert. Typecheck, changed-file ESLint
 (with zero warnings) and whitespace checks pass. Production rendering verifies
-Overview/Subscribers/Audit alongside Payments/Codes and private headers.
+Overview/Users/Audit alongside Payments/Codes and private headers.
 The payment suite passes all 29 checks after bucket writers gained window-end markers.
 
 Manual Browser pane, 375 x 812, synthetic services: Overview values and EAT
-labels, subscriber POST search without a phone URL, ID-only detail links, device
+labels, user POST search without a phone URL, ID-only detail links, device
 and code tools, verification/erasure controls, and action-filtered Audit all fit
 without horizontal overflow. Screenshots: `.tmp/065-overview-375.png`,
-`.tmp/065-subscribers-375.png`, `.tmp/065-audit-375.png`. No real personal data was
+`.tmp/065-users-375.png`, `.tmp/065-audit-375.png`. No real personal data was
 erased and no real member purge was run.
 
 **Status: Completed.** Paid access remains off. Commit and push before 066.
@@ -5169,7 +5169,7 @@ erased and no real member purge was run.
 
 ## 066 — Legal, help, policy copy and analytics (20 October 2026)
 
-Implemented mode-independent metadata, footer, privacy/terms/help/contact copy in the existing information chrome. Added member-cookie and phone notices, local SMS/draft boundaries, screenshot/database/backup/Meta handling, retention/erasure limits and payment/refund/data-protection blockers. Terms cover offers, trial timing, manual review, EAT periods, renewals, personal codes/devices, weak phone login, suspension and unresolved legal/refund facts. Original-content reuse excludes unfinished-fixture subscriber material. Contact stays release-ready without database reads.
+Implemented mode-independent metadata, footer, privacy/terms/help/contact copy in the existing information chrome. Added member-cookie and phone notices, local SMS/draft boundaries, screenshot/database/backup/Meta handling, retention/erasure limits and payment/refund/data-protection blockers. Terms cover offers, trial timing, manual review, EAT periods, renewals, personal codes/devices, weak phone login, suspension and unresolved legal/refund facts. Original-content reuse excludes unfinished-fixture premium material. Contact stays release-ready without database reads.
 
 Added four analytics goals and three successful-action, consent-gated name-only events; strict collection rejects attached payment values/identifiers. Added the owner runbook in subscriptions.md and reconciled database, grants, deployment-overlay, API, SEO and information-page docs. Rendering assertions decode HTML entities and follow current Help wording. The gated slip screen now uses the existing empty-state heading-level option to supply its missing h1. A small information-rendering wrapper reuses production route factories with explicitly synthetic off-mode access, avoiding any real database/settings change.
 
@@ -5474,7 +5474,7 @@ Best Slips, Builder, Performance and Analytics sections. Desktop app-page top
 padding is zero; Analytics removes its top inset and uses the shared app-header
 sticky offset instead of 53px. Inner filter padding, control gaps, card spacing
 and phone/tablet spacing remain local to their existing components. The owner
-payments, codes, subscribers, plans and audit workspaces already use zero-gap
+payments, codes, users, plans and audit workspaces already use zero-gap
 desktop geometry and needed no changes. Regular content-page spacing is
 retained outside the app section stacks.
 

@@ -25,7 +25,7 @@ def main() -> None:
                 "go back to make changes or leave before you pay", "save or print these terms using your browser",
                 "Payments in Account to view recent payment records", "cancellation, refund and other consumer rights provided by applicable law",
                 "Include your payment reference, purchase date and the reason",
-                "except picks, odds and associated subscriber material", "fixtures and scores without an account",
+                "except picks, odds and associated premium material", "fixtures and scores without an account",
                 "Once a match has finished, its predictions, probabilities and results are public",
                 "Saved slips become public after all their matches have finished", "saving a slip does not place a bet",
                 "does not guarantee wins, prediction accuracy",

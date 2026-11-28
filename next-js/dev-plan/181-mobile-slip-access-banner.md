@@ -6,7 +6,7 @@ confirmed-session mobile banner below the app header now includes:
 > Completed slips are public. Subscribe for live/upcoming.
 
 The existing price, Sign up / Sign in, Subscribe, payment and account actions
-retain their session-driven behavior and return destinations. Active subscribers
+retain their session-driven behavior and return destinations. Active users
 do not receive the acquisition note. Other mobile surfaces retain their approved
 single-row banner. Desktop guidance remains in its existing banner.
 
@@ -17,5 +17,5 @@ panel while retaining their private-data checks; the subscription fixture also
 exercises Best Slips header guidance with confirmed account states.
 
 Browser checks passed at 320px, 375px and 430px for signed-out, member, expired,
-pending-payment and active-subscriber states. Session transitions retain the
+pending-payment and active-user states. Session transitions retain the
 appropriate actions; the note is absent from other pages and active accounts.

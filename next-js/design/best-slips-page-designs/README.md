@@ -14,7 +14,7 @@ python scripts/preview-best-slips-page-designs.py --serve
 
 Open the local URL printed by the command. Use Design or the previous/next
 buttons, the appearance toggle, and Preview styling to compare with the original.
-The Viewer picker previews Subscriber, Guest and Free member states using local
+The Viewer picker previews User, Guest and Free member states using local
 personas. Guest/member views retain public completed slips. Desktop access
 guidance now uses the existing account/subscription status bar, with no duplicate
 Unlock new slips panel. Mobile keeps its original presentation.

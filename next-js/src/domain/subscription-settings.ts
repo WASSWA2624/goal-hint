@@ -92,7 +92,7 @@ export type EditableSettingField = (typeof editableSettingFields)[number];
 export type SettingsChanges = Partial<Pick<SubscriptionSettings, EditableSettingField>>;
 
 /**
- * The numbers and names that Safety tips tell subscribers to trust. Changing any of them needs the owner password again
+ * The numbers and names that Safety tips tell users to trust. Changing any of them needs the owner password again
  * and is audited with the old and new values.
  */
 export const identitySettingFields = Object.freeze(["mtnNumber", "mtnName", "mtnMenuShortcut", "airtelNumber", "airtelName",

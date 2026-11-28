@@ -19,7 +19,7 @@ import { feedQueryRules, feedSortLabelKey, matchFeedPageDefaults, panelFilterCou
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { matchesHref } from "@/domain/navigation";
 import { formatOddsHundredths, oddsRules } from "@/domain/odds";
-import { withoutSubscriberFeedOracle } from "@/domain/paywall";
+import { withoutPremiumFeedOracle } from "@/domain/paywall";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { useDeviceTimeZone } from "@/i18n/use-messages";
@@ -34,12 +34,12 @@ import { DialogContent, DraftDateFields, LocationFields, Muted, Panel } from "./
 
 /** One applied draft and shared field tree serve every viewport. */
 export function FeedFilters({ query, today, dateQuery, dateToday, scope, performance, leagues, onApply, searchText, onSearchChange, onSearchSubmit, publishedMarkets, marketsUnavailable,
-  onMarketsOpen, subscriberOnly = false, pending = false,
+  onMarketsOpen, premiumOnly = false, pending = false,
   providerOdds = publicPolicy.features.providerOdds }: {
   query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; onApply: (next: FeedQuery) => void;
   dateQuery: FeedQuery; dateToday: ReportingDate; scope: string; performance: ReactNode;
   searchText: string; onSearchChange: (text: string, composing: boolean) => void; onSearchSubmit: (text: string) => void;
-  subscriberOnly?: boolean; pending?: boolean; providerOdds?: boolean;
+  premiumOnly?: boolean; pending?: boolean; providerOdds?: boolean;
   publishedMarkets?: readonly FeedMarketPick[] | undefined; marketsUnavailable?: boolean | undefined;
   onMarketsOpen?: ((status: FeedQuery["status"]) => void) | undefined;
 }) {
@@ -60,7 +60,7 @@ export function FeedFilters({ query, today, dateQuery, dateToday, scope, perform
     setOpen(false);
     setMarketDraft(null);
   }
-  const locked = subscriberOnly && draft.query.status !== "finished", live = draft.query.status === "live";
+  const locked = premiumOnly && draft.query.status !== "finished", live = draft.query.status === "live";
   const oddsEnabled = providerOdds && !locked;
   const complete = useMemo(() => compileFeedFilterDraft(draft, today, oddsEnabled), [draft, today, oddsEnabled]);
   const queryTooLong = useMemo(() => open && !!complete && feedFilterQueryTooLong(complete, today), [open, complete, today]);
@@ -173,7 +173,7 @@ export function FeedFilters({ query, today, dateQuery, dateToday, scope, perform
               const base = status === "live" ? { ...compiled, interval: undefined, time: null, zone: deviceZone } : compiled;
               const day = getDateInTimeZone(utcInstantFromEpochMilliseconds(Date.now()), base.zone ?? deviceZone);
               const next = selectFeedStatus(base, status, day);
-              return feedFilterDraft(subscriberOnly && status !== "finished" ? withoutSubscriberFeedOracle(next) : next, day, deviceZone);
+              return feedFilterDraft(premiumOnly && status !== "finished" ? withoutPremiumFeedOracle(next) : next, day, deviceZone);
             }); }} />
           <SelectInput label={messages.text("feed.sort.label")} value={`${draft.query.sort.by}-${draft.query.sort.direction}`} onChange={event => {
             const sort = feedSortOptions.find(value => `${value.by}-${value.direction}` === event.currentTarget.value);

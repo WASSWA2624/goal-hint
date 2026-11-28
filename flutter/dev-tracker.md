@@ -330,7 +330,7 @@ and explicit anonymous snapshot are staged before activation. The snapshot
 holds at most 30 basic fixtures/128 KiB with a maximum 24-hour display lifetime
 and visible saved timestamp; at most two 10 MiB bundles plus small metadata and
 browser overhead remain. Root and `/en` fall back to **Saved matches**, not
-subscriber Best Slips. `/en/matches` without a query is the supported saved feed;
+user Best Slips. `/en/matches` without a query is the supported saved feed;
 uncached routes explain the connection requirement. The shared web components
 render real permitted data, rather than a screenshot or native replica.
 

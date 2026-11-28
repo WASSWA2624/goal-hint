@@ -127,7 +127,7 @@ def main():
                         assert response.headers.get("Set-Cookie") is None, url
                         text = response.text  # Keep every flight script; never strip raw RSC data.
                         if url.startswith("/en/matches?q="):
-                            assert "data-subscriber-banner" not in text and "Predictions are for subscribers" not in text, (viewer, url, "removed subscriber banner returned")
+                            assert "data-premium-banner" not in text and "Predictions are for users with access" not in text, (viewer, url, "removed user banner returned")
                         if not full and not free_fixture:
                             assert not re.search(SENTINELS + r'|0\.6173|"home-win"', text), (viewer, url, "unfinished forecast leaked")
                             if "/insights" in url:
@@ -192,7 +192,7 @@ def main():
                 assert len(actions) == 1, (viewer, "one Slip Builder action group")
                 links = builder.nodes("a", "data-slip-access-action")
                 assert len(links) == 1, (viewer, "one Slip Builder toolbar access action")
-                assert not builder.nodes(attr="data-subscriber-panel"), (viewer, "no added access section below filters")
+                assert not builder.nodes(attr="data-user-panel"), (viewer, "no added access section below filters")
                 for link in links:
                     labels = {node.attrs["data-action-label"]: node.text.strip() for node in link.nodes(attr="data-action-label")}
                     assert labels == {"mobile": label, "desktop": label}, (viewer, "responsive Slip Builder access labels")
@@ -236,7 +236,7 @@ def main():
                     markup = document(response.text).root
                     toggles = markup.nodes("summary", "data-slip-toggle")
                     if full:
-                        assert len(toggles) == 1 and "10.98" in toggles[0].text and "66.0%" in toggles[0].text, (viewer, "subscriber original header")
+                        assert len(toggles) == 1 and "10.98" in toggles[0].text and "66.0%" in toggles[0].text, (viewer, "user original header")
                         assert "Win probability" not in toggles[0].text and "34.6%" not in toggles[0].text
                         assert not any(toggles[0].nodes(tag) for tag in ["a", "button"]), (viewer, "whole header remains a toggle")
                         assert '61.7%' in response.text and '70.3%' in response.text, (viewer, "entitled original match probabilities")
@@ -249,7 +249,7 @@ def main():
                         destinations = [parse_qs(urlsplit(action.attrs["href"]).query) for action in slip_actions]
                         assert len({tuple(query["return"]) for query in destinations}) == 1
                         assert all(query["return"][0].startswith("/en/best-slips/") and query.get("checkout") == ["1"] for query in destinations)
-                        assert not markup.nodes(attr="data-subscriber-panel")
+                        assert not markup.nodes(attr="data-user-panel")
                         assert not markup.nodes(attr="data-best-slips-access"), (viewer, "no duplicate mobile access panel beneath filters")
                 checks += 1
             for path in ["/completed-slips", "/completed-slips?_rsc", "/api/completed-best-slips"]:

@@ -1,6 +1,6 @@
 # Shared admin record workspace
 
-Payments, Codes, Subscribers, Referral review, Plans, Audit and Settings use
+Payments, Codes, Users, Referral review, Plans, Audit and Settings use
 the components in `src/components/admin/record-workspace.tsx`. Edit that module
 to change their shared layout, scrolling, toolbar spacing, headers, row surfaces,
 or action-footer presentation. Screen files supply their own record fields,
@@ -41,7 +41,7 @@ scroll, or footer styles into screen-specific files.
 Payments reloads the pending queue after its live count changes when review is
 idle. The payment detail uses payment-specific review zones. Codes retains real manual-grant, extend, and
 revoke operations. Plans retains saved-name/price/duration snapshots and reorder
-behavior. Subscribers retains account tabs, access/credit tools, restrictions,
+behavior. Users retains account tabs, access/credit tools, restrictions,
 and guarded removal. Members manage their passwords through the account's own
 recovery and change-password flows. Audit offers related-record links in the
 detail footer and CSV export beside Advanced filters. Export covers all matches
@@ -49,7 +49,7 @@ in the loaded window.
 
 ## Responsive and state behavior
 
-The fixed two-pane layout starts at 64rem. Primary forms for Codes, Subscribers,
+The fixed two-pane layout starts at 64rem. Primary forms for Codes, Users,
 Referral review and Plans use the shared modal with the same controls on both
 viewports. Selecting a row on mobile opens one detail view. Referral search
 queries all matching cases through the owner-only endpoint, and updates retain
@@ -65,22 +65,22 @@ persistence to the existing services and API handlers.
 Run `python scripts/verify-owner-payments-rendering.py --serve` from `next-js/`
 for the production acceptance fixture. Its printed synthetic entry establishes
 only the fixture session. Test mutations there rather than against business
-storage. The fixture includes a long payment queue, subscriber account workflows,
+storage. The fixture includes a long payment queue, user account workflows,
 stateful plans, Audit filtering/export, and all approved menu destinations.
 
-## Balanced compact Subscribers
+## Balanced compact Users
 
-The live Subscribers workspace and its ten design studies share
-`SubscriberDirectoryFilters` and `SubscriberAccountRow` from
-`subscriber-directory-parts.tsx`. Keep the floating search, four filters, account
+The live Users workspace and its ten design studies share
+`UserDirectoryFilters` and `UserAccountRow` from
+`user-directory-parts.tsx`. Keep the floating search, four filters, account
 identity, status, and carrier treatment in those shared parts. Carrier artwork
 requires a configured phone-prefix match; unknown carriers use the globe icon.
-The `subscriberPresentation` mixin in `subscriber-presentation-styles.ts` applies
+The `userPresentation` mixin in `user-presentation-styles.ts` applies
 the approved compact summary, statistics, actions, and tabs to both surfaces.
-Account actions reuse the existing forms inside `SubscriberReviewDialog`.
+Account actions reuse the existing forms inside `UserReviewDialog`.
 
-Run `python scripts/verify-subscriber-directory-rendering.py` from `next-js/`
+Run `python scripts/verify-user-directory-rendering.py` from `next-js/`
 for focused production rendering and API acceptance. Use `--origin` to check an
 already running isolated owner fixture, or `--fixture` to reuse a built fixture
-under `.tmp`. The owner acceptance suite delegates its Subscribers checks to
+under `.tmp`. The owner acceptance suite delegates its Users checks to
 this verifier. Browser checks cover independent scrolling and dialog behavior.

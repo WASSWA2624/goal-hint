@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { gateDetailResponse, gateFeedResponse, gateInsights, usesSubscriberFeedOracle } from '../src/domain/paywall.ts';
+import { gateDetailResponse, gateFeedResponse, gateInsights, usesPremiumFeedOracle } from '../src/domain/paywall.ts';
 import { matchDetailResponseSchema } from '../src/domain/match-detail.ts';
 import { matchFeedResponseSchema } from '../src/domain/match-feed.ts';
 import { parseFeedQuery } from '../src/domain/feed-query.ts';
@@ -16,7 +16,7 @@ import { cheapestActivePlan } from '../src/domain/subscription-offer.ts';
 import { createMessages } from '../src/i18n/messages.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { isCompletedFixtureStatus } from '../src/domain/market-settlement.ts';
-import { subscriberHref } from '../src/domain/subscriber-navigation.ts';
+import { subscriptionHref } from '../src/domain/subscription-navigation.ts';
 import { scenarios, today, sentinel, now } from './helpers/paywall-fixtures.mjs';
 
 const free = { tier: 'free', signedIn: false, mode: 'on' }, full = { ...free, tier: 'full' };
@@ -74,9 +74,9 @@ test('all played final statuses expose the original result and revision to guest
   }
 });
 test('finished filters are public; active probability, selection and price oracles stay locked', () => {
-  for (const query of ['', 'prob=0-100', 'status=finished', 'market=total-goals', 'sort=kickoff&dir=asc', 'status=finished&sort=probability', 'status=finished&picks=only', 'status=finished&odds=1.50-3.00', 'status=finished&marketPick=total-goals:over-1.5']) assert.equal(usesSubscriberFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), false);
+  for (const query of ['', 'prob=0-100', 'status=finished', 'market=total-goals', 'sort=kickoff&dir=asc', 'status=finished&sort=probability', 'status=finished&picks=only', 'status=finished&odds=1.50-3.00', 'status=finished&marketPick=total-goals:over-1.5']) assert.equal(usesPremiumFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), false);
   for (const query of ['picks=only', 'odds=1.50-3.00', 'prob=1-100', 'prob=0-99', 'sort=probability', 'marketPick=match-result:home-win', 'status=scheduled&marketPick=total-goals:over-1.5']) {
-    assert.equal(usesSubscriberFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), true);
+    assert.equal(usesPremiumFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), true);
   }
 });
 test('oracle requests return nonrecoverable private 403 before any raw read', async () => {
@@ -206,14 +206,14 @@ test('completed analysis is public only with verified canonical terminal status'
 test('locked destinations carry checkout intent only with a safe return path', () => {
   for (const [signedIn, path, guestView] of [[false, '/en/best-slips/2026-10-09/1', 'register'],
     [false, '/en/matches', 'register'], [true, '/en/slips', 'register'], [false, '/en', 'login']]) {
-    const href = new URL(subscriberHref(signedIn, path, guestView), 'https://goalhint.test');
+    const href = new URL(subscriptionHref(signedIn, path, guestView), 'https://goalhint.test');
     assert.equal(href.pathname, signedIn ? '/en/subscribe' : '/en/account');
     assert.equal(href.searchParams.get('view'), signedIn ? null : guestView);
     assert.equal(href.searchParams.get('return'), path);
     assert.equal(href.searchParams.get('checkout'), '1');
   }
-  assert.equal(subscriberHref(false, 'https://outside.test', 'login'), '/en/account?view=login');
-  assert.equal(subscriberHref(true, '//outside.test'), '/en/subscribe');
+  assert.equal(subscriptionHref(false, 'https://outside.test', 'login'), '/en/account?view=login');
+  assert.equal(subscriptionHref(true, '//outside.test'), '/en/subscribe');
 });
 
 test('the final access check redacts unfinished feed rows after expiry without hiding matches', async () => {

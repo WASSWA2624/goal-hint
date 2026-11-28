@@ -248,24 +248,24 @@
     ...Array.from({ length: 3 }, (_, index) => ({ day: "2026-10-31", rank: index + 1, status: "not-started" }))
   ].map((row, index) => ({ ...row, id: `concept-${index}`, odds: (4.5 + index % 12 * .17).toFixed(2), probability: (81.4 + index % 8 * .8).toFixed(1), matches: 3 + index % 2, published: `${String(9 + Math.floor(row.rank / 10)).padStart(2, "0")}:${String(14 + row.rank).padStart(2,"0")}` }));
   const views = Array.from(root.querySelectorAll(".gh-phone"));
-  const settings = { appearance: "system", viewer: "subscriber" };
+  const settings = { appearance: "system", viewer: "user" };
   const saved = globalThis.openai?.widgetState?.privateContent;
   if (["system", "light", "dark"].includes(saved?.appearance)) settings.appearance = saved.appearance;
-  if (["subscriber", "member", "guest"].includes(saved?.viewer)) settings.viewer = saved.viewer;
+  if (["user", "member", "guest"].includes(saved?.viewer)) settings.viewer = saved.viewer;
   const states = new Map(views.map(phone => [phone, { period: phone.dataset.recipe === "daybook" ? "last3" : "today", status: "all", page: 1, from: today, to: today, open: new Set() }]));
-  if (settings.viewer !== "subscriber") for (const state of states.values()) state.period = "last7";
+  if (settings.viewer !== "user") for (const state of states.values()) state.period = "last7";
   const icon = name => `<i data-lucide="${name}" aria-hidden="true"></i>`;
   const dateLabel = day => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`));
   const isComplete = row => !["not-started", "in-progress"].includes(row.status);
   const outcome = row => isComplete(row) ? row.status : "pending";
-  const defaultPeriod = phone => settings.viewer !== "subscriber" ? "last7" : phone.dataset.recipe === "daybook" ? "last3" : "today";
+  const defaultPeriod = phone => settings.viewer !== "user" ? "last7" : phone.dataset.recipe === "daybook" ? "last3" : "today";
   function bounds(state) {
     const shift = days => new Date(Date.parse(`${today}T12:00:00Z`) + days * 86400000).toISOString().slice(0,10);
     return { last7: [shift(-6),today], last3: [shift(-2),today], yesterday: [shift(-1),shift(-1)], today: [today,today], tomorrow: [shift(1),shift(1)], next3: [today,shift(2)], next7: [today,shift(6)], custom: [state.from,state.to] }[state.period];
   }
   function cohortFor(state) {
     const [from,to] = bounds(state);
-    return rows.filter(row => row.day >= from && row.day <= to && (settings.viewer === "subscriber" || isComplete(row)));
+    return rows.filter(row => row.day >= from && row.day <= to && (settings.viewer === "user" || isComplete(row)));
   }
   function countsFor(state) {
     const cohort = cohortFor(state);
@@ -290,9 +290,9 @@
     return `<div class="gh-inline-summary" aria-label="Performance in selected date range"><span><strong>${counts.all}</strong> slips</span><span><strong>${counts.won}</strong> won</span><span><strong>${counts.lost}</strong> lost</span><span><strong>${counts.pending}</strong> pending</span><span><strong>${counts.void}</strong> void</span><span><strong>${counts.cancelled}</strong> cancelled</span></div>`;
   }
   function access() {
-    if (settings.viewer === "subscriber") return "";
+    if (settings.viewer === "user") return "";
     const guest = settings.viewer === "guest";
-    return `<aside class="gh-access" aria-label="Subscriber access"><h2>See upcoming Best slips</h2><p>${guest ? "Create an account, then subscribe to unlock upcoming slips." : "Subscribe to unlock upcoming slips."} Completed slips remain available below.</p><div class="gh-actions"><button type="button" class="gh-button gh-primary cursor-interaction" data-destination="${guest ? "Sign up" : "Subscribe"}">${guest ? "Sign up" : "Subscribe"}</button>${guest ? '<button type="button" class="gh-button cursor-interaction" data-destination="Sign in">Sign in</button>' : ""}</div></aside>`;
+    return `<aside class="gh-access" aria-label="Premium access"><h2>See upcoming Best slips</h2><p>${guest ? "Create an account, then subscribe to unlock upcoming slips." : "Subscribe to unlock upcoming slips."} Completed slips remain available below.</p><div class="gh-actions"><button type="button" class="gh-button gh-primary cursor-interaction" data-destination="${guest ? "Sign up" : "Subscribe"}">${guest ? "Sign up" : "Subscribe"}</button>${guest ? '<button type="button" class="gh-button cursor-interaction" data-destination="Sign in">Sign in</button>' : ""}</div></aside>`;
   }
   function slip(row, phone, position) {
     const state = states.get(phone), recipe = phone.dataset.recipe;
@@ -327,7 +327,7 @@
     else if (recipe === "ledger") content = heading + notice + dates + inlineCounts(counts) + filters + listHead + list + pagination;
     else content = heading + notice + dates + filters + listHead + list + pagination;
     phone.dataset.appearance = settings.appearance;
-    phone.innerHTML = `<div class="gh-app"><div class="gh-brandbar"><div class="gh-wordmark" aria-label="Goal Hint">GOAL<span>HINT</span></div><button type="button" class="gh-account cursor-interaction" data-action="account">${icon("circle-user-round")}${settings.viewer === "guest" ? "Sign in" : "Account"}</button></div><div class="gh-memberline"><span>${settings.viewer === "subscriber" ? "Your daily football selections" : "Completed slips · Public access"}</span>${settings.viewer === "subscriber" ? "<strong>Subscribed</strong>" : ""}</div><main class="gh-main">${content}<p class="gh-disclaimer">Average probability refers to the predictions in a slip. Outcomes are not guaranteed.</p></main><nav class="gh-nav" aria-label="Main navigation"><button type="button" aria-current="page" class="cursor-interaction" data-destination="Best slips">${icon("layers")}Best slips</button><button type="button" class="cursor-interaction" data-destination="Matches">${icon("layout-grid")}Matches</button><button type="button" class="cursor-interaction" data-destination="Slips">${icon("ticket")}Slips</button><button type="button" class="cursor-interaction" data-action="more">${icon("ellipsis")}More</button></nav></div>`;
+    phone.innerHTML = `<div class="gh-app"><div class="gh-brandbar"><div class="gh-wordmark" aria-label="Goal Hint">GOAL<span>HINT</span></div><button type="button" class="gh-account cursor-interaction" data-action="account">${icon("circle-user-round")}${settings.viewer === "guest" ? "Sign in" : "Account"}</button></div><div class="gh-memberline"><span>${settings.viewer === "user" ? "Your daily football selections" : "Completed slips · Public access"}</span>${settings.viewer === "user" ? "<strong>Subscribed</strong>" : ""}</div><main class="gh-main">${content}<p class="gh-disclaimer">Average probability refers to the predictions in a slip. Outcomes are not guaranteed.</p></main><nav class="gh-nav" aria-label="Main navigation"><button type="button" aria-current="page" class="cursor-interaction" data-destination="Best slips">${icon("layers")}Best slips</button><button type="button" class="cursor-interaction" data-destination="Matches">${icon("layout-grid")}Matches</button><button type="button" class="cursor-interaction" data-destination="Slips">${icon("ticket")}Slips</button><button type="button" class="cursor-interaction" data-action="more">${icon("ellipsis")}More</button></nav></div>`;
     phone.querySelectorAll(".gh-slip").forEach(details => details.addEventListener("toggle", () => { if (details.open) state.open.add(details.dataset.id); else state.open.delete(details.dataset.id); }));
     icons();
     if (restoreKey) phone.querySelector(restoreKey)?.focus({ preventScroll: true });
@@ -415,7 +415,7 @@
     } else if (action === "select-caption") { phone.querySelector("[data-caption]").select(); announce(phone,"Preview caption selected. Use your device's copy command."); }
     else if (action === "matches") announce(phone,"Individual match layouts are reserved for the next design review.");
     else if (action === "more") showSheet(phone,"More",["Performance","Help","Privacy","Terms","Contact"].map(label => `<button type="button" class="gh-button cursor-interaction" data-destination="${label}">${label}</button>`).join(""),button);
-    else if (action === "account") showSheet(phone,settings.viewer === "guest" ? "Your account" : "Account",`<p>${settings.viewer === "subscriber" ? "Subscription active" : settings.viewer === "member" ? "Free member" : "Sign in to your Goal Hint account."}</p><button type="button" class="gh-button cursor-interaction" data-destination="${settings.viewer === "guest" ? "Sign in" : "Account settings"}">${settings.viewer === "guest" ? "Sign in" : "Account settings"}</button>`,button);
+    else if (action === "account") showSheet(phone,settings.viewer === "guest" ? "Your account" : "Account",`<p>${settings.viewer === "user" ? "Subscription active" : settings.viewer === "member" ? "Free member" : "Sign in to your Goal Hint account."}</p><button type="button" class="gh-button cursor-interaction" data-destination="${settings.viewer === "guest" ? "Sign in" : "Account settings"}">${settings.viewer === "guest" ? "Sign in" : "Account settings"}</button>`,button);
   });
   function renderAll() { root.dataset.viewer = settings.viewer; views.forEach(phone => render(phone)); }
   renderAll();
@@ -429,13 +429,13 @@
       renderAll(); save();
     }});
     tweak.addSelect(settings,"appearance",{ label: "Appearance", options: [{ label: "Match device", value: "system" },{ label: "Light", value: "light" },{ label: "Dark", value: "dark" }] });
-    tweak.addSelect(settings,"viewer",{ label: "Preview as", options: [{ label: "Subscriber", value: "subscriber" },{ label: "Free member", value: "member" },{ label: "Guest", value: "guest" }] });
+    tweak.addSelect(settings,"viewer",{ label: "Preview as", options: [{ label: "User", value: "user" },{ label: "Free member", value: "member" },{ label: "Guest", value: "guest" }] });
   }
   window.addEventListener("openai:set_globals", event => {
     const next = event.detail?.globals?.widgetState?.privateContent;
     if (!next) return;
     if (["system","light","dark"].includes(next.appearance)) settings.appearance = next.appearance;
-    if (["subscriber","member","guest"].includes(next.viewer)) settings.viewer = next.viewer;
+    if (["user","member","guest"].includes(next.viewer)) settings.viewer = next.viewer;
     if (settings.viewer !== lastViewer) {
       for (const [phone,state] of states) Object.assign(state,{ period: defaultPeriod(phone), status: "all", page: 1, open: new Set() });
       lastViewer = settings.viewer;

@@ -15,7 +15,7 @@
 ## Acceptance
 
 - Preserve every status, all ten period choices, four sorting choices, search,
-  section counts, subscriber restrictions and the Predictions only default.
+  section counts, user restrictions and the Predictions only default.
 - Keep edits as drafts until Search/Enter or Apply; Done retains a section
   draft, Cancel/Escape restores it, section Reset remains local, and the main
   Reset applies defaults immediately.
@@ -24,7 +24,7 @@
 - Keep the two-row layout at normal desktop sizes. Allow controls to wrap for
   enlarged text and longer labels without overlap or clipping; retain at least
   44px targets for coarse pointers.
-- Verify both themes, 1024px and wider desktops, active badges, subscriber
+- Verify both themes, 1024px and wider desktops, active badges, user
   restrictions, keyboard focus, all five popup dialogs and mobile breakpoints.
 
 ## Verification
@@ -41,8 +41,8 @@
 - Unified desktop/mobile and JavaScript-disabled native checks passed all
   statuses, future periods, Live/Today, stale time clearing and custom archives.
 - Light/dark layouts passed at 1024/1280/1440/1600px. The default panel is about
-  88px high with two 32px rows. Active badges, 200% text and the subscriber-label
-  layout wrap without overlap or clipped buttons. Subscriber-label geometry
+  88px high with two 32px rows. Active badges, 200% text and the user-label
+  layout wrap without overlap or clipped buttons. User-label geometry
   used a presentation-only fixture adjustment; access policy is unchanged.
 - A fresh coarse-pointer browser context confirmed Search, selectors, all
   filter buttons, Predictions only and both actions have targets of at least

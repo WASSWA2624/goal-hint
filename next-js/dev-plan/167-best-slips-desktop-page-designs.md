@@ -20,7 +20,7 @@ content, layout and interactions. Keep mobile and matches inside slips unchanged
   primary facts to 15px, labels/actions to 13px and metadata to 12px; collapsed
   rows become 44px. Add spacing between result buttons, wrapping below 1280px
   to keep all six results visible. Keep expanded matches and mobile unchanged.
-- Add Subscriber, Guest and Free member review personas. Reuse the original
+- Add User, Guest and Free member review personas. Reuse the original
   public-only cohort rules and access message; give the desktop access panel
   a clear heading, 14px explanation and prominent Sign up/Sign in or Subscribe
   actions. No live account or subscription behavior is changed.
@@ -45,7 +45,7 @@ content, layout and interactions. Keep mobile and matches inside slips unchanged
   native keyboard disclosure, sharing image generation and focus restoration
   passed.
 - Exact computed-style comparisons passed for the original mobile headers and
-  access panel in all three viewer states at 390px, plus 320px subscribers,
+  access panel in all three viewer states at 390px, plus 320px users,
   across both themes and all ten designs. Expanded desktop header/match markup
   and styles stayed identical to the original in both themes and all designs.
 - Visually reviewed the ten-design comparison sheet and full-size desktop,

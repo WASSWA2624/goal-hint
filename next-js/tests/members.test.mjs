@@ -283,15 +283,15 @@ test("public reads cache settings for 30 s, serve the last good value on failure
   const cold = createSettingsService(scriptedDatabase({ failing: true }).database, { environment: null, now: () => clock.now });
   const none = await cold.current();
   assert.deepEqual([none.source, none.settings, accessMode(none)], ["unavailable", null, "free"],
-    "With no good value, access resolves to free, so an outage never opens subscriber content.");
+    "With no good value, access resolves to free, so an outage never opens user content.");
 });
 
-test("audit details refuse images, full codes and subscriber phones; owner settings may name the owner's numbers", () => {
+test("audit details refuse images, full codes and user phones; owner settings may name the owner's numbers", () => {
   assert.deepEqual(auditDetails({ at: new Date("2026-10-19T07:00:00.000Z"), plan: "8b6f2c1e-4a3d-4f5e-9a1b-123456789012", reference: "C-7K2Q",
     changes: { mtnNumber: { from: null, to: OWNER_MTN }, paymentNote: { from: null, to: `Call ${OWNER_CONTACT}` } }, ending: "ending 456" }),
   { at: "2026-10-19T07:00:00.000Z", plan: "8b6f2c1e-4a3d-4f5e-9a1b-123456789012", reference: "C-7K2Q",
     changes: { mtnNumber: { from: null, to: OWNER_MTN }, paymentNote: { from: null, to: `Call ${OWNER_CONTACT}` } }, ending: "ending 456" });
-  for (const [label, details] of [["a subscriber phone", { account: "256700000101" }], ["a plus phone", { note: "paid from +256700000101" }],
+  for (const [label, details] of [["a user phone", { account: "256700000101" }], ["a plus phone", { note: "paid from +256700000101" }],
     ["a phone in a list", { numbers: ["256700000101"] }], ["a full code", { code: "7K2Q-9MXA-4TPB" }], ["a code in text", { text: "code 7K2Q-9MXA-4TPB sent" }],
     ["image bytes", { image: Buffer.from([0xff, 0xd8]) }], ["typed bytes", { image: new Uint8Array(2) }], ["a class instance", { map: new Map() }]]) {
     assert.throws(() => auditDetails(details), UnsafeAuditDetailsError, label);
@@ -375,7 +375,7 @@ test("settings are retained and permanent deletion stays inside its reviewed ser
       assert.doesNotMatch(text, /\bsubscriptionPlan\.delete(Many)?\(/u, file);
       assert.doesNotMatch(text, /DELETE\s+FROM\s+`?SubscriptionPlan\b/iu, file);
     }
-    if (relative !== "server/admin/delete-subscriber.ts") {
+    if (relative !== "server/admin/delete-user.ts") {
       assert.doesNotMatch(text, /\bownerAuditEvent\.delete(Many)?\(/u, file);
       assert.doesNotMatch(text, /DELETE\s+FROM\s+`?OwnerAuditEvent\b/iu, file);
     }
@@ -426,7 +426,7 @@ test("a committed save or mode switch answers saved even when the page data cann
 });
 
 test("owner revenue periods use Kampala civil month/week boundaries",async()=>{
- const {revenueBounds}=await import("../src/server/admin/subscribers.ts");
+ const {revenueBounds}=await import("../src/server/admin/users.ts");
  const before=revenueBounds(Date.parse("2026-11-01T20:59:59Z"));assert.equal(before.week.toISOString(),"2026-10-25T21:00:00.000Z");
  const after=revenueBounds(Date.parse("2026-11-01T21:00:00Z"));assert.equal(after.week.toISOString(),"2026-11-01T21:00:00.000Z");assert.equal(after.month.toISOString(),"2026-10-31T21:00:00.000Z");
 });

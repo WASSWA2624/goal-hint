@@ -5,7 +5,7 @@ import { createMemberAuth } from "../src/server/members/member-auth.ts";
 import { createMemberSessions } from "../src/server/members/member-sessions.ts";
 import { awardReferralRegistration, createReferrals, ensureReferralCode, recordReferralRegistration } from "../src/server/members/referrals.ts";
 import { createAccessCodes, createAccessPeriod, lockMemberAccount } from "../src/server/members/access-codes.ts";
-import { createSubscribers } from "../src/server/admin/subscribers.ts";
+import { createUsers } from "../src/server/admin/users.ts";
 import { paidDatabase } from "./helpers/paid-database.mjs";
 import { MysqlServerUnavailableError } from "./helpers/mysql-instance.mjs";
 import { silentPaymentNotifications } from "./helpers/payment-notification-fixtures.mjs";
@@ -104,7 +104,7 @@ test("referral award concurrency, paid precedence, immutable identity and deleti
   assert.equal(await codes.renewDue(member.accountId), "skipped");
   assert.equal(await f.database.query(tx => tx.walletEntry.count({ where: { accountId: member.accountId, kind: "renewal" } })), 1);
   await assert.rejects(f.database.query(tx => tx.memberReferral.updateMany({ where: { accountId: invited.pending.accountId }, data: { inviterId: invited.pending.accountId } })));
-  const admin = createSubscribers(f.database, now, f.config);
+  const admin = createUsers(f.database, now, f.config);
   assert.equal((await admin.action(invited.pending.accountId, "delete", undefined, "synthetic-owner")).status, "saved");
   const reused = await legacySignup(friend, link);
   assert.equal((await auth.verifyAccount(reused.otp, reused.pending.token, "198.51.100.9")).status, "authenticated");

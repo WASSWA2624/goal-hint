@@ -8,7 +8,7 @@ or lifetime reward cap is added by this batch.
 
 ## Client address provenance
 
-`src/instrumentation.ts` installs a subscriber to Node's
+`src/instrumentation.ts` installs a user to Node's
 [`http.server.request.start` channel](https://nodejs.org/download/release/v24.8.0/docs/api/diagnostics_channel.html),
 which supplies the actual IncomingMessage/socket before normal request handling.
 The transport resolves and stamps an internal, process-signed address. Route

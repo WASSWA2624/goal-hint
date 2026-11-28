@@ -32,7 +32,7 @@ backup, pending migrations, application grants and schema/health checks.
 - The final focused auth/referral/deletion suite passed 78 tests without skips;
   related Account/activity/database-health regressions also passed.
 - Genuine isolated MySQL tests passed 37 unique cases across authentication,
-  wallet, subscriber management/deletion, Custom Filters and referrals. Initial
+  wallet, user management/deletion, Custom Filters and referrals. Initial
   stale integration assertions were updated to current service APIs and all six
   affected cases passed on rerun. The referral case covers concurrent exactly-once
   awards, immutable identities, deletion/re-registration, fractional scheduling,
