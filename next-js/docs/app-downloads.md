@@ -95,6 +95,10 @@ Website-only deployments do not advance native versions.
 
 ## Verification and remaining packaging work
 
+On 28 November 2026 the Android-only page and signed universal Android APK
+`1.0.0+8` went live. The APK installed and opened the production Matches page
+in a clean API 36 Android emulator. [Production Downloads](https://goalhint.com/en/download).
+
 Download/runtime/navigation/configuration checks pass (59 Node tests), as do six
 download publisher tests, native analysis and the native test suite. Browser
 checks cover both themes, 320/390px mobile and 1440/1920px desktop, platform
