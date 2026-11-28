@@ -1,10 +1,11 @@
 import io
+import json
 import os
 from pathlib import Path
 import runpy
 import sys
 import tempfile
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 import zipfile
@@ -31,6 +32,53 @@ def delta(entries):
 
 
 class HostedDeployTest(unittest.TestCase):
+    def test_matches_smoke_verifies_browser_headers_and_completed_list_and_summary(self):
+        target = SimpleNamespace(host="test.goalhint.com", environment="staging")
+        matches = b'<header data-app-navigation="matches"></header><main data-feed-match-results="">'
+        ready = b'<section data-feed-performance-state="ready">build-fixture</section></main>'
+        headers = b"HTTP/2 200\r\nX-Robots-Tag: noindex\r\n\r\n"
+        marker = HOST["FIRST_BYTE_MARKER"]
+        run = Mock(return_value=SimpleNamespace(returncode=0, stdout=headers + matches + ready + marker + b"1.25"))
+        request = HOST["smoke_request"]
+        with patch.object(request.__globals__["subprocess"], "run", run):
+            self.assertIsNone(request(target, "/en/matches", "build-fixture", None))
+            args = run.call_args.args[0]
+            self.assertIn("Sec-Fetch-Mode: navigate", args)
+            self.assertIn("Sec-Fetch-Dest: document", args)
+            self.assertEqual(args[args.index("--max-time") + 1], "40")
+            self.assertEqual(run.call_args.kwargs["timeout"], 41)
+
+            run.return_value.stdout = headers + matches + ready + marker + b"16.1"
+            self.assertEqual(request(target, "/en/matches", "build-fixture", None), "browser header deadline")
+            self.assertIsNone(request(target, "/en/matches", "build-fixture", None, legacy_rollback=True))
+            run.return_value.stdout = headers + matches + ready + b'<div data-feed-list-recovery="">' + marker + b"1.25"
+            self.assertEqual(request(target, "/en/matches", "build-fixture", None), "Matches list or summary unavailable")
+            run.return_value.stdout = headers + matches + b"build-fixture" + marker + b"1.25"
+            self.assertEqual(request(target, "/en/matches", "build-fixture", None), "Matches list or summary unavailable")
+            run.return_value.stdout = b"HTTP/2 200\r\n\r\n" + matches + ready + marker + b"1.25"
+            self.assertEqual(request(target, "/en/matches", "build-fixture", None), "missing staging noindex")
+            run.return_value.returncode = 28
+            self.assertEqual(request(target, "/en/matches", "build-fixture", None), "request deadline")
+
+    def test_today_smoke_rejects_false_success_and_allows_sparse_staging_coverage(self):
+        feed = {"state": "ready", "records": [{}], "page": 1, "pageSize": 1, "total": 14,
+                "today": "2026-11-28", "range": {"from": "2026-11-28", "to": "2026-11-28"},
+                "access": {"tier": "free", "signedIn": False}}
+        healthy = HOST["healthy_today_feed"]
+
+        def body(**changes):
+            return json.dumps({**feed, **changes}).encode()
+
+        self.assertTrue(healthy(body(), "production"))
+        self.assertFalse(healthy(body(records=[]), "production"))
+        self.assertFalse(healthy(body(records=[{}, {}]), "production"))
+        self.assertFalse(healthy(body(access={"tier": "full", "signedIn": True}), "production"))
+        self.assertFalse(healthy(body(today="2026-11-27"), "production"))
+        sparse = body(state="data-unavailable", records=[], total=0, coverage={"partial": True, "knownFixtures": 0})
+        self.assertTrue(healthy(sparse, "staging"))
+        self.assertFalse(healthy(sparse, "production"))
+        self.assertTrue(healthy(body(state="no-fixtures", records=[], total=0), "production"))
+
     def test_delta_links_unchanged_files_and_omits_obsolete_files(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -66,9 +114,11 @@ class HostedDeployTest(unittest.TestCase):
             target.current.return_value = candidate
             target.release.return_value = previous
             HOST["write_json"](target.journal, {"previous": previous.name, "candidate": candidate.name})
-            with patch.dict(HOST["recover"].__globals__, {"smoke": Mock()}):
+            smoke = Mock()
+            with patch.dict(HOST["recover"].__globals__, {"smoke": smoke}):
                 HOST["recover"](target)
             target.activate.assert_called_once_with(previous)
+            smoke.assert_called_once_with(target, previous, legacy_rollback=True)
             target.remove.assert_called_once_with(candidate)
             self.assertFalse(target.journal.exists())
 

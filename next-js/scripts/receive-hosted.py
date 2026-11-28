@@ -37,6 +37,19 @@ RUNTIME = {MIGRATION_MARKER, RECEIPT, "tmp/restart.txt", "standalone/.env.test",
 PACKAGE_ROOTS = {"app.js", INFO, "package.json", "DEPLOY.md", ".env.example", "standalone", "prisma", "scripts"}
 REQUIRED = {"app.js", INFO, BUILD_ID, "standalone/server.js", "scripts/deploy-mariadb.py"}
 CACHE_DIRECTORIES = {"standalone/.next/cache", "standalone/.next/server/route-cache"}
+MATCHES_SMOKE_PATH = "/en/matches"
+TODAY_SMOKE_PATH = "/api/matches?when=today&pageSize=1"
+SMOKE_HEADER_SECONDS = 15
+MATCHES_BODY_SECONDS = 40
+FIRST_BYTE_MARKER = b"\n__goalhint_first_byte__="
+BROWSER_AGENT = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                 "(KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36")
+MATCHES_MARKERS = (
+    rb'<[a-z][^>]*\sdata-app-navigation="matches"',
+    rb'<[a-z][^>]*\sdata-feed-match-results(?=[=\s>])',
+    rb'<[a-z][^>]*\sdata-feed-performance-state="ready"',
+)
+MATCHES_RECOVERY = rb'<[a-z][^>]*\sdata-feed-list-recovery(?=[=\s>])'
 
 
 class DeploymentError(Exception):
@@ -279,34 +292,89 @@ def probe_name(manifest):
     return f"goalhint-release-{manifest['archiveSha256'][:32]}.txt"
 
 
-def smoke(target, release, manifest=None):
+def healthy_today_feed(body, environment):
+    try:
+        response = json.loads(body)
+    except (ValueError, UnicodeError):
+        return False
+    if not isinstance(response, dict):
+        return False
+    state = response.get("state")
+    records, dates, access = (response.get(key) for key in ("records", "range", "access"))
+    total = response.get("total")
+    if not (isinstance(records, list) and len(records) <= 1 and type(total) is int and total >= len(records)
+            and response.get("page") == response.get("pageSize") == 1
+            and isinstance(dates, dict) and isinstance(response.get("today"), str)
+            and dates.get("from") == dates.get("to") == response["today"]
+            and access == {"tier": "free", "signedIn": False}):
+        return False
+    if state in ("ready", "insufficient-data"):
+        return bool(records)
+    if state in ("no-fixtures", "no-filter-matches"):
+        return total == 0
+    # Staging disables live provider jobs and can have no fixture coverage.
+    coverage = response.get("coverage")
+    return (environment == "staging" and state == "data-unavailable" and total == 0
+            and isinstance(coverage, dict) and coverage.get("knownFixtures") == 0 and coverage.get("partial") is True)
+
+
+def smoke_request(target, path, build, probe, *, legacy_rollback=False):
+    document = path == MATCHES_SMOKE_PATH
+    budget = MATCHES_BODY_SECONDS if document else SMOKE_HEADER_SECONDS
+    args = ["curl", "--silent", "--fail", "--noproxy", "*", "--max-time", str(budget), "--include",
+            "--header", "Cache-Control: no-cache"]
+    if document:
+        args += ["--user-agent", BROWSER_AGENT, "--header", "Accept: text/html",
+                 "--header", "Sec-Fetch-Mode: navigate", "--header", "Sec-Fetch-Dest: document",
+                 "--write-out", FIRST_BYTE_MARKER.decode("ascii") + "%{time_starttransfer}"]
+    try:
+        result = subprocess.run([*args, f"https://{target.host}{path}"], capture_output=True, timeout=budget + 1)
+    except subprocess.TimeoutExpired:
+        return "request deadline"
+    if result.returncode:
+        return "request deadline" if result.returncode == 28 else "HTTP request failed"
+    headers, _, body = result.stdout.partition(b"\r\n\r\n")
+    if not re.match(rb"HTTP/\S+ 200\b", headers) or not body:
+        return "unexpected response"
+    if path == probe and body != b"ready\n":
+        return "release probe mismatch"
+    if document:
+        body, _, first_byte = body.rpartition(FIRST_BYTE_MARKER)
+        if not re.fullmatch(rb"\d+(?:\.\d+)?", first_byte):
+            return "missing response timing"
+        if not legacy_rollback and float(first_byte) > SMOKE_HEADER_SECONDS:
+            return "browser header deadline"
+        if build.encode() not in body:
+            return "build identity mismatch"
+        if target.environment == "staging" and not re.search(rb"(?im)^x-robots-tag:[^\r\n]*\bnoindex\b", headers):
+            return "missing staging noindex"
+        if not all(re.search(marker, body) for marker in MATCHES_MARKERS) or re.search(MATCHES_RECOVERY, body):
+            return "Matches list or summary unavailable"
+    if path.startswith("/api/") and not re.search(rb"(?im)^content-type:\s*application/json\b", headers):
+        return "expected API JSON"
+    if path == TODAY_SMOKE_PATH and not healthy_today_feed(body, target.environment):
+        return "Today feed unavailable or invalid"
+    return None
+
+
+def smoke(target, release, manifest=None, *, legacy_rollback=False):
     build = (release / BUILD_ID).read_text().strip()
     require(re.fullmatch(r"[A-Za-z0-9_-]{6,128}", build), "Invalid Next build identity.")
-    endpoints = ["/en/matches", "/api/matches?when=today&pageSize=1", "/api/account/session",
+    endpoints = [MATCHES_SMOKE_PATH, TODAY_SMOKE_PATH, "/api/account/session",
                  f"/_next/static/{build}/_buildManifest.js"]
     probe = f"/{probe_name(manifest)}" if manifest else None
     if probe:
         endpoints.append(probe)
     for attempt in range(6):
         for path in endpoints:
-            result = subprocess.run(["curl", "--silent", "--fail", "--noproxy", "*", "--max-time", "15", "--include",
-                                     "--header", "Cache-Control: no-cache", f"https://{target.host}{path}"],
-                                    capture_output=True, timeout=16)
-            headers, _, body = result.stdout.partition(b"\r\n\r\n")
-            if result.returncode or not re.match(rb"HTTP/\S+ 200\b", headers) or not body:
-                break
-            if path == probe and body != b"ready\n":
-                break
-            if path == "/en/matches" and (build.encode() not in body or
-                    (target.environment == "staging" and not re.search(rb"(?im)^x-robots-tag:[^\r\n]*\bnoindex\b", headers))):
-                break
-            if path.startswith("/api/") and not re.search(rb"(?im)^content-type:\s*application/json\b", headers):
+            failure = smoke_request(target, path, build, probe, legacy_rollback=legacy_rollback)
+            if failure:
                 break
         else:
             return
         if attempt < 5:
             time.sleep(2)
-    raise DeploymentError(f"HTTPS smoke failed on {target.environment} at {path} for Next build {build}.")
+    raise DeploymentError(f"HTTPS smoke failed on {target.environment} at {path} for Next build {build}: {failure}.")
 
 
 def recover(target):
@@ -327,7 +395,7 @@ def recover(target):
     else:
         if active == candidate:
             target.activate(target.release(previous.name))
-            smoke(target, previous)
+            smoke(target, previous, legacy_rollback=True)
         if present(candidate):
             target.remove(candidate)
     target.journal.unlink()
