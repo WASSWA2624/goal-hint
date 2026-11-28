@@ -88,6 +88,27 @@ Production activated `fe3a3f6e` after the staging checks. The desktop Chrome gat
 
 These are individual flows with changing live data. In the slow desktop append, Apache recorded a rejected page-three prefix after the pending fixture order changed, then a second request for the three-page window. A separate throttled mobile run reached ready Matches counts in 10.29 seconds, down from the prior observation of 14.46 seconds. It appended 50 to 100 and 100 to 150 in 4.53 and 2.44 seconds, each in one request on an unchanged prefix.
 
+From 20:39 to 20:49 Kampala time, Apache recorded 138 HTTP 200 summary responses. Its Matches checked-continuation and window requests recorded 11 HTTP 200 and six HTTP 409 responses. The conflict indicates a changed list prefix and establishes the frequency of the extra-read path in this sample.
+
 ### Single-request refresh after a live reorder
 
 The follow-up request opts into rebuilding a changed Matches window of up to 300 records with the IDs already selected by the prefix check. It makes this decision within the same repeatable-read transaction. Stable membership still hydrates only the next page, and older requests retain the existing conflict response. The focused checks exercised a genuine reorder with one snapshot transaction, a stable 50-row continuation, lists shrinking to 12 and zero rows, and the oversized-window conflict. The numbered Best Slips limit also covers up to six pages within the same response byte ceiling. An application test verified a six-page authorized response with 120 unique slips and exact period counts.
+
+In the populated production-mode fixture, Chrome verified the reordered Matches window in one request in 571–734 ms across mobile light and desktop dark. Both ran through all 293 fixtures and exercised recovery from a temporary service failure and interrupted connections. Both Best Slips profiles continued to the fourth page and checked that a shrink to 15 published slips ended pagination. All 24 owned MySQL Matches integration checks passed, including the single-request replacement and the legacy conflict response.
+
+Hosted staging verified `fdf14c3b`, Next build `Y6oFkddSijoo97YOQCwVC`, from ZIP SHA-256 `e9c370dd374e7209b907608962cb9b98031a80bbad8ab47d4012cb1a87376e46`. The delta transferred 3,181,811 bytes for 152 files and the 95-migration inventory passed. Desktop and mobile Chrome passed. The deliberately outdated continuation returned one coherent empty page in one response against the staging cohort. Mobile Chrome separately recovered from injected 503s on Best Slips in 871 ms and Matches counts in 10.04 seconds.
+
+The matched 80-request staging workload completed without failures. p50/p95/p99 was 334/436/509 ms in the final staging sample, compared with 340/372/746 ms in the previous staging sample.
+
+Production then activated the identical artifact and passed the provisional desktop gate with zero page errors. An independently submitted outdated request for the populated Today All cohort returned three pages and 150 unique fixtures in a single HTTP 200. The observed completion was 7.60 seconds, including 6.26 seconds in the application. The production mobile test used 150 ms of simulated latency and a 190 KB/s downlink. Both environments' active receipts matched the ZIP and build. Each migration ledger verified all 95 required migrations, neither environment had an open deployment journal, and both monitoring timers were active.
+
+| Observed production phase | Desktop Chrome | Throttled mobile Chrome |
+| --- | ---: | ---: |
+| Cold Matches counts ready | 17.09 s | 12.23 s |
+| Matches first append, 50 to 100 | 11.04 s | 4.05 s |
+| Matches second append, 100 to 150 | 4.63 s | 13.38 s |
+| Best Slips in-app rows | 20.16 s | |
+| Cold Best Slips counts ready | 6.16 s | |
+| Best Slips append, 20 to 30 | 5.33 s | |
+
+Both production profiles finished the available checks. The updated path completes bounded order changes in one request. First loads and individual appends still vary with live data and request timings.

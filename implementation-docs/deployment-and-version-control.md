@@ -30,6 +30,8 @@ On 28 November 2026, staging and production verified the same interactive feed c
 
 Later on 28 November, both hosted targets verified the follow-up `fe3a3f6e`, build `mzekNoNtqE71MmomQYtGb`. Staging passed desktop Chrome, the throttled mobile recovery check and 80 timed HTTP requests before promotion. Production completed two consecutive Matches appends and one available Best Slips append. Both receipt checks matched the archive and verified all 95 migrations. [Follow-up rollout and remaining timing variation](../next-js/docs/reports/interactive-feed-delivery-2026-11-28.md#follow-up-production).
 
+The final `fdf14c3b` promotion on 28 November verified build `Y6oFkddSijoo97YOQCwVC` in both environments after staging passed browser, injected-error, and workload checks. Production verified that one outdated Matches continuation returned 150 unique rows across three pages. Production desktop and mobile Chrome passed with the populated lists and counts, and both receipts and ledgers matched. [Reordered-window rollout](../next-js/docs/reports/interactive-feed-delivery-2026-11-28.md#single-request-refresh-after-a-live-reorder).
+
 [Local launcher](../next-js/scripts/development.py), [database target guards](../next-js/scripts/database.py), [VPS staging and production runbook](../next-js/docs/deployment/how-to-deploy.md#vps-staging-and-release-promotion), [Best Slips worker operations](../next-js/docs/daily-slip-publications.md).
 
 ## Git, checks and packaging
