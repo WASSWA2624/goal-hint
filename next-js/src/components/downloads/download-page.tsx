@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import styled from "styled-components";
-import { appPlatforms, type AppPlatform } from "@/domain/app-download-presentation";
 import { Button, ButtonLink, TextLink } from "@/components/ui/controls";
-import { AndroidIcon, CheckIcon, DownloadIcon, MonitorIcon, PhoneIcon, WindowsIcon } from "@/components/ui/icons";
+import { AndroidIcon, CheckIcon, DownloadIcon, WindowsIcon } from "@/components/ui/icons";
 import { BrandMark } from "@/components/ui/brand";
 import { PageHeading, Stack } from "@/components/ui/layout";
 import { createMessages } from "@/i18n/messages";
@@ -79,40 +78,36 @@ const ReleaseHeading = styled.div`
   > small { color: ${({ theme }) => theme.color.mutedText}; }
 `;
 const ContinueLink = styled(TextLink)`justify-self: center; margin-inline: auto;`;
-const platformIcons = { android: AndroidIcon, windows: WindowsIcon, ios: PhoneIcon, macos: MonitorIcon, linux: MonitorIcon };
-const fileLabels = { android: "downloads.androidFile", windows: "downloads.windowsFile", macos: "downloads.macosFile", linux: "downloads.linuxFile", ios: null } as const;
-const installerLabels = { file: "downloads.file", store: "downloads.store", testflight: "downloads.testflight" } as const;
+const platformOptions = [
+  { id: "android", Icon: AndroidIcon, fileLabel: "downloads.androidFile" },
+  { id: "windows", Icon: WindowsIcon, fileLabel: "downloads.windowsFile" },
+] as const;
+type PlatformOptionId = (typeof platformOptions)[number]["id"];
 
 export function DownloadPage({ locale }: { locale: string }) {
   const downloads = useAppDownloads();
-  const [choice, setChoice] = useState<AppPlatform | null>(null);
-  const selected = choice ?? downloads?.platform ?? null;
-  const release = downloads?.catalog.releases.find(candidate => candidate.platform === selected);
-  const fileLabel = selected ? fileLabels[selected] : null;
-  const installerLabel = release?.kind === "store" && release.platform === "ios"
-    ? "downloads.appStore"
-    : installerLabels[release?.kind ?? "file"];
+  const [choice, setChoice] = useState<PlatformOptionId | null>(null);
+  const selected = platformOptions.find(option => option.id === (choice ?? downloads?.platform));
+  const release = downloads?.catalog.releases.find(candidate => candidate.platform === selected?.id);
+  const installerLabel = release?.kind === "store" ? "downloads.store" : "downloads.file";
   const messages = createMessages(locale);
   const development = downloads?.catalog.channel === "development";
   return <Page data-download-page><Stack $gap="lg">
     <Hero><TitleRow><BrandMark alt="" /><PageHeading>{messages.text("downloads.title")}</PageHeading></TitleRow></Hero>
     <Platforms role="group" aria-label={messages.text("downloads.platform")}>
-      {appPlatforms.map(platform => {
-        const PlatformIcon = platformIcons[platform];
-        return <PlatformButton key={platform} variant="secondary" type="button" aria-pressed={selected === platform}
-          data-download-platform={platform} onClick={() => setChoice(platform)}><PlatformIcon /><span>{messages.text(`downloads.${platform}`)}</span>
-          {selected === platform && <CheckIcon data-selected />}</PlatformButton>;
-      })}
+      {platformOptions.map(({ id, Icon }) => <PlatformButton key={id} variant="secondary" type="button" aria-pressed={selected?.id === id}
+        data-download-platform={id} onClick={() => setChoice(id)}><Icon /><span>{messages.text(`downloads.${id}`)}</span>
+        {selected?.id === id && <CheckIcon data-selected />}</PlatformButton>)}
     </Platforms>
     {selected && <Panel aria-live="polite">
-      <ReleaseHeading><h2>{messages.text(`downloads.${selected}`)}{selected === downloads?.platform && <> ({messages.text("downloads.recommended")})</>}</h2>
+      <ReleaseHeading><h2>{messages.text(`downloads.${selected.id}`)}{selected.id === downloads?.platform && <> ({messages.text("downloads.recommended")})</>}</h2>
         {development && <small>{messages.text("downloads.development")}</small>}</ReleaseHeading>
       {release ? <>
         {release.version && <p>{messages.text("downloads.compactVersion", { version: release.version })}
-          {release.kind === "file" && fileLabel && <> · {messages.text(fileLabel)}</>}
+          {release.kind === "file" && <> · {messages.text(selected.fileLabel)}</>}
           {release.size && <> · {messages.text("downloads.size", { size: messages.number(release.size / 1024 / 1024, { maximumFractionDigits: 1 }) })}</>}</p>}
         <ButtonLink href={release.href} prefetch={false} data-app-installer download={release.kind === "file" && !downloads?.native ? true : undefined}
-          onClick={() => downloads?.acknowledge(release)}><DownloadIcon />{messages.text(installerLabel, { platform: messages.text(`downloads.${selected}`) })}</ButtonLink>
+          onClick={() => downloads?.acknowledge(release)}><DownloadIcon />{messages.text(installerLabel, { platform: messages.text(`downloads.${selected.id}`) })}</ButtonLink>
         {release.sha256 && <details><summary>{messages.text("downloads.checksum")}</summary>
           <p>{messages.text("downloads.version", { version: release.version ?? "", build: String(release.build) })}</p><code>SHA-256: {release.sha256}</code></details>}
       </> : <p>{messages.text("downloads.soon")}</p>}

@@ -15,6 +15,8 @@ export async function verifyAppDownloadScreen(browser, origin, { theme = 'light'
     await page.bringToFront();
     await page.goto(`${origin}/en/download`, { waitUntil: 'domcontentloaded', timeout: 120000 });
     await page.locator('meta[name="goal-hint-appearance"]').waitFor({ state: 'attached', timeout: 120000 });
+    const platforms = page.locator('[data-download-platform]');
+    assert.deepEqual(await platforms.evaluateAll(buttons => buttons.map(button => button.dataset.downloadPlatform)), ['android', 'windows']);
     const installer = page.locator('[data-app-installer]');
     await installer.waitFor({ timeout: 120000 });
     assert.equal(await page.locator(`[data-download-platform="${platform}"]`).getAttribute('aria-pressed'), 'true');

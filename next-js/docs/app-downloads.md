@@ -2,17 +2,14 @@
 
 The header, mobile icon, More menu and `/{locale}/download` are available in both
 development and production. They share the existing theme and control tokens.
-The page offers Android, Windows, iOS, macOS and Linux. Device detection
-recommends a platform and the user can choose any platform. Downloads start
-after a user action.
+The page offers Android and Windows. Device detection selects the recommended
+option on those platforms. All visitors can choose either option. Downloads
+start after a user action.
 
 | Platform | Development | Production |
 | --- | --- | --- |
 | Android | Local APK | Hosted signed APK, with a configured Google Play fallback |
-| Windows | Local setup EXE | Hosted setup EXE |
-| iOS | Coming soon | Published App Store listing or public TestFlight invitation |
-| macOS | Coming soon | Hosted signed and notarized DMG |
-| Linux | Coming soon | Hosted signed Debian package |
+| Windows | Local setup EXE | Hosted signed x64 setup EXE |
 
 Platforms without a published release show “Coming soon.”
 
@@ -66,15 +63,16 @@ Production delivery ZIPs include `download-manifest.json` with the actual
 version/build, signature verification and installer hash. Existing older
 packages need repackaging before new publication.
 
-For manual VPS publication, prepare a production-only download root with
+For VPS publication, prepare a production-only download root with
 `python scripts/app-downloads.py --channel production --root <download-root>`.
 Copy the validated, versioned `files/` entries into the private installer root,
 verify their SHA-256 on the host and publish the catalog atomically after all
 listed files exist. Configure `GOAL_HINT_APP_DOWNLOADS_ROOT` to use that root.
-The legacy `scripts/deploy-cpanel.py` uploader also verifies upload and installer
+Keep that root outside the replaceable web release, for example at
+`~/goal-hint-downloads/`. The legacy `scripts/deploy-cpanel.py` uploader links
+its persistent installer root into each web release, verifies upload and installer
 hashes and retains active entries for platforms absent from a new upload.
 
-Hosted installers live under `~/<app>-downloads/`, linked into each web release.
 Old versioned installers are retained and a website rollback does not remove
 them. Replacing an existing version/build with different bytes is rejected;
 increment the native build number. Sign the Windows EXE during native packaging
