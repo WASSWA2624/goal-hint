@@ -160,6 +160,8 @@ The initial production attempt for that artifact passed the migration and HTTP g
 
 On the next attempt against that same package, production Chrome rendered 50 Matches rows in 19.71 seconds and coherent outcome counts in 27.46 seconds. The summary API returned HTTP 200 in 1.55 seconds of application time. The gate then failed while opening Best Slips. Apache recorded HTTP 200 for the Best Slips Flight requests, and Chrome missed the 15-second in-app URL deadline. The verifier now uses the app's 30-second foreground progress window for the in-app transition and still requires the destination list and counts.
 
+Another cold production run rendered 50 rows in 10.56 seconds and reached `DOMContentLoaded` in 10.45 seconds. Apache recorded the summary request 28 seconds after navigation began. The request returned HTTP 200 in 4.29 seconds of application time and passed all five observed summary phases. Chrome still displayed the summary placeholder when the deadline elapsed. The operator check can now allow the late request its own response time within the bounded summary and overall deadlines. It still waits for figures in the page.
+
 ## Reproduction
 
 - Run the pinned runtime in `next-js/`. Run the focused tests for worker, account, administrator, Matches, Best Slips, sharing and request timing. Use the disposable MySQL test fixture for database runs.

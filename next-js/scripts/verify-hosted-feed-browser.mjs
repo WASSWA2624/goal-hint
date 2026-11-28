@@ -34,6 +34,8 @@ function feedState({ pathname, phase, staging, diagnose = false }) {
       return diagnose ? { pending: "matches-list-recovery-deadline" } : false;
     if (phase === "summary" && shown(shell, '[data-feed-summary-retry="true"]'))
       return diagnose ? { pending: "matches-summary-recovery-deadline" } : false;
+    if (phase === "summary" && diagnose && shown(shell, '[data-feed-performance-state="loading"]'))
+      return { pending: "matches-summary-response-deadline", awaitingResponse: true };
     const failedSummary = phase === "summary"
       && shown(shell, '[data-feed-performance-state="unavailable"], [data-feed-performance-state="stale"]');
     if (failedSummary) return diagnose ? { failure: "matches-summary-unavailable" } : false;
@@ -101,7 +103,11 @@ async function phaseState(page, pathname, phase, start, staging, budget = phaseT
       const result = await page.evaluate(feedState, { ...parameters, diagnose: true });
       requireReady(!result?.failure, result?.failure);
       if (result?.list || result?.summary) return result;
-      if (result?.pending && budget === phaseTimeout)
+      if (result?.awaitingResponse && budget === phaseTimeout && diagnostic.summaryRequestedAt > start) {
+        const responseBudget = Math.min(initialRecoveryTimeout, phaseTimeout + diagnostic.summaryRequestedAt - start);
+        return phaseState(page, pathname, phase, start, staging, responseBudget);
+      }
+      if (result?.pending && !result.awaitingResponse && budget === phaseTimeout)
         return phaseState(page, pathname, phase, start, staging, initialRecoveryTimeout);
       requireReady(!result?.pending, result?.pending);
     }
@@ -148,6 +154,7 @@ async function verifyStagingCoverage(page, origin, start) {
 async function qualify(page, origin, observations, state, name, pathname, open) {
   const start = performance.now();
   state.acceptedList = null;
+  state.summaryRequestedAt = 0;
   state.phase = `${name}-navigation`;
   const confirmDocument = await open();
   state.phase = `${name}-list`;
@@ -239,7 +246,10 @@ async function run() {
     page.on("pageerror", () => { diagnostic.pageErrors++; });
     page.on("request", request => {
       const url = new URL(request.url());
-      if (url.origin === origin && url.pathname === "/api/matches/summary") diagnostic.summaryRequests++;
+      if (url.origin === origin && url.pathname === "/api/matches/summary") {
+        diagnostic.summaryRequests++;
+        if (!diagnostic.summaryRequestedAt) diagnostic.summaryRequestedAt = performance.now();
+      }
     });
     page.on("requestfailed", request => {
       const url = new URL(request.url());
@@ -297,7 +307,7 @@ async function run() {
 }
 
 const observations = [];
-const diagnostic = { phase: "browser-start", pageErrors: 0, acceptedList: null, apiResponses: [], failedRequests: [], summaryRequests: 0 };
+const diagnostic = { phase: "browser-start", pageErrors: 0, acceptedList: null, apiResponses: [], failedRequests: [], summaryRequests: 0, summaryRequestedAt: 0 };
 const watchdog = setTimeout(() => {
   console.error(JSON.stringify({ ok: false, failure: "browser-deadline", ...diagnostic, observations }));
   process.exit(1);
